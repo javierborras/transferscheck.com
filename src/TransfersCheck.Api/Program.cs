@@ -1,0 +1,56 @@
+using Microsoft.EntityFrameworkCore;
+using TransfersCheck.Core;
+using TransfersCheck.Infrastructure;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.Configure<CommercialOptions>(builder.Configuration.GetSection(CommercialOptions.Section));
+builder.Services.Configure<SyncOptions>(builder.Configuration.GetSection(SyncOptions.Section));
+builder.Services.Configure<OnboardingOptions>(builder.Configuration.GetSection(OnboardingOptions.Section));
+builder.Services.Configure<MercadoPagoOptions>(builder.Configuration.GetSection(MercadoPagoOptions.Section));
+builder.Services.Configure<CheckoutOptions>(builder.Configuration.GetSection(CheckoutOptions.Section));
+builder.Services.Configure<LoginSessionOptions>(builder.Configuration.GetSection(LoginSessionOptions.Section));
+builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOptions.Section));
+builder.Services.Configure<DataProtectionPathOptions>(builder.Configuration.GetSection(DataProtectionPathOptions.Section));
+builder.Services.Configure<FirebaseOptions>(builder.Configuration.GetSection(FirebaseOptions.Section));
+builder.Services.Configure<UiOptions>(builder.Configuration.GetSection(UiOptions.Section));
+
+var uiOrigin = builder.Configuration[$"{CorsOptions.Section}:UiOrigin"] ?? "";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ui", policy =>
+    {
+        if (!string.IsNullOrWhiteSpace(uiOrigin))
+            policy.WithOrigins(uiOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+    });
+});
+
+builder.Services.AddTransfersCheckInfrastructure(builder.Configuration);
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new() { Title = "TransfersCheck", Version = "v1" });
+});
+
+var app = builder.Build();
+
+if (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
+    var connection = builder.Configuration.GetConnectionString("TransfersCheck");
+    if (!string.IsNullOrWhiteSpace(connection))
+        db.Database.EnsureCreated();
+}
+
+app.UseCors("ui");
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "TransfersCheck");
+});
+
+app.Run();
+
+public partial class Program;
