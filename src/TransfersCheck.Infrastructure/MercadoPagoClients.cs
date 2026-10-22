@@ -46,12 +46,6 @@ public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoP
     }
 }
 
-public sealed class UnavailablePushSender : IPushSender
-{
-    public Task SendArrivedAsync(string token, Guid transferId, string payerName, decimal amount, string currency, CancellationToken cancellationToken)
-        => Task.CompletedTask;
-}
-
 public sealed class MercadoPagoCheckout(
     HttpClient http,
     IOptions<CheckoutOptions> checkout,

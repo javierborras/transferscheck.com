@@ -44,7 +44,9 @@ public static class TransferEndpoints
                 status = row.Status,
                 statusLabel = StatusWords.Label(row.Status),
                 typeCode = row.TypeCode
-            })
+            }),
+            pollIntervalSeconds = (int)sync.Value.PollInterval.TotalSeconds,
+            buttonCooldownSeconds = (int)sync.Value.ButtonCooldown.TotalSeconds
         });
     }
 

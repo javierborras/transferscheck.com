@@ -7,6 +7,7 @@ namespace TransfersCheck.MockServer;
 
 public static class MockState
 {
+    static MockState() => SeedPayments();
     public static readonly ConcurrentDictionary<string, string> Challenges = new();
     public static readonly ConcurrentDictionary<string, string> UsedCodes = new();
     public static readonly ConcurrentDictionary<string, string> RefreshUsers = new();
@@ -18,6 +19,7 @@ public static class MockState
     public static int SearchCount;
     public static string LastCheckoutAuthorization = "";
     public static string LastCheckoutBody = "";
+    public static string LastPushAuthorization = "";
     public static readonly ConcurrentDictionary<string, string> CheckoutTenants = new();
 
     public static void Reset()
@@ -34,6 +36,7 @@ public static class MockState
         SearchCount = 0;
         LastCheckoutAuthorization = "";
         LastCheckoutBody = "";
+        LastPushAuthorization = "";
         SeedPayments();
     }
 
@@ -155,8 +158,11 @@ public static class MockEndpoints
             return Results.Json(new { id, status = "approved", external_reference = tenant });
         });
 
+        app.MapPost("/google/token", () => Results.Json(new { access_token = "ya29.mock", expires_in = 3600 }));
+
         app.MapPost("/v1/projects/{project}/messages:send", async (HttpRequest request) =>
         {
+            MockState.LastPushAuthorization = request.Headers.Authorization.ToString();
             using var reader = new StreamReader(request.Body);
             MockState.SentPushes.Add(await reader.ReadToEndAsync());
             return Results.Json(new { name = "projects/mock/messages/1" });

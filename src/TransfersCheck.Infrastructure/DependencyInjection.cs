@@ -29,7 +29,8 @@ public static class DependencyInjection
         services.AddHttpClient<MercadoPagoAuthorizer>();
         services.AddScoped<IMerchantAuthorizer>(sp => sp.GetRequiredService<MercadoPagoAuthorizer>());
         services.AddSingleton<IEntitlement, Entitlement>();
-        services.AddSingleton<IPushSender, UnavailablePushSender>();
+        services.AddHttpClient<FirebasePushSender>();
+        services.AddScoped<IPushSender>(sp => sp.GetRequiredService<FirebasePushSender>());
         services.AddHttpClient<MercadoPagoCheckout>();
         services.AddScoped<ICheckout>(sp => sp.GetRequiredService<MercadoPagoCheckout>());
         services.AddSingleton<IPollLock>(_ => new SqlPollLock(configuration.GetConnectionString("TransfersCheck") ?? ""));

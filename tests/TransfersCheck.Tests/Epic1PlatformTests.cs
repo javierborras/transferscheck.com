@@ -123,12 +123,12 @@ public sealed class Epic1PlatformTests
         await using var factory = new TransfersApiFactory(_sql);
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/swagger/v1/swagger.json");
-        request.Headers.Add("Origin", "http://localhost:5173");
+        request.Headers.Add("Origin", "http://localhost:5183");
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"openapi\"", json, StringComparison.Ordinal);
-        Assert.Equal("http://localhost:5173", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal("http://localhost:5183", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
     }
 
     private static Transfer TransferFor(Guid tenantId, string externalId) => new()
@@ -197,6 +197,7 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public string? VideoUrl { get; init; }
     public int? PageSize { get; init; }
     public int? PriceAmount { get; init; }
+    public string? ServiceAccountPath { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -205,8 +206,8 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:TransfersCheck", _sql.ConnectionString);
         builder.UseSetting("Session:SigningKey", "test-signing-key-with-32-bytes-min");
         builder.UseSetting("DataProtection:KeyPath", Path.Combine(Path.GetTempPath(), "transferscheck-test-keys"));
-        builder.UseSetting("Cors:UiOrigin", "http://localhost:5173");
-        builder.UseSetting("Ui:Origin", "http://localhost:5173");
+        builder.UseSetting("Cors:UiOrigin", "http://localhost:5183");
+        builder.UseSetting("Ui:Origin", "http://localhost:5183");
         builder.UseSetting("MercadoPago:ClientId", "mock-client");
         builder.UseSetting("MercadoPago:ClientSecret", "mock-secret");
         builder.UseSetting("MercadoPago:AuthorizationUrl", "http://127.0.0.1:5099/authorization");
@@ -216,7 +217,12 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Checkout:AccessToken", "mock-checkout-token");
         builder.UseSetting("Checkout:WebhookSecret", "test-webhook-secret");
         builder.UseSetting("Checkout:NotificationUrl", "http://127.0.0.1:5080/api/billing/webhook");
-        builder.UseSetting("Checkout:ReturnUrl", "http://localhost:5173/");
+        builder.UseSetting("Checkout:ReturnUrl", "http://localhost:5183/");
+        builder.UseSetting("Firebase:MessagingUrl", "http://127.0.0.1:5099/v1/projects/mock/messages:send");
+        builder.UseSetting("Firebase:ProjectId", "mock");
+        builder.UseSetting("Firebase:Scope", "https://www.googleapis.com/auth/firebase.messaging");
+        if (ServiceAccountPath is not null)
+            builder.UseSetting("Firebase:ServiceAccountPath", ServiceAccountPath);
         if (PriceAmount is not null)
             builder.UseSetting("Commercial:PriceAmount", PriceAmount.Value.ToString());
         if (VideoUrl is not null)

@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using TransfersCheck.Api.Accounts;
 using TransfersCheck.Api.Billing;
 using TransfersCheck.Api.Connections;
+using TransfersCheck.Api.Push;
 using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
@@ -99,6 +100,7 @@ AccountEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
 BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);
+PushEndpoints.Map(app);
 
 app.Run();
 
