@@ -1,4 +1,8 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using TransfersCheck.Api.Accounts;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
 
@@ -27,6 +31,36 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddTransfersCheckInfrastructure(builder.Configuration);
+
+var signingKey = builder.Configuration["Session:SigningKey"] ?? "";
+if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.MapInboundClaims = false;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
+                ClockSkew = TimeSpan.FromMinutes(1)
+            };
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var cookieName = builder.Configuration["Session:CookieName"] ?? "tc_session";
+                    if (context.Request.Cookies.TryGetValue(cookieName, out var token))
+                        context.Token = token;
+                    return Task.CompletedTask;
+                }
+            };
+        });
+    builder.Services.AddAuthorization();
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -45,11 +79,18 @@ if (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment())
 }
 
 app.UseCors("ui");
+if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "TransfersCheck");
 });
+
+AccountEndpoints.Map(app);
 
 app.Run();
 
