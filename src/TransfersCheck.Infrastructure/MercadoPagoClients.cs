@@ -11,18 +11,6 @@ public sealed class MercadoPagoTransferSource : ITransferSource
         => throw new NotImplementedException();
 }
 
-public sealed class MercadoPagoAuthorizer : IMerchantAuthorizer
-{
-    public string BuildAuthorizationUrl(string state, string codeChallenge)
-        => throw new NotImplementedException();
-
-    public Task<TokenSet> ExchangeAsync(string code, string codeVerifier, CancellationToken cancellationToken)
-        => throw new NotImplementedException();
-
-    public Task<TokenSet> RefreshAsync(string refreshToken, CancellationToken cancellationToken)
-        => throw new NotImplementedException();
-}
-
 public sealed class UnavailablePushSender : IPushSender
 {
     public Task SendArrivedAsync(string token, Guid transferId, string payerName, decimal amount, string currency, CancellationToken cancellationToken)

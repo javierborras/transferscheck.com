@@ -24,7 +24,8 @@ public static class DependencyInjection
         });
         services.AddScoped<IMerchantStore, EfMerchantStore>();
         services.AddScoped<ITransferSource, MercadoPagoTransferSource>();
-        services.AddScoped<IMerchantAuthorizer, MercadoPagoAuthorizer>();
+        services.AddHttpClient<MercadoPagoAuthorizer>();
+        services.AddScoped<IMerchantAuthorizer>(sp => sp.GetRequiredService<MercadoPagoAuthorizer>());
         services.AddSingleton<IEntitlement, Entitlement>();
         services.AddSingleton<IPushSender, UnavailablePushSender>();
         services.AddSingleton<ICheckout, UnavailableCheckout>();

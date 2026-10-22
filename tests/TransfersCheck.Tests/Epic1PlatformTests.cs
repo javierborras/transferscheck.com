@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
@@ -157,8 +159,13 @@ public sealed class SqlFixture : IAsyncLifetime
     public string ConnectionString { get; } =
         "Server=localhost\\SQLEXPRESS;Database=TransfersCheckTests;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=True";
 
+    private IAsyncDisposable? _mock;
+
     public async Task InitializeAsync()
     {
+        TransfersCheck.MockServer.MockState.Reset();
+        _mock = await TransfersCheck.MockServer.Program.ListenAsync("http://127.0.0.1:5099");
+
         var options = new DbContextOptionsBuilder<TransfersCheckDb>()
             .UseSqlServer(ConnectionString, sql => sql.UseCompatibilityLevel(SqlCompat.Level))
             .Options;
@@ -167,15 +174,27 @@ public sealed class SqlFixture : IAsyncLifetime
         await db.Database.EnsureCreatedAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public async Task DisposeAsync()
+    {
+        if (_mock is not null)
+            await _mock.DisposeAsync();
+    }
 }
 
 [CollectionDefinition("sql", DisableParallelization = true)]
 public sealed class SqlCollection : ICollectionFixture<SqlFixture>;
 
+public sealed class MutableClock : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
+    public override DateTimeOffset GetUtcNow() => Now;
+}
+
 public sealed class TransfersApiFactory : WebApplicationFactory<Program>
 {
     private readonly SqlFixture _sql;
+    public TimeProvider? Clock { get; init; }
+    public string? VideoUrl { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -185,6 +204,23 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Session:SigningKey", "test-signing-key-with-32-bytes-min");
         builder.UseSetting("DataProtection:KeyPath", Path.Combine(Path.GetTempPath(), "transferscheck-test-keys"));
         builder.UseSetting("Cors:UiOrigin", "http://localhost:5173");
+        builder.UseSetting("Ui:Origin", "http://localhost:5173");
+        builder.UseSetting("MercadoPago:ClientId", "mock-client");
+        builder.UseSetting("MercadoPago:ClientSecret", "mock-secret");
+        builder.UseSetting("MercadoPago:AuthorizationUrl", "http://127.0.0.1:5099/authorization");
+        builder.UseSetting("MercadoPago:TokenUrl", "http://127.0.0.1:5099/oauth/token");
+        builder.UseSetting("MercadoPago:ApiBaseUrl", "http://127.0.0.1:5099");
+        builder.UseSetting("MercadoPago:RedirectUri", "http://127.0.0.1:5099/ignored-callback");
+        if (VideoUrl is not null)
+            builder.UseSetting("Onboarding:MercadoPagoVideoUrl", VideoUrl);
         builder.UseEnvironment("Development");
+        if (Clock is not null)
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton(Clock);
+            });
+        }
     }
 }

@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\TransfersCheck.Core\TransfersCheck.Core.csproj" />
     <ProjectReference Include="..\..\src\TransfersCheck.Infrastructure\TransfersCheck.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\TransfersCheck.Api\TransfersCheck.Api.csproj" />
+    <ProjectReference Include="..\..\tools\TransfersCheck.MockServer\TransfersCheck.MockServer.csproj" />
   </ItemGroup>
 
 </Project>
