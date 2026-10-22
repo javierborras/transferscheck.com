@@ -16,6 +16,8 @@ public static class MockState
     public static long UserId = 1001;
     public static int RefreshCount;
     public static int SearchCount;
+    public static string LastCheckoutAuthorization = "";
+    public static string LastCheckoutBody = "";
     public static readonly ConcurrentDictionary<string, string> CheckoutTenants = new();
 
     public static void Reset()
@@ -30,6 +32,8 @@ public static class MockState
         UserId = 1001;
         RefreshCount = 0;
         SearchCount = 0;
+        LastCheckoutAuthorization = "";
+        LastCheckoutBody = "";
         SeedPayments();
     }
 
@@ -131,11 +135,17 @@ public static class MockEndpoints
             return Results.Json(new { results = MockState.Payments });
         });
 
-        app.MapPost("/checkout/preferences", () => Results.Json(new
+        app.MapPost("/checkout/preferences", async (HttpRequest request) =>
         {
-            id = "pref-1",
-            init_point = "http://127.0.0.1:5099/checkout/pref-1"
-        }));
+            MockState.LastCheckoutAuthorization = request.Headers.Authorization.ToString();
+            using var reader = new StreamReader(request.Body);
+            MockState.LastCheckoutBody = await reader.ReadToEndAsync();
+            return Results.Json(new
+            {
+                id = "pref-1",
+                init_point = "http://127.0.0.1:5099/checkout/pref-1"
+            });
+        });
 
         app.MapGet("/v1/payments/{id}", (string id) =>
         {

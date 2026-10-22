@@ -196,6 +196,7 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public TimeProvider? Clock { get; init; }
     public string? VideoUrl { get; init; }
     public int? PageSize { get; init; }
+    public int? PriceAmount { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -212,6 +213,12 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("MercadoPago:TokenUrl", "http://127.0.0.1:5099/oauth/token");
         builder.UseSetting("MercadoPago:ApiBaseUrl", "http://127.0.0.1:5099");
         builder.UseSetting("MercadoPago:RedirectUri", "http://127.0.0.1:5099/ignored-callback");
+        builder.UseSetting("Checkout:AccessToken", "mock-checkout-token");
+        builder.UseSetting("Checkout:WebhookSecret", "test-webhook-secret");
+        builder.UseSetting("Checkout:NotificationUrl", "http://127.0.0.1:5080/api/billing/webhook");
+        builder.UseSetting("Checkout:ReturnUrl", "http://localhost:5173/");
+        if (PriceAmount is not null)
+            builder.UseSetting("Commercial:PriceAmount", PriceAmount.Value.ToString());
         if (VideoUrl is not null)
             builder.UseSetting("Onboarding:MercadoPagoVideoUrl", VideoUrl);
         if (PageSize is not null)

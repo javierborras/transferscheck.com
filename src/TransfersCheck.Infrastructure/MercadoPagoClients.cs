@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Core;
@@ -51,13 +52,44 @@ public sealed class UnavailablePushSender : IPushSender
         => Task.CompletedTask;
 }
 
-public sealed class UnavailableCheckout : ICheckout
+public sealed class MercadoPagoCheckout(
+    HttpClient http,
+    IOptions<CheckoutOptions> checkout,
+    IOptions<MercadoPagoOptions> mercadoPago) : ICheckout
 {
-    public Task<string> CreatePreferenceAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
-        => throw new NotImplementedException();
+    public async Task<string> CreatePreferenceAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
+    {
+        var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{root}/checkout/preferences");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", checkout.Value.AccessToken);
+        request.Content = JsonContent.Create(new
+        {
+            items = new[]
+            {
+                new { title, quantity = 1, currency_id = currency, unit_price = amount }
+            },
+            external_reference = tenantId.ToString(),
+            notification_url = checkout.Value.NotificationUrl,
+            back_urls = new { success = checkout.Value.ReturnUrl }
+        });
+        using var response = await http.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        return doc.RootElement.GetProperty("init_point").GetString() ?? "";
+    }
 
-    public Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken)
-        => throw new NotImplementedException();
+    public async Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken)
+    {
+        var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{root}/v1/payments/{Uri.EscapeDataString(paymentId)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", checkout.Value.AccessToken);
+        using var response = await http.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        if (doc.RootElement.GetProperty("status").GetString() != "approved")
+            return null;
+        return doc.RootElement.GetProperty("external_reference").GetString();
+    }
 }
 
 public sealed class SqlPollLock(string connectionString) : IPollLock

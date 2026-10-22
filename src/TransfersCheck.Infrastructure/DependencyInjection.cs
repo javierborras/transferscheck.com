@@ -30,7 +30,8 @@ public static class DependencyInjection
         services.AddScoped<IMerchantAuthorizer>(sp => sp.GetRequiredService<MercadoPagoAuthorizer>());
         services.AddSingleton<IEntitlement, Entitlement>();
         services.AddSingleton<IPushSender, UnavailablePushSender>();
-        services.AddSingleton<ICheckout, UnavailableCheckout>();
+        services.AddHttpClient<MercadoPagoCheckout>();
+        services.AddScoped<ICheckout>(sp => sp.GetRequiredService<MercadoPagoCheckout>());
         services.AddSingleton<IPollLock>(_ => new SqlPollLock(configuration.GetConnectionString("TransfersCheck") ?? ""));
         return services;
     }

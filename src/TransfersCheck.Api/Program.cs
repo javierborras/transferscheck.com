@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TransfersCheck.Api.Accounts;
+using TransfersCheck.Api.Billing;
 using TransfersCheck.Api.Connections;
 using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
@@ -96,6 +97,7 @@ app.UseSwaggerUI(options =>
 
 AccountEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
+BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);
 
 app.Run();
