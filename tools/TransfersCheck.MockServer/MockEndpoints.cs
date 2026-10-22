@@ -15,6 +15,7 @@ public static class MockState
     public static string RateLimit = "";
     public static long UserId = 1001;
     public static int RefreshCount;
+    public static int SearchCount;
     public static readonly ConcurrentDictionary<string, string> CheckoutTenants = new();
 
     public static void Reset()
@@ -28,6 +29,7 @@ public static class MockState
         RateLimit = "";
         UserId = 1001;
         RefreshCount = 0;
+        SearchCount = 0;
         SeedPayments();
     }
 
@@ -125,6 +127,7 @@ public static class MockEndpoints
                 return Results.BadRequest(new { message = "2001", error = "bad_request" });
             if (request.Headers.Authorization.Count == 0)
                 return Results.Unauthorized();
+            MockState.SearchCount++;
             return Results.Json(new { results = MockState.Payments });
         });
 

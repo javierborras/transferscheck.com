@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TransfersCheck.Api.Accounts;
 using TransfersCheck.Api.Connections;
+using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
 
@@ -62,6 +63,8 @@ if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
     builder.Services.AddAuthorization();
 }
 
+builder.Services.AddSingleton<TransferPollWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TransferPollWorker>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -93,6 +96,7 @@ app.UseSwaggerUI(options =>
 
 AccountEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
+TransferEndpoints.Map(app);
 
 app.Run();
 

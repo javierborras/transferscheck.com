@@ -195,6 +195,7 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     private readonly SqlFixture _sql;
     public TimeProvider? Clock { get; init; }
     public string? VideoUrl { get; init; }
+    public int? PageSize { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -213,6 +214,8 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("MercadoPago:RedirectUri", "http://127.0.0.1:5099/ignored-callback");
         if (VideoUrl is not null)
             builder.UseSetting("Onboarding:MercadoPagoVideoUrl", VideoUrl);
+        if (PageSize is not null)
+            builder.UseSetting("Sync:PageSize", PageSize.Value.ToString());
         builder.UseEnvironment("Development");
         if (Clock is not null)
         {
