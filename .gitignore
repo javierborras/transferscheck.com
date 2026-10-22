@@ -310,6 +310,10 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+web/blob-report/
 
 # Visual Studio 6 build log
 *.plg
@@ -426,3 +430,14 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml
+_bmad/render/
+
+# TransfersCheck secrets and local keys
+appsettings.*.local.json
+**/dataprotection-keys/
+**/*service-account*.json
+**/*firebase-adminsdk*.json
+**/*serviceAccount*.json
