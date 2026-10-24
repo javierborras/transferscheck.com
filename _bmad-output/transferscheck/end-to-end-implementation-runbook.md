@@ -374,6 +374,8 @@ Completed on 24 October 2026. Manifest/theme/icon on `web/`; API image still exc
 
 ## Wave 14 — Stories 6.2, 6.3, 6.4
 
+Completed on 24 October 2026. FCM web push on arrived only; foreground beep/notice; `/?first=` tap; Firebase keys empty; no service-account JSON. Evidence: `Arrived_push_uses_fcm_and_pending_rejected_stay_silent`.
+
 **Outcome.** After a transfer is stored, the arrival is heard and shown, and one tap opens that row first. Pending and rejected stay silent. The service-account JSON stays out of the repo.
 
 **Precondition.** Wave 13 is green.
@@ -396,6 +398,8 @@ Completed on 24 October 2026. Manifest/theme/icon on `web/`; API image still exc
 **Realign.** The committed push path notifies approved accounts. This wave does not keep that gate and does not replace it. Wave 15 states the live rule.
 
 ## Wave 15 — Story 6.5
+
+Completed on 24 October 2026. Configurar label `Habilitar Notificaciones`; token register enables `PushApproved`; Punto de Alerta receives. Evidence: `Configurar_habilitar_notificaciones_reaches_punto_de_alerta`.
 
 **Outcome.** Configurar shows Habilitar Notificaciones. A Punto de Alerta receives alerts. The button does not name the mechanism.
 

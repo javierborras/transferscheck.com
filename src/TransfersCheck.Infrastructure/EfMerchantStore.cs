@@ -145,8 +145,9 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
 
     public async Task<IReadOnlyList<PushDevice>> ListApprovedPushDevicesAsync(CancellationToken cancellationToken)
     {
-        var approved = db.LoginAccounts.Where(a => a.PushApproved && !a.Revoked).Select(a => a.Id);
-        return await db.PushDevices.Where(d => approved.Contains(d.AccountId)).ToListAsync(cancellationToken);
+        // Wave 15: only accounts with Habilitar Notificaciones (PushApproved).
+        var enabled = db.LoginAccounts.Where(a => a.PushApproved && !a.Revoked).Select(a => a.Id);
+        return await db.PushDevices.Where(d => enabled.Contains(d.AccountId)).ToListAsync(cancellationToken);
     }
 
     public async Task DeletePushDevicesForAccountAsync(Guid accountId, CancellationToken cancellationToken)

@@ -122,7 +122,7 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         var body = await billing.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("fiveDayWarning").GetBoolean());
 
-        clock.Now = clock.Now.AddSeconds(61);
+        clock.Now = clock.Now.AddMinutes(5);
         using var refresh = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
 

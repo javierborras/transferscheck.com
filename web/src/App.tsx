@@ -699,7 +699,7 @@ function OwnerLogins() {
           {row.revoked ? null : (
             <label>
               <input type="checkbox" checked={row.pushApproved} onChange={(event) => void push(row, event.target.checked)} />
-              Avisos
+              Habilitar Notificaciones
             </label>
           )}
           {row.isOwner ? null : (

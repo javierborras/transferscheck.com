@@ -17,11 +17,12 @@ Updated: 24 October 2026.
 | 10 | `e3067e8` | Prepaid payment link; return does not move access; owner token unset |
 | 11 | `5f39fd3` | Five-day notice via Hangfire job + banner; NullMailSender unbound |
 | 12 | `87b8427` | Access-date web block; Pack Evento 24h from link |
-| 13 | *(this push)* | Installable PWA from web/; API does not serve it |
+| 13 | `9416490` | Installable PWA from web/; API does not serve it |
+| 14–15 | *(this push)* | FCM arrived push + Habilitar Notificaciones (no mechanism name) |
 
 ## Next
 
-Start at **wave 14** (stories 6.2–6.4 — FCM arrival sound/notice; no service-account JSON).
+**STOP before wave 16** — email-code digit length is an open decision (ADR-013 / `open-decisions.md`). Do not invent the length.
 
 ## Verify
 
