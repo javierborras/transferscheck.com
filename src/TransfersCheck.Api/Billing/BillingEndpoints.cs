@@ -36,6 +36,8 @@ public static class BillingEndpoints
         HttpContext http,
         IMerchantStore store,
         IPlanCatalog plans,
+        IConsultaCounter consultas,
+        IOptions<CommercialOptions> commercial,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
@@ -46,6 +48,14 @@ public static class BillingEndpoints
             ? active.FirstOrDefault(plan => string.Equals(plan.Code, code, StringComparison.OrdinalIgnoreCase))
             : null;
         var now = clock.GetUtcNow();
+        var quotaLevel = QuotaLevel.Ok;
+        var used = 0;
+        if (merchant?.ConnectedAt is { } link)
+        {
+            var (periodStart, periodEnd) = WeeklyQueryQuota.Period(link, now);
+            used = await consultas.CountAsync(account.TenantId, periodStart, periodEnd, cancellationToken);
+            quotaLevel = WeeklyQueryQuota.Evaluate(used, commercial.Value.WeeklyQueryCap, commercial.Value.WeeklyQueryWarningGap);
+        }
         return Results.Ok(new
         {
             accountLabel = "Email",
@@ -56,6 +66,10 @@ public static class BillingEndpoints
             accessUntil = merchant?.AccessUntil,
             fiveDayWarning = FiveDayNotice.ShouldWarn(merchant?.PlanCode, merchant?.AccessUntil, now),
             blocked = AccessBlock.IsBlocked(merchant?.AccessUntil, now),
+            consultaWarn = quotaLevel is QuotaLevel.Warn,
+            consultaWait = quotaLevel is QuotaLevel.Wait,
+            consultasUsed = used,
+            consultasCap = commercial.Value.WeeklyQueryCap,
             plans = active.Select(plan => new
             {
                 code = plan.Code,

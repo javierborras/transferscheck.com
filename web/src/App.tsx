@@ -598,6 +598,7 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   const [expired, setExpired] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [fiveDayWarning, setFiveDayWarning] = useState(false);
+  const [consultaWarn, setConsultaWarn] = useState(false);
   const [pollSeconds, setPollSeconds] = useState(300);
   const [cooldownSeconds, setCooldownSeconds] = useState(60);
   const seen = useRef<Map<string, string> | null>(null);
@@ -622,10 +623,11 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
     }
     const billing = await api("/api/billing");
     if (billing.ok) {
-      const { accessUntil, fiveDayWarning, blocked: isBlocked } = await billing.json();
+      const { accessUntil, fiveDayWarning, blocked: isBlocked, consultaWarn: warnConsultas } = await billing.json();
       setExpired(Boolean(accessUntil) && new Date(accessUntil).getTime() <= Date.now());
       setBlocked(Boolean(isBlocked));
       setFiveDayWarning(Boolean(fiveDayWarning));
+      setConsultaWarn(Boolean(warnConsultas));
     }
   }
 
@@ -687,8 +689,14 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
     setLoading(true);
     setWait("");
     const response = await api("/api/transfers/refresh", { method: "POST" });
-    if (response.status === 429) setWait("Mercado Pago está demorado. Aguardá unos instantes para volver a consultar.");
-    else if (response.status === 409) setExpired(true);
+    if (response.status === 429) {
+      const body = await response.json().catch(() => ({} as { error?: string }));
+      setWait(
+        body.error === "quota_wait"
+          ? "Llegaste al tope de consultas de esta semana. Esperá al próximo período."
+          : "Mercado Pago está demorado. Aguardá unos instantes para volver a consultar."
+      );
+    } else if (response.status === 409) setExpired(true);
     else await load(true);
     setLoading(false);
     setCooldown(cooldownSeconds);
@@ -735,6 +743,11 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
                 </p>
               ) : session.isOwner && trial ? (
                 <p className="banner trial">La prueba está en curso.</p>
+              ) : null}
+              {session.isOwner && consultaWarn ? (
+                <p className="banner warning" role="status">
+                  Te quedan pocas consultas de esta semana.
+                </p>
               ) : null}
               {notice ? (
                 <p className="notice" role="status">

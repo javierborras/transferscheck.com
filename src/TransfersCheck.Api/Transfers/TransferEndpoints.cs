@@ -92,12 +92,27 @@ public static class TransferEndpoints
         HttpContext http,
         TransferSync sync,
         IMerchantStore store,
+        IConsultaCounter consultas,
         IOptions<SyncOptions> options,
+        IOptions<CommercialOptions> commercial,
+        TimeProvider clock,
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
         if (!account.IsOwner)
             return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
+        var now = clock.GetUtcNow();
+        if (merchant?.ConnectedAt is { } link)
+        {
+            var (periodStart, periodEnd) = WeeklyQueryQuota.Period(link, now);
+            var used = await consultas.CountAsync(account.TenantId, periodStart, periodEnd, cancellationToken);
+            if (WeeklyQueryQuota.Evaluate(used, commercial.Value.WeeklyQueryCap, commercial.Value.WeeklyQueryWarningGap) is QuotaLevel.Wait)
+                return Results.Json(new { error = "quota_wait", used, cap = commercial.Value.WeeklyQueryCap }, statusCode: StatusCodes.Status429TooManyRequests);
+            await consultas.IncrementOnDemandAsync(account.TenantId, now, periodStart, cancellationToken);
+        }
+
         var status = await sync.Run(account.TenantId, manual: true, cancellationToken);
         if (status is SyncStatus.Waiting)
             return Results.Json(new { error = "waiting" }, statusCode: StatusCodes.Status429TooManyRequests);

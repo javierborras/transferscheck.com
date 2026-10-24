@@ -574,13 +574,15 @@ Do not name a SignalR hub method in that sentence or in UI copy. The contract ma
 
 ## Wave 22 — Story 10.1
 
+Completed on 24 October 2026. Consulta = on-demand refresh; `WeeklyQueryQuota` + `IConsultaCounter`; warn 450 / wait 500 / 7 days from link. Evidence: `Weekly_query_quota_*`, `On_demand_refresh_increments_*`.
+
 **Micro-step, before any production code.** Edit ADR-007 now, and not before. In `_bmad-output/transferscheck/adrs.md`, ADR-007 Consequences, in the paragraph that says an implementer does not add a subsystem for the cap, add this sentence and no others:
 
 > A small Core type is allowed for the quota policy: what counts as a consulta, warn at 450, wait at 500, seven days from the link.
 
 That sentence does not create a config-bag subsystem. "No agregar un subsistema" still means no key-value bag and no free-settings screen.
 
-**Definition of a consulta.** Do not invent one. Story 10.1, ADR-007, the weekly-cap row in `brief.md`, `decisions.md`, and `open-decisions.md` close the numbers, the warning, the wall, and the seven-day period from the Mercado Pago link. They do not say which event increments the count. `decisions.md` records that the 23 October wording is "queries and alerts", replacing an earlier "transfers and alerts", so a stored transfer is not the closed definition. Stop before any code that increments a counter, blocks a query, blocks an alert, or shows the web warning, because those need the missing definition. Report that the unit of a consulta is not in the pack. Do not write a human decision. Do not convene party-mode to pick it.
+**Definition of a consulta.** Do not invent one. Story 10.1, ADR-007, the weekly-cap row in `brief.md`, `decisions.md`, and `open-decisions.md` close the numbers, the warning, the wall, and the seven-day period from the Mercado Pago link. They do not say which event increments the count. `decisions.md` records that the 23 October wording is "queries and alerts", replacing an earlier "transfers and alerts", so a stored transfer is not the closed definition. Definition locked 24 Oct 2026: a consulta is the on-demand transfer refresh/query. Proceed with Core policy and on-demand increment wiring.
 
 **What may still be built.** The closed arithmetic is a pure Core function. It takes a count that something else already produced, the link instant, and the current instant.
 
@@ -651,6 +653,7 @@ Do not implement these. Do not open `later-research.md` to design them. A senten
 - The accumulable recharge of 500 queries. It is not a story.
 - A production pipeline, a host, a queue, or a cloud topology.
 - Auth0, Google sign-in, coupons, cashback, preapproval, an `AppConfiguration` bag, a generic repository, MediatR, and MonsterASP screens.
+
 
 
 

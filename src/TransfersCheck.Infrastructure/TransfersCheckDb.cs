@@ -25,6 +25,7 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<EmailSignInChallenge> EmailSignInChallenges => Set<EmailSignInChallenge>();
     public DbSet<AlertInvite> AlertInvites => Set<AlertInvite>();
     public DbSet<ReferralGrant> ReferralGrants => Set<ReferralGrant>();
+    public DbSet<ConsultaEvent> ConsultaEvents => Set<ConsultaEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +34,14 @@ public sealed class TransfersCheckDb : DbContext
             entity.HasKey(g => g.Id);
             entity.Property(g => g.Outcome).HasMaxLength(32);
         });
+
+        modelBuilder.Entity<ConsultaEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.TenantId, e.OccurredAt });
+            entity.HasQueryFilter(e => _tenant.TenantId != Guid.Empty && e.TenantId == _tenant.TenantId);
+        });
+
 
         modelBuilder.Entity<EmailSignInChallenge>(entity =>
         {
