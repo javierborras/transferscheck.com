@@ -152,6 +152,8 @@ Completed on 24 October 2026. Adopted door copy, menu (Transacciones, Configurar
 
 ## Wave 5 — Stories 2.2, 2.4
 
+Completed on 24 October 2026. `LoginAccountCap` + `ITenantPlanCode` (no new `IMerchantStore` methods); Pack Evento / unset = admin alone; Pack Mes = four Puntos de Alerta; revoke unchanged. Dev-only `PUT /api/dev/plan-code` until wave 9. Evidence: `Pack_mes_refuses_a_fifth_punto_de_alerta_and_pack_evento_refuses_a_second_account` + `web/e2e/configurar.spec.ts`.
+
 **Outcome.** Configurar enforces the plan account cap and revokes a login. Pack Evento is the admin alone. Pack Mes is one admin and at most four Puntos de Alerta.
 
 **Precondition.** Wave 4 is green. Step 0b is already in story 1.5. Obey it. Do not edit the story again.

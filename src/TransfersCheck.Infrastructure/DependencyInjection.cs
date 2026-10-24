@@ -23,6 +23,8 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString, sql => sql.UseCompatibilityLevel(SqlCompat.Level));
         });
         services.AddScoped<IMerchantStore, EfMerchantStore>();
+        services.AddScoped<ITenantPlanCode, TenantPlanCode>();
+        services.AddSingleton<LoginAccountCap>();
         services.AddHttpClient<MercadoPagoTransferSource>();
         services.AddScoped<ITransferSource>(sp => sp.GetRequiredService<MercadoPagoTransferSource>());
         services.AddScoped<TransferSync>();

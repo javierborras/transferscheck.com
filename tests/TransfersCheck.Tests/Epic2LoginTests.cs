@@ -40,27 +40,41 @@ public sealed class Epic2LoginTests(SqlFixture sql)
     }
 
     [Fact]
-    public async Task A_merchant_stops_at_five_login_accounts()
+    public async Task Pack_mes_refuses_a_fifth_punto_de_alerta_and_pack_evento_refuses_a_second_account()
     {
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient();
-        var ownerCookie = await SignUp(client, $"cap-{Guid.NewGuid():N}@counter.test");
+
+        var mesCookie = await SignUp(client, $"mes-{Guid.NewGuid():N}@counter.test");
+        await SetPlanCode(factory, mesCookie, PlanCodes.PackMes);
         for (var i = 0; i < 4; i++)
         {
-            using var created = await Send(client, HttpMethod.Post, "/api/logins", ownerCookie, new
+            using var created = await Send(client, HttpMethod.Post, "/api/logins", mesCookie, new
             {
-                email = $"till-{i}-{Guid.NewGuid():N}@counter.test",
+                email = $"alerta-{i}-{Guid.NewGuid():N}@counter.test",
                 password = "password1"
             });
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(createdBody.GetProperty("isOwner").GetBoolean());
+            Assert.Equal("Punto de Alerta", createdBody.GetProperty("role").GetString());
         }
 
-        using var refused = await Send(client, HttpMethod.Post, "/api/logins", ownerCookie, new
+        using var fifth = await Send(client, HttpMethod.Post, "/api/logins", mesCookie, new
         {
-            email = $"till-extra-{Guid.NewGuid():N}@counter.test",
+            email = $"alerta-extra-{Guid.NewGuid():N}@counter.test",
             password = "password1"
         });
-        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, fifth.StatusCode);
+
+        var eventoCookie = await SignUp(client, $"evento-{Guid.NewGuid():N}@counter.test");
+        await SetPlanCode(factory, eventoCookie, PlanCodes.PackEvento);
+        using var second = await Send(client, HttpMethod.Post, "/api/logins", eventoCookie, new
+        {
+            email = $"evento-extra-{Guid.NewGuid():N}@counter.test",
+            password = "password1"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
     [Fact]
@@ -99,6 +113,7 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient();
         var ownerCookie = await SignUp(client, $"revoke-owner-{Guid.NewGuid():N}@counter.test");
+        await SetPlanCode(factory, ownerCookie, PlanCodes.PackMes);
         var counterEmail = $"revoke-till-{Guid.NewGuid():N}@counter.test";
         using var created = await Send(client, HttpMethod.Post, "/api/logins", ownerCookie, new { email = counterEmail, password = "password1" });
         var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
@@ -141,6 +156,22 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         using var response = await client.PostAsJsonAsync("/api/accounts", new { email, password = "password1" });
         response.EnsureSuccessStatusCode();
         return CookiePair(response.Headers.GetValues("Set-Cookie").Single());
+    }
+
+    private static async Task SetPlanCode(TransfersApiFactory factory, string cookie, string planCode)
+    {
+        using var client = factory.CreateClient();
+        using var session = await Send(client, HttpMethod.Get, "/api/session", cookie);
+        var body = await session.Content.ReadFromJsonAsync<JsonElement>();
+        var tenantId = body.GetProperty("tenantId").GetGuid();
+        using var scope = factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenant.TenantId = tenantId;
+        var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var merchant = await store.FindMerchantAsync(tenantId, CancellationToken.None);
+        Assert.NotNull(merchant);
+        merchant!.PlanCode = planCode;
+        await store.SaveChangesAsync(CancellationToken.None);
     }
 
     private static string CookiePair(string setCookie) => setCookie.Split(';')[0];

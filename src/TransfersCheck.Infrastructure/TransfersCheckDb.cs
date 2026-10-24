@@ -29,6 +29,7 @@ public sealed class TransfersCheckDb : DbContext
             entity.HasKey(m => m.Id);
             entity.Ignore(m => m.TenantId);
             entity.Property(m => m.ChecklistStep).HasMaxLength(32);
+            entity.Property(m => m.PlanCode).HasMaxLength(32);
             entity.HasQueryFilter(m => _tenant.TenantId != Guid.Empty && m.Id == _tenant.TenantId);
         });
 

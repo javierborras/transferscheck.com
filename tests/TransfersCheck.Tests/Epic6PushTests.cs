@@ -20,6 +20,8 @@ public sealed class Epic6PushTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql) { Clock = clock, ServiceAccountPath = keyPath };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var owner = await ConnectOwner(client);
+        using var plan = await Send(client, "/api/dev/plan-code", owner, HttpMethod.Put, new { planCode = "pack_mes" });
+        Assert.Equal(HttpStatusCode.NoContent, plan.StatusCode);
         var staffEmail = $"staff-{Guid.NewGuid():N}@counter.test";
         using var created = await Send(client, "/api/logins", owner, json: new { email = staffEmail, password = "password1" });
         var staffId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();

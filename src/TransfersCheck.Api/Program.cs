@@ -126,6 +126,7 @@ if (app.Environment.IsDevelopment())
 }
 
 AccountEndpoints.Map(app);
+DevPlanEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
 BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);

@@ -571,7 +571,7 @@ function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<
   return (
     <Shell onSalir={onSalir} back>
       <main>
-        <h1>Configurar usuarios</h1>
+        <h1>Configurar</h1>
         {session.isOwner ? <OwnerLogins /> : null}
       </main>
     </Shell>
@@ -600,7 +600,7 @@ function OwnerLogins() {
       body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
     });
     if (!response.ok) {
-      setError("No se pudo crear la cuenta.");
+      setError(response.status === 409 ? "No se puede agregar otro Punto de Alerta en este plan." : "No se pudo crear la cuenta.");
       return;
     }
     event.currentTarget.reset();
@@ -629,6 +629,7 @@ function OwnerLogins() {
       {rows.map((row) => (
         <div className="login-row" key={row.id}>
           <span className="email">{row.email}</span>
+          <span className="role">{row.isOwner ? "Admin" : "Punto de Alerta"}</span>
           {row.revoked ? null : (
             <label>
               <input type="checkbox" checked={row.pushApproved} onChange={(event) => void push(row, event.target.checked)} />

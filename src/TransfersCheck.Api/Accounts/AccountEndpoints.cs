@@ -136,6 +136,7 @@ public static class AccountEndpoints
             id = a.Id,
             email = a.Email,
             isOwner = a.IsOwner,
+            role = a.IsOwner ? "Admin" : "Punto de Alerta",
             pushApproved = a.PushApproved,
             revoked = a.Revoked
         }));
@@ -145,13 +146,18 @@ public static class AccountEndpoints
         Credentials body,
         HttpContext http,
         IMerchantStore store,
+        ITenantPlanCode planCode,
+        LoginAccountCap accountCap,
         CancellationToken cancellationToken)
     {
         if (!Owner(http))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         if (!Valid(body))
             return Results.BadRequest(new { error = "invalid_account" });
-        if (await store.CountAccountsAsync(cancellationToken) >= 5)
+
+        var accounts = await store.ListAccountsAsync(cancellationToken);
+        var alertPoints = accounts.Count(a => !a.IsOwner && !a.Revoked);
+        if (!accountCap.AllowsAnotherAlertPoint(await planCode.GetAsync(cancellationToken), alertPoints))
             return Results.Conflict(new { error = "account_cap" });
 
         var email = body.Email!.Trim().ToLowerInvariant();
@@ -167,7 +173,13 @@ public static class AccountEndpoints
             IsOwner = false
         };
         await store.AddAccountAsync(account, cancellationToken);
-        return Results.Created($"/api/logins/{account.Id}", new { id = account.Id, email });
+        return Results.Created($"/api/logins/{account.Id}", new
+        {
+            id = account.Id,
+            email,
+            isOwner = false,
+            role = "Punto de Alerta"
+        });
     }
 
     private static async Task<IResult> Revoke(

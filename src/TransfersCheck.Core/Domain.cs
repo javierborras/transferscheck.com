@@ -30,6 +30,8 @@ public sealed class Merchant : ITenantOwned
     public string ChecklistStep { get; set; } = "account";
     public DateTimeOffset? RateLimitedUntil { get; set; }
     public DateTimeOffset? RefreshNotBefore { get; set; }
+    /// <summary>Plan code for login caps only until the plan table (wave 9).</summary>
+    public string? PlanCode { get; set; }
 }
 
 public sealed class LoginAccount : ITenantOwned
