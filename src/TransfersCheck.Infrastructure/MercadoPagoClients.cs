@@ -49,7 +49,7 @@ public sealed class MercadoPagoCheckout(
     IOptions<CheckoutOptions> checkout,
     IOptions<MercadoPagoOptions> mercadoPago) : ICheckout
 {
-    public async Task<string> CreatePreferenceAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
+    public async Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
     {
         var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{root}/checkout/preferences");

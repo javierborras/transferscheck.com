@@ -64,7 +64,7 @@ public static class BillingEndpoints
         var account = (LoginAccount)http.Items["account"]!;
         var packMes = await plans.FindByCodeAsync(PlanCodes.PackMes, cancellationToken)
             ?? throw new InvalidOperationException("Pack Mes plan row is missing.");
-        var initPoint = await checkout.CreatePreferenceAsync(
+        var initPoint = await checkout.CreatePaymentLinkAsync(
             account.TenantId,
             packMes.Amount,
             packMes.Currency,

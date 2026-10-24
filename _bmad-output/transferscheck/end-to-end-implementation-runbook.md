@@ -278,6 +278,8 @@ Completed on 24 October 2026. Plan table (`IPlanCatalog`) seeds Pack Evento / Pa
 
 ## Wave 10 — Stories 5.3, 5.6
 
+Completed on 24 October 2026. `ICheckout.CreatePaymentLinkAsync`; owner `Checkout:AccessToken` empty in appsettings; webhook extends with gap rule; browser return does not move access; no cashback/coupon. Evidence: `Payment_link_extends_access_without_cashback_and_return_does_not` + `web/e2e/pay.spec.ts`.
+
 **Outcome.** The prepaid Mercado Pago payment link. No preapproval, no automatic debit, no cashback, no coupon. The browser return does not itself move the access date. The owner account stays unset.
 
 **Precondition.** Wave 9 is green.

@@ -39,6 +39,7 @@ public sealed class MercadoPagoOptions
 public sealed class CheckoutOptions
 {
     public const string Section = "Checkout";
+    /// <summary>SaaS owner Mercado Pago token for payment links. Stays empty in the repo; story 12.3 fills it outside this build.</summary>
     public string AccessToken { get; set; } = "";
     public string WebhookSecret { get; set; } = "";
     public string NotificationUrl { get; set; } = "";

@@ -113,6 +113,7 @@ public interface IPushSender
 
 public interface ICheckout
 {
-    Task<string> CreatePreferenceAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken);
+    /// <summary>Creates a prepaid Mercado Pago payment link (not preapproval). Owner AccessToken may be empty until story 12.3.</summary>
+    Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken);
     Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
 }

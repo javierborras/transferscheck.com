@@ -124,24 +124,35 @@ public sealed class Epic5BillingTests(SqlFixture sql)
     }
 
     [Fact]
-    public async Task Webhook_extends_access_and_the_browser_return_does_not()
+    public async Task Payment_link_extends_access_without_cashback_and_return_does_not()
     {
         MockState.Reset();
         MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         var clock = new MutableClock();
         await using var factory = new TransfersApiFactory(sql) { Clock = clock };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var cookie = await ConnectOwner(client, factory);
+        var email = $"pay-link-{Guid.NewGuid():N}@counter.test";
+        var cookie = await ConnectOwner(client, factory, email);
         var tenantId = await Tenant(client, cookie);
         var before = await AccessUntil(client, cookie);
+        Assert.NotNull(before);
+        Assert.True(before > clock.Now);
+
+        var appsettings = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "appsettings.json"));
+        Assert.Contains("\"AccessToken\": \"\"", appsettings, StringComparison.Ordinal);
+        Assert.DoesNotContain("cashback", appsettings, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("coupon", appsettings, StringComparison.OrdinalIgnoreCase);
 
         using var checkout = await Send(client, "/api/billing/checkout", cookie);
         Assert.Equal(HttpStatusCode.OK, checkout.StatusCode);
         var initPoint = (await checkout.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("initPoint").GetString();
         Assert.Contains("pref-1", initPoint, StringComparison.Ordinal);
         Assert.Equal("Bearer mock-checkout-token", MockState.LastCheckoutAuthorization);
-        Assert.Contains("5999", MockState.LastCheckoutBody, StringComparison.Ordinal);
         Assert.DoesNotContain("preapproval", MockState.LastCheckoutBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("auto_recurring", MockState.LastCheckoutBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cashback", MockState.LastCheckoutBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("coupon", MockState.LastCheckoutBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("external_reference", MockState.LastCheckoutBody, StringComparison.Ordinal);
 
         using var returned = await client.GetAsync("/api/billing/return");
         Assert.Equal(HttpStatusCode.Redirect, returned.StatusCode);
@@ -158,16 +169,32 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         Assert.Equal(HttpStatusCode.OK, pendingResponse.StatusCode);
         Assert.Equal(before, await AccessUntil(client, cookie));
 
+        // Pay while days remain: period continues from AccessUntil without a gap.
         var paymentId = "pay-" + Guid.NewGuid().ToString("N");
         MockState.CheckoutTenants[paymentId] = tenantId.ToString();
         using var applied = await client.SendAsync(Webhook(client, paymentId));
         Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
         var extended = await AccessUntil(client, cookie);
-        Assert.Equal(before!.Value.AddDays(30), extended);
+        Assert.Equal(before.Value.AddDays(30), extended);
 
         using var replay = await client.SendAsync(Webhook(client, paymentId));
         Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
         Assert.Equal(extended, await AccessUntil(client, cookie));
+
+        // Pay after the block: new period starts at payment.
+        clock.Now = extended!.Value.AddDays(2);
+        using var again = await client.PostAsJsonAsync("/api/sessions", new { email, password = "password1" });
+        again.EnsureSuccessStatusCode();
+        cookie = again.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        var afterBlockId = "pay-" + Guid.NewGuid().ToString("N");
+        MockState.CheckoutTenants[afterBlockId] = tenantId.ToString();
+        using var afterBlock = await client.SendAsync(Webhook(client, afterBlockId));
+        Assert.Equal(HttpStatusCode.OK, afterBlock.StatusCode);
+        Assert.Equal(clock.Now.AddDays(30), await AccessUntil(client, cookie));
+
+        var core = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Core", "Ports.cs"));
+        Assert.DoesNotContain("Cashback", core, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Coupon", core, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string RepoRoot()

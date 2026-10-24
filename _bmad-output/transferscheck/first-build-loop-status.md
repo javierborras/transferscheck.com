@@ -13,11 +13,12 @@ Updated: 24 October 2026.
 | 6 | `d2bc703` | MP operator checklist without secrets / withdrawn prices |
 | 7 | `774d88c` / `bf9fa9c` | Checklist on real connection state; connect badges |
 | 8 | `aff151d` | Last-10 list columns + Desconocido; no Sincronizar |
-| 9 | *(this push)* | Plan table Pack Evento/Mes; 21-day Pack Mes trial from link |
+| 9 | `dd3a338` | Plan table Pack Evento/Mes; 21-day Pack Mes trial from link |
+| 10 | *(this push)* | Prepaid payment link; return does not move access; owner token unset |
 
 ## Next
 
-Start at **wave 10** (stories 5.3, 5.6 — prepaid payment link; browser return does not move access).
+Start at **wave 11** (story 5.4 — five-day notice email + banner; fake mail port; Hangfire job body).
 
 ## Verify
 
