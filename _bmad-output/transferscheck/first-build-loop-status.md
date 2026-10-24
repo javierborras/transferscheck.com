@@ -19,10 +19,11 @@ Updated: 24 October 2026.
 | 12 | `87b8427` | Access-date web block; Pack Evento 24h from link |
 | 13 | `9416490` | Installable PWA from web/; API does not serve it |
 | 14–15 | `4bd68c2` | FCM arrived push + Habilitar Notificaciones (no mechanism name) |
+| 16 | _(pending push)_ | Email code 6 digits / 1h; door Código field |
 
 ## Next
 
-**STOP before wave 16** — email-code digit length is an open decision (ADR-013 / `open-decisions.md`). Do not invent the length.
+Wave 17 — alias once, Pack Mes invite (1h), wa.me only.
 
 ## Verify
 
@@ -33,6 +34,4 @@ cd web; npm run e2e
 
 ## Open decisions (do not invent)
 
-- Wave 16 / story 7.1: email-code digit length
-- Wave 21 / story 9.1: SignalR hub method name (shared message type OK; UI must not say SignalR)
-- Wave 22 / story 10.1: what counts as a "consulta" if not in live docs
+None for waves 16–22: human locked email-code length, live-list contract (no SignalR in UI), and consulta = on-demand transfer refresh/query (24 Oct 2026).

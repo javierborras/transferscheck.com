@@ -274,16 +274,28 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    const payload: Record<string, FormDataEntryValue | null> = {
+      email: data.get("email"),
+      password: data.get("password")
+    };
+    if (needsCode) payload.code = data.get("code");
     const response = await api("/api/sessions", {
       method: "POST",
-      body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
+      body: JSON.stringify(payload)
     });
     if (!response.ok) {
-      setError("El correo o la contraseña no sirven.");
+      const body = await response.json().catch(() => ({} as { error?: string }));
+      if (body.error === "code_required") {
+        setNeedsCode(true);
+        setError("Te enviamos un código a tu email. Ingresalo para continuar.");
+        return;
+      }
+      setError(body.error === "invalid_code" ? "El código no sirve o venció." : "El correo o la contraseña no sirven.");
       return;
     }
     const current = await api("/api/session");
@@ -321,6 +333,12 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
         >
           {showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
         </button>
+        {needsCode ? (
+          <label>
+            Código *
+            <input name="code" inputMode="numeric" autoComplete="one-time-code" required />
+          </label>
+        ) : null}
         {error ? <p className="error">{error}</p> : null}
         <button type="submit">Iniciar sesión</button>
       </form>

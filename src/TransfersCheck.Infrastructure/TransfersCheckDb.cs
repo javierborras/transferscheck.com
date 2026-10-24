@@ -22,9 +22,18 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<ProcessedPayment> ProcessedPayments => Set<ProcessedPayment>();
     public DbSet<Plan> Plans => Set<Plan>();
+    public DbSet<EmailSignInChallenge> EmailSignInChallenges => Set<EmailSignInChallenge>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<EmailSignInChallenge>(entity =>
+        {
+            entity.HasKey(c => c.AccountId);
+            entity.Property(c => c.Email).HasMaxLength(256);
+            entity.Property(c => c.CodeHash).HasMaxLength(64);
+            entity.HasIndex(c => c.Email);
+        });
+
         modelBuilder.Entity<Plan>(entity =>
         {
             entity.HasKey(p => p.Code);

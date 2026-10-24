@@ -8,7 +8,7 @@ namespace TransfersCheck.Api.Accounts;
 
 public static class AccountEndpoints
 {
-    public sealed record Credentials(string? Email, string? Password, Guid? TenantId);
+    public sealed record Credentials(string? Email, string? Password, string? Code, Guid? TenantId);
     public sealed record PushApproval(bool Approved);
 
     public static void Map(WebApplication app)
@@ -65,6 +65,8 @@ public static class AccountEndpoints
     private static async Task<IResult> SignIn(
         Credentials body,
         IMerchantStore store,
+        IEmailCodeStore codes,
+        IMailSender mail,
         IOptions<LoginSessionOptions> sessionOptions,
         ITenantContext tenantContext,
         TimeProvider clock,
@@ -77,6 +79,22 @@ public static class AccountEndpoints
         var account = await store.FindAccountByEmailAsync(body.Email, cancellationToken);
         if (account is null || account.Revoked || !PasswordHasher.Verify(body.Password, account.PasswordHash))
             return Results.Json(new { error = "invalid_credentials" }, statusCode: StatusCodes.Status401Unauthorized);
+
+        var now = clock.GetUtcNow();
+        if (string.IsNullOrWhiteSpace(body.Code))
+        {
+            var issued = EmailSignInCode.Generate();
+            await codes.IssueAsync(account.Id, account.Email, issued, now.Add(sessionOptions.Value.EmailCodeLifetime), cancellationToken);
+            await mail.SendAsync(
+                account.Email,
+                "TransfersCheck — código de acceso",
+                issued,
+                cancellationToken);
+            return Results.Json(new { error = "code_required" }, statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        if (!await codes.TryConsumeAsync(account.Id, body.Code.Trim(), now, cancellationToken))
+            return Results.Json(new { error = "invalid_code" }, statusCode: StatusCodes.Status401Unauthorized);
 
         await Issue(store, tenantContext, sessionOptions.Value, clock, response, account, cancellationToken);
         return Results.Ok(new { email = account.Email, isOwner = account.IsOwner });

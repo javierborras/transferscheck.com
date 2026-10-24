@@ -180,7 +180,7 @@ A single `TrialDays` of 14 and a single `PriceAmount` of 5999 are withdrawn.
 
 ### Consequences
 
-A new process setting is a typed property. The weekly cap default is 500. An implementer changes that property. They do not add a subsystem for the cap, the gap, the record count, or the 1-hour lifetimes. The pay screen reads the plan table. The commerce webapp does not gain a business-config screen. It has no Backend Config / Pruebas screen. The services panel stays on the owner microsite (ADR-012), and that microsite is not the first bmad-build (`later-research.md`). The recharge pack stays deferred. It is not a story. The cutoff instant is the Mercado Pago link, above.
+A new process setting is a typed property. The weekly cap default is 500. An implementer changes that property. They do not add a subsystem for the cap, the gap, the record count, or the 1-hour lifetimes. A small Core type is allowed for the quota policy: what counts as a consulta, warn at 450, wait at 500, seven days from the link. The pay screen reads the plan table. The commerce webapp does not gain a business-config screen. It has no Backend Config / Pruebas screen. The services panel stays on the owner microsite (ADR-012), and that microsite is not the first bmad-build (`later-research.md`). The recharge pack stays deferred. It is not a story. The cutoff instant is the Mercado Pago link, above. A consulta is an on-demand transfer refresh/query (human decision 24 Oct 2026).
 
 ## ADR-008 — Account caps, one session each, admin deactivate
 
@@ -239,11 +239,11 @@ The last 10 transfers stay. The poll stays. The browser notification stays. Whil
 
 ### Decision
 
-While the webapp is open, a new transfer appears immediately. When the webapp is closed, the browser notification still fires. The poll still runs. This record names no hub method.
+While the webapp is open, a new transfer appears immediately. When the webapp is closed, the browser notification still fires. The poll still runs. This record names no hub method. API and web/ share a message contract a test can fail first.
 
 ### Consequences
 
-An implementer does not remove `TransferPollWorker` or the push path to make room for this. Hub method names are not decided here.
+An implementer does not remove `TransferPollWorker` or the push path to make room for this. Hub method names are not decided here. UI copy must not say SignalR.
 
 ## ADR-011 — Hangfire runs two jobs; the poll stays on the worker
 
@@ -302,7 +302,7 @@ There is no permission matrix. The human adopted this split on the evening of 23
 
 ### Consequences
 
-The email-code lifetime and the invite-link lifetime are each 1 hour. The email-code length is not chosen. That length is not a research item in `later-research.md`. The alias is immutable after confirmation. A Punto de Alerta has no Mercado Pago account features and no account-management action. They may open the detail of one of the last N rows. They do not get the title Historial de Transacciones. They cannot open history, a CSV, or the totals. Those stay with the commerce admin, by day, by month, and by a date range. The admin history is not capped at 10 rows.
+The email-code lifetime and the invite-link lifetime are each 1 hour. The email-code length is 6 numeric digits (human decision 24 Oct 2026). The alias is immutable after confirmation. A Punto de Alerta has no Mercado Pago account features and no account-management action. They may open the detail of one of the last N rows. They do not get the title Historial de Transacciones. They cannot open history, a CSV, or the totals. Those stay with the commerce admin, by day, by month, and by a date range. The admin history is not capped at 10 rows.
 
 ## ADR-014 — Owner microsite sign-in
 

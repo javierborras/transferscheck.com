@@ -422,9 +422,11 @@ Completed on 24 October 2026. Configurar label `Habilitar Notificaciones`; token
 
 ## Wave 16 — Story 7.1
 
-**Micro-step, before any production code.** The test asserts rejection and a 1-hour lifetime only. It does not assert a digit length. ADR-013 and `open-decisions.md` leave the length unchosen. If a failing test cannot be written without choosing how many characters the code has, stop. Point at `open-decisions.md` and ADR-013. Do not choose the length. Do not write it into `decisions.md`.
+Completed on 24 October 2026. Email sign-in code is 6 numeric digits, 1-hour lifetime, via `IEmailCodeStore` + existing mail port. Door gains Código without naming length. Evidence: `Sign_in_requires_the_email_code_and_refuses_it_after_one_hour`, `e2e/email-code.spec.ts`.
 
-**Outcome.** Every commerce sign-in also requires the email code. The code lives 1 hour.
+**Micro-step, before any production code.** Length locked 24 Oct 2026: 6 numeric digits, lifetime 1 hour. Proceed.
+
+**Outcome.** Every commerce sign-in also requires the email code. The code is 6 digits and lives 1 hour.
 
 **Precondition.** Wave 15 is green. The mail port from wave 11 exists. Reuse it. Do not pick a provider.
 

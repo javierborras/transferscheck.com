@@ -236,7 +236,7 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public string? VideoUrl { get; init; }
     public int? PageSize { get; init; }
     public string? ServiceAccountPath { get; init; }
-    public RecordingMailSender? Mail { get; init; }
+    public RecordingMailSender Mail { get; init; } = new();
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -274,11 +274,8 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton(Clock);
             }
-            if (Mail is not null)
-            {
-                services.RemoveAll<IMailSender>();
-                services.AddSingleton<IMailSender>(Mail);
-            }
+            services.RemoveAll<IMailSender>();
+            services.AddSingleton<IMailSender>(Mail);
         });
     }
 }

@@ -98,8 +98,7 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         using var client = factory.CreateClient();
         var email = $"one-{Guid.NewGuid():N}@counter.test";
         var first = await SignUp(client, email);
-        using var secondResponse = await client.PostAsJsonAsync("/api/sessions", new { email, password = "password1" });
-        var second = CookiePair(secondResponse.Headers.GetValues("Set-Cookie").Single());
+        var second = await TestAuth.SignInWithCode(client, factory, email);
 
         using var oldSession = await Send(client, HttpMethod.Get, "/api/session", first);
         using var newSession = await Send(client, HttpMethod.Get, "/api/session", second);
@@ -119,8 +118,7 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
         var accountId = createdBody.GetProperty("id").GetGuid();
 
-        using var counterSignIn = await client.PostAsJsonAsync("/api/sessions", new { email = counterEmail, password = "password1" });
-        var counterCookie = CookiePair(counterSignIn.Headers.GetValues("Set-Cookie").Single());
+        var counterCookie = await TestAuth.SignInWithCode(client, factory, counterEmail);
         using var counterSession = await Send(client, HttpMethod.Get, "/api/session", counterCookie);
         var sessionBody = await counterSession.Content.ReadFromJsonAsync<JsonElement>();
         var tenantId = sessionBody.GetProperty("tenantId").GetGuid();

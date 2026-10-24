@@ -506,9 +506,9 @@ As a commerce admin, I want every sign-in to require a code sent to my email, so
 **Then** the sign-in requires email, password, and a code sent to that same email
 **And** a sign-in without that code is refused
 **And** the code lives 1 hour
-**And** this story does not set the code length
+**And** the code is 6 numeric digits (human decision 24 Oct 2026)
 
-Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. The human said the 1-hour lifetime was already defined.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. The human said the 1-hour lifetime was already defined. Amended 24 Oct 2026: length locked to 6 digits.
 
 ### Story 7.2
 

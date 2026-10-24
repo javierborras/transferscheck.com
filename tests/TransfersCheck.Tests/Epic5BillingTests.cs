@@ -108,15 +108,13 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         Assert.NotNull(access);
 
         clock.Now = access.Value.AddDays(-5);
-        using var session = await client.PostAsJsonAsync("/api/sessions", new { email, password = "password1" });
-        session.EnsureSuccessStatusCode();
-        cookie = session.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        cookie = await TestAuth.SignInWithCode(client, factory, email);
 
         using var scope = factory.Services.CreateScope();
         var job = scope.ServiceProvider.GetRequiredService<TransfersCheck.Api.Jobs.FiveDayNoticeJob>();
         Assert.DoesNotContain("TransferPollWorker", job.GetType().Name, StringComparison.Ordinal);
         await job.Execute();
-        Assert.Equal(1, mail.Sent.Count(item => item.To == email));
+        Assert.Equal(1, mail.Sent.Count(item => item.To == email && item.Subject.Contains("cinco días", StringComparison.Ordinal)));
 
         using var billing = await Send(client, "/api/billing", cookie, HttpMethod.Get);
         var body = await billing.Content.ReadFromJsonAsync<JsonElement>();
@@ -126,9 +124,9 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         using var refresh = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
 
-        var beforeReplay = mail.Sent.Count(item => item.To == email);
+        var beforeReplay = mail.Sent.Count(item => item.To == email && item.Subject.Contains("cinco días", StringComparison.Ordinal));
         await job.Execute();
-        Assert.Equal(beforeReplay, mail.Sent.Count(item => item.To == email));
+        Assert.Equal(beforeReplay, mail.Sent.Count(item => item.To == email && item.Subject.Contains("cinco días", StringComparison.Ordinal)));
 
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
         Assert.Contains("fiveDayWarning", app, StringComparison.Ordinal);
@@ -173,9 +171,7 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         Assert.Equal(HttpStatusCode.OK, synced.StatusCode);
 
         clock.Now = access!.Value;
-        using var again = await client.PostAsJsonAsync("/api/sessions", new { email, password = "password1" });
-        again.EnsureSuccessStatusCode();
-        cookie = again.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        cookie = await TestAuth.SignInWithCode(client, factory, email);
         MockState.Payments.Add(MockState.Payment(80, "approved", "bank_transfer", 80m, "Bloqueado"));
         using var stopped = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.Conflict, stopped.StatusCode);
@@ -196,9 +192,7 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         Assert.Equal(HttpStatusCode.Redirect, connected.StatusCode);
         Assert.Equal(linkAt.AddHours(24), await AccessUntil(client, eventoCookie));
         clock.Now = linkAt.AddHours(24);
-        using var eventoSession = await client.PostAsJsonAsync("/api/sessions", new { email = eventoEmail, password = "password1" });
-        eventoSession.EnsureSuccessStatusCode();
-        eventoCookie = eventoSession.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        eventoCookie = await TestAuth.SignInWithCode(client, factory, eventoEmail);
         using var eventoBilling = await Send(client, "/api/billing", eventoCookie, HttpMethod.Get);
         var eventoBody = await eventoBilling.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(eventoBody.GetProperty("blocked").GetBoolean());
@@ -265,9 +259,7 @@ public sealed class Epic5BillingTests(SqlFixture sql)
 
         // Pay after the block: new period starts at payment.
         clock.Now = extended!.Value.AddDays(2);
-        using var again = await client.PostAsJsonAsync("/api/sessions", new { email, password = "password1" });
-        again.EnsureSuccessStatusCode();
-        cookie = again.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        cookie = await TestAuth.SignInWithCode(client, factory, email);
         var afterBlockId = "pay-" + Guid.NewGuid().ToString("N");
         MockState.CheckoutTenants[afterBlockId] = tenantId.ToString();
         using var afterBlock = await client.SendAsync(Webhook(client, afterBlockId));

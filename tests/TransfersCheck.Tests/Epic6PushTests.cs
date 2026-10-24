@@ -123,8 +123,7 @@ public sealed class Epic6PushTests(SqlFixture sql)
         using var enabled = await Send(client, $"/api/logins/{staffId}/push", owner, HttpMethod.Put, new { approved = true });
         Assert.Equal(HttpStatusCode.NoContent, enabled.StatusCode);
 
-        using var staffSignIn = await client.PostAsJsonAsync("/api/sessions", new { email = staffEmail, password = "password1" });
-        var staff = staffSignIn.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        var staff = await TestAuth.SignInWithCode(client, factory, staffEmail);
         using var staffToken = await Send(client, "/api/push/tokens", staff, json: new { token = "device-staff" });
         Assert.Equal(HttpStatusCode.NoContent, staffToken.StatusCode);
 

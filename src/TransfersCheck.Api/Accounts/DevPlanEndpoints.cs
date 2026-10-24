@@ -20,6 +20,16 @@ public static class DevPlanEndpoints
             .AddEndpointFilter<LiveSessionFilter>();
         app.MapPut("/api/dev/access-until", SetAccess)
             .AddEndpointFilter<LiveSessionFilter>();
+        app.MapGet("/api/dev/email-code", PeekCode);
+    }
+
+    private static async Task<IResult> PeekCode(
+        string email,
+        IEmailCodeStore codes,
+        CancellationToken cancellationToken)
+    {
+        var code = await codes.PeekPlainCodeAsync(email, cancellationToken);
+        return code is null ? Results.NotFound() : Results.Ok(new { code });
     }
 
     private static async Task<IResult> Set(
