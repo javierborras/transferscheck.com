@@ -86,7 +86,13 @@ public sealed class Epic6PushTests(SqlFixture sql)
         Assert.Contains("notificationclick", worker, StringComparison.Ordinal);
         Assert.Contains("/?first=", worker, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", index, StringComparison.Ordinal);
+        Assert.Contains("icon.svg", index, StringComparison.Ordinal);
         Assert.DoesNotContain("web/", docker, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("manifest.webmanifest", docker, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(Path.Combine(root, "web", "public", "icon.svg")));
+        Assert.True(File.Exists(Path.Combine(root, "web", "public", "sw.js")));
+        var apiCsproj = File.ReadAllText(Path.Combine(root, "src", "TransfersCheck.Api", "TransfersCheck.Api.csproj"));
+        Assert.DoesNotContain("wwwroot", apiCsproj, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

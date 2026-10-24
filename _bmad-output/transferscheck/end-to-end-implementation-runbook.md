@@ -352,6 +352,8 @@ Completed on 24 October 2026. `AccessBlock` + billing `blocked`; web access-bloc
 
 ## Wave 13 — Story 6.1
 
+Completed on 24 October 2026. Manifest/theme/icon on `web/`; API image still excludes PWA. Evidence: `The_pwa_is_installable_from_the_ui_origin`.
+
 **Outcome.** The installable PWA is built from `web/`. The API does not serve it.
 
 **Precondition.** Wave 12 is green.

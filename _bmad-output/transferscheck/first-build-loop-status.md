@@ -16,11 +16,12 @@ Updated: 24 October 2026.
 | 9 | `dd3a338` | Plan table Pack Evento/Mes; 21-day Pack Mes trial from link |
 | 10 | `e3067e8` | Prepaid payment link; return does not move access; owner token unset |
 | 11 | `5f39fd3` | Five-day notice via Hangfire job + banner; NullMailSender unbound |
-| 12 | *(this push)* | Access-date web block; Pack Evento 24h from link |
+| 12 | `87b8427` | Access-date web block; Pack Evento 24h from link |
+| 13 | *(this push)* | Installable PWA from web/; API does not serve it |
 
 ## Next
 
-Start at **wave 13** (story 6.1 — installable PWA from web/).
+Start at **wave 14** (stories 6.2–6.4 — FCM arrival sound/notice; no service-account JSON).
 
 ## Verify
 
