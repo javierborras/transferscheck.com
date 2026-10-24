@@ -33,8 +33,14 @@ type LoginRow = { id: string; email: string; isOwner: boolean; pushApproved: boo
 
 let firstOpen: Promise<void> | null = null;
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
-const clock = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
-const when = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
+const when = new Intl.DateTimeFormat("es-AR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false
+});
 
 function beep() {
   const context = new AudioContext();
@@ -576,23 +582,21 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
               <button type="button" onClick={enableAlerts}>Activar avisos</button>
             </section>
           ) : null}
+          <div className="transfer-columns" role="row">
+            <span>Fecha</span>
+            <span>Pagador</span>
+            <span>Monto</span>
+            <span>Estado</span>
+          </div>
           <ol className="transfers">
             {items.map((item) => {
               const tone = item.status === "approved" || item.status === "pending" || item.status === "rejected" ? item.status : "other";
-              const badge = item.status === "approved" ? "Acreditado" : item.status === "pending" ? "Pendiente" : item.statusLabel;
-              const moment = new Date(item.occurredAt);
-              const detail =
-                item.status === "approved"
-                  ? `${item.statusLabel} ${clock.format(moment)}`
-                  : item.status === "pending"
-                    ? "En proceso de acreditación"
-                    : when.format(moment);
               return (
                 <li key={item.id} className={first === item.id ? `row ${tone} focus` : `row ${tone}`}>
-                  <div className="payer">{item.payerName}</div>
+                  <div className="when">{when.format(new Date(item.occurredAt))}</div>
+                  <div className="payer">{item.payerName || "Desconocido"}</div>
                   <div className="amount">{money.format(item.amount)}</div>
-                  <div className="when">{detail}</div>
-                  <div className="status">{badge}</div>
+                  <div className="status">{item.statusLabel}</div>
                 </li>
               );
             })}

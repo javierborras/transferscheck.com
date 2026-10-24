@@ -11,10 +11,11 @@ Updated: 24 October 2026.
 | 4 | `27aaf0f` | Adopted door copy, menu, sign-out |
 | 5 | `dfd482e` | Pack Evento / Pack Mes login caps (`LoginAccountCap`) |
 | 6 | `d2bc703` | MP operator checklist without secrets / withdrawn prices |
+| 7 | (this push) | Checklist connect words, badges, reconnect, empty video |
 
 ## Next
 
-Start at **wave 7** (stories 3.3, 3.4, 3.6 — checklist UI, server step, video URL unset).
+Start at **wave 8** (stories 4.1–4.4 — last-10 list, refresh, no Sincronizar).
 
 ## Verify
 

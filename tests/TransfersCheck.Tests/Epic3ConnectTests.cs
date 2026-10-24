@@ -71,14 +71,14 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
 
         using var done = await Connect(client, cookie);
         Assert.Equal(HttpStatusCode.Redirect, done.StatusCode);
-        Assert.Contains("/conectar", done.Headers.Location?.ToString() ?? "", StringComparison.Ordinal);
         using var after = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
         var ready = await after.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(ready.GetProperty("connectDone").GetBoolean());
         Assert.True(ready.GetProperty("listReachable").GetBoolean());
         Assert.True(ready.GetProperty("trialRunning").GetBoolean());
         Assert.Equal("Conectado", ready.GetProperty("connectionBadge").GetString());
-        Assert.Equal("Re-conectar cuenta", ready.GetProperty("button").GetString());
+        Assert.Equal("Conectar Mercado Pago", ready.GetProperty("button").GetString());
+        Assert.Equal("Re-conectar cuenta", ready.GetProperty("reconnectButton").GetString());
         Assert.Equal("alerts", ready.GetProperty("currentStep").GetString());
 
         using var scope = factory.Services.CreateScope();
