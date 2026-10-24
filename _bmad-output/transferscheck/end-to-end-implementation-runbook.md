@@ -447,6 +447,8 @@ Completed on 24 October 2026. Email sign-in code is 6 numeric digits, 1-hour lif
 
 ## Wave 17 — Stories 7.2, 7.3, 7.4
 
+Completed on 24 October 2026. Alias once via `ICommerceAliasStore`; Pack Mes invite via `IAlertInviteStore` (1h, single-use, `wa.me`); door has commerce+user for Punto de Alerta. Evidence: `Alias_is_confirmed_once_*`, `Pack_mes_invite_*`, `e2e/configurar.spec.ts`.
+
 **Outcome.** The admin confirms the alias once, as `#alias`. Pack Mes gets a single-use invite that lives 1 hour. The Punto de Alerta sets a password from that link. WhatsApp only carries the message, via `wa.me`.
 
 **Precondition.** Wave 16 is green. Wave 5's cap still applies. This wave does not raise the cap.

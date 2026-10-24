@@ -23,6 +23,7 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<ProcessedPayment> ProcessedPayments => Set<ProcessedPayment>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<EmailSignInChallenge> EmailSignInChallenges => Set<EmailSignInChallenge>();
+    public DbSet<AlertInvite> AlertInvites => Set<AlertInvite>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +33,14 @@ public sealed class TransfersCheckDb : DbContext
             entity.Property(c => c.Email).HasMaxLength(256);
             entity.Property(c => c.CodeHash).HasMaxLength(64);
             entity.HasIndex(c => c.Email);
+        });
+
+        modelBuilder.Entity<AlertInvite>(entity =>
+        {
+            entity.HasKey(i => i.Id);
+            entity.Property(i => i.Token).HasMaxLength(64);
+            entity.HasIndex(i => i.Token).IsUnique();
+            entity.HasQueryFilter(i => _tenant.TenantId != Guid.Empty && i.TenantId == _tenant.TenantId);
         });
 
         modelBuilder.Entity<Plan>(entity =>
@@ -72,6 +81,8 @@ public sealed class TransfersCheckDb : DbContext
             entity.Ignore(m => m.TenantId);
             entity.Property(m => m.ChecklistStep).HasMaxLength(32);
             entity.Property(m => m.PlanCode).HasMaxLength(32);
+            entity.Property(m => m.Alias).HasMaxLength(32);
+            entity.HasIndex(m => m.Alias).IsUnique().HasFilter("[Alias] IS NOT NULL");
             entity.HasQueryFilter(m => _tenant.TenantId != Guid.Empty && m.Id == _tenant.TenantId);
         });
 
@@ -79,6 +90,7 @@ public sealed class TransfersCheckDb : DbContext
         {
             entity.HasKey(a => a.Id);
             entity.Property(a => a.Email).HasMaxLength(256);
+            entity.Property(a => a.UserName).HasMaxLength(32);
             entity.Property(a => a.PasswordHash).HasMaxLength(500);
             entity.HasIndex(a => a.Email).IsUnique();
             entity.HasQueryFilter(a => _tenant.TenantId != Guid.Empty && a.TenantId == _tenant.TenantId);

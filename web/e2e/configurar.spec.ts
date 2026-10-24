@@ -41,12 +41,17 @@ async function apiJson(
   );
 }
 
+async function confirmAlias(page: import("@playwright/test").Page, alias: string) {
+  const result = await apiJson(page, "/api/alias", "POST", { alias });
+  expect(result.status, result.body).toBe(200);
+}
+
 test("Configurar refuses a second account when the plan is Pack Evento (unset)", async ({ page }) => {
   await signUp(page, `e2e-evento-${Date.now()}@counter.test`);
+  await confirmAlias(page, `ev${Date.now()}`.slice(0, 12));
   await openConfigurar(page);
-  await page.getByLabel("Dirección de email *").fill(`extra-${Date.now()}@counter.test`);
-  await page.getByLabel("Contraseña *").fill("password1");
-  await page.getByRole("button", { name: "Agregar cuenta" }).click();
+  await page.getByLabel("Nombre *").fill("extra");
+  await page.getByRole("button", { name: "Crear invitación" }).click();
   await expect(page.getByText("No se puede agregar otro Punto de Alerta en este plan.")).toBeVisible({
     timeout: 10_000
   });
@@ -58,19 +63,15 @@ test("Configurar on Pack Mes allows four Puntos de Alerta and refuses the fifth;
   await signUp(page, `e2e-mes-${Date.now()}@counter.test`);
   const setPlan = await apiJson(page, "/api/dev/plan-code", "PUT", { planCode: "pack_mes" });
   expect(setPlan.status).toBe(204);
+  const alias = `mes${Date.now()}`.slice(0, 12);
+  await confirmAlias(page, alias);
 
   for (let i = 0; i < 4; i++) {
-    const created = await apiJson(page, "/api/logins", "POST", {
-      email: `alerta-${i}-${Date.now()}@counter.test`,
-      password: "password1"
-    });
+    const created = await apiJson(page, "/api/logins", "POST", { name: `alerta${i}` });
     expect(created.status, created.body).toBe(201);
   }
 
-  const fifth = await apiJson(page, "/api/logins", "POST", {
-    email: `alerta-extra-${Date.now()}@counter.test`,
-    password: "password1"
-  });
+  const fifth = await apiJson(page, "/api/logins", "POST", { name: "alertaextra" });
   expect(fifth.status).toBe(409);
 
   await openConfigurar(page);

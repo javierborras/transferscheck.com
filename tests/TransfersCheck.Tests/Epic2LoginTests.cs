@@ -47,33 +47,28 @@ public sealed class Epic2LoginTests(SqlFixture sql)
 
         var mesCookie = await SignUp(client, $"mes-{Guid.NewGuid():N}@counter.test");
         await SetPlanCode(factory, mesCookie, PlanCodes.PackMes);
+        var mesAlias = $"mes{Guid.NewGuid():N}"[..10];
+        using (var alias = await Send(client, HttpMethod.Post, "/api/alias", mesCookie, new { alias = mesAlias }))
+            alias.EnsureSuccessStatusCode();
         for (var i = 0; i < 4; i++)
         {
-            using var created = await Send(client, HttpMethod.Post, "/api/logins", mesCookie, new
-            {
-                email = $"alerta-{i}-{Guid.NewGuid():N}@counter.test",
-                password = "password1"
-            });
+            using var created = await Send(client, HttpMethod.Post, "/api/logins", mesCookie, new { name = $"alerta{i}" });
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
             var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
             Assert.False(createdBody.GetProperty("isOwner").GetBoolean());
             Assert.Equal("Punto de Alerta", createdBody.GetProperty("role").GetString());
+            Assert.Equal($"alerta{i}#{mesAlias}", createdBody.GetProperty("displayName").GetString());
         }
 
-        using var fifth = await Send(client, HttpMethod.Post, "/api/logins", mesCookie, new
-        {
-            email = $"alerta-extra-{Guid.NewGuid():N}@counter.test",
-            password = "password1"
-        });
+        using var fifth = await Send(client, HttpMethod.Post, "/api/logins", mesCookie, new { name = "alertaextra" });
         Assert.Equal(HttpStatusCode.Conflict, fifth.StatusCode);
 
         var eventoCookie = await SignUp(client, $"evento-{Guid.NewGuid():N}@counter.test");
         await SetPlanCode(factory, eventoCookie, PlanCodes.PackEvento);
-        using var second = await Send(client, HttpMethod.Post, "/api/logins", eventoCookie, new
-        {
-            email = $"evento-extra-{Guid.NewGuid():N}@counter.test",
-            password = "password1"
-        });
+        var eventoAlias = $"ev{Guid.NewGuid():N}"[..10];
+        using (var alias = await Send(client, HttpMethod.Post, "/api/alias", eventoCookie, new { alias = eventoAlias }))
+            alias.EnsureSuccessStatusCode();
+        using var second = await Send(client, HttpMethod.Post, "/api/logins", eventoCookie, new { name = "extra" });
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
@@ -113,12 +108,16 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         using var client = factory.CreateClient();
         var ownerCookie = await SignUp(client, $"revoke-owner-{Guid.NewGuid():N}@counter.test");
         await SetPlanCode(factory, ownerCookie, PlanCodes.PackMes);
-        var counterEmail = $"revoke-till-{Guid.NewGuid():N}@counter.test";
-        using var created = await Send(client, HttpMethod.Post, "/api/logins", ownerCookie, new { email = counterEmail, password = "password1" });
+        var alias = $"rev{Guid.NewGuid():N}"[..10];
+        using (var confirmed = await Send(client, HttpMethod.Post, "/api/alias", ownerCookie, new { alias }))
+            confirmed.EnsureSuccessStatusCode();
+        using var created = await Send(client, HttpMethod.Post, "/api/logins", ownerCookie, new { name = "caja1" });
         var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
         var accountId = createdBody.GetProperty("id").GetGuid();
-
-        var counterCookie = await TestAuth.SignInWithCode(client, factory, counterEmail);
+        var token = createdBody.GetProperty("token").GetString()!;
+        using var claimed = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "password1" });
+        claimed.EnsureSuccessStatusCode();
+        var counterCookie = claimed.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
         using var counterSession = await Send(client, HttpMethod.Get, "/api/session", counterCookie);
         var sessionBody = await counterSession.Content.ReadFromJsonAsync<JsonElement>();
         var tenantId = sessionBody.GetProperty("tenantId").GetGuid();

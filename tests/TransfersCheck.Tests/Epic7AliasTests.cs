@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using TransfersCheck.Core;
 
 namespace TransfersCheck.Tests;
 
@@ -41,6 +43,118 @@ public sealed class Epic7AliasTests(SqlFixture sql)
         Assert.Contains("name=\"code\"", app, StringComparison.Ordinal);
         Assert.DoesNotContain("6 dígitos", app, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("six digits", app, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Alias_is_confirmed_once_as_hash_alias_and_shown_beside_the_logo()
+    {
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient();
+        var cookie = await SignUp(client, $"alias-{Guid.NewGuid():N}@counter.test");
+        var alias = $"tienda{Guid.NewGuid():N}"[..12];
+
+        using var confirmed = await Send(client, HttpMethod.Post, "/api/alias", cookie, new { alias });
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
+        Assert.Equal($"#{alias}", (await confirmed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("alias").GetString());
+
+        using var again = await Send(client, HttpMethod.Post, "/api/alias", cookie, new { alias = alias + "x" });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Equal("alias_locked", (await again.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+
+        using var get = await Send(client, HttpMethod.Get, "/api/alias", cookie);
+        Assert.Equal($"#{alias}", (await get.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("alias").GetString());
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.Contains("alias-slot", app, StringComparison.Ordinal);
+        Assert.Contains("/api/alias", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Pack_mes_invite_is_single_use_one_hour_and_wa_me_only_carries_the_message()
+    {
+        var clock = new MutableClock();
+        await using var factory = new TransfersApiFactory(sql) { Clock = clock };
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var cookie = await SignUp(client, $"invite-{Guid.NewGuid():N}@counter.test");
+        await SetPlanCode(factory, cookie, PlanCodes.PackMes);
+        var alias = $"mes{Guid.NewGuid():N}"[..10];
+        using var aliasOk = await Send(client, HttpMethod.Post, "/api/alias", cookie, new { alias });
+        aliasOk.EnsureSuccessStatusCode();
+
+        using var created = await Send(client, HttpMethod.Post, "/api/logins", cookie, new { name = "lucia" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var body = await created.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal($"lucia#{alias}", body.GetProperty("displayName").GetString());
+        var inviteUrl = body.GetProperty("inviteUrl").GetString()!;
+        var waMe = body.GetProperty("waMeUrl").GetString()!;
+        var token = body.GetProperty("token").GetString()!;
+        Assert.StartsWith("http://localhost:5183/invitar/", inviteUrl, StringComparison.Ordinal);
+        Assert.DoesNotContain("#", inviteUrl.Split('/').Last(), StringComparison.Ordinal);
+        Assert.StartsWith("https://wa.me/?text=", waMe, StringComparison.Ordinal);
+        Assert.Contains(Uri.EscapeDataString(inviteUrl), waMe, StringComparison.Ordinal);
+        Assert.DoesNotContain("WhatsApp API", File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "appsettings.json")), StringComparison.OrdinalIgnoreCase);
+
+        using var claim = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "password1" });
+        Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
+        var puntoCookie = claim.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+
+        using var reuse = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "password2" });
+        Assert.Equal(HttpStatusCode.Unauthorized, reuse.StatusCode);
+
+        using var signIn = await client.PostAsJsonAsync("/api/sessions", new { commerce = alias, user = "lucia", password = "password1" });
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+
+        clock.Now = clock.Now.AddHours(1).AddSeconds(1);
+        using var lateInvite = await Send(client, HttpMethod.Post, "/api/logins", cookie, new { name = "marco" });
+        var lateToken = (await lateInvite.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString()!;
+        clock.Now = clock.Now.AddHours(1).AddSeconds(1);
+        using var expired = await client.PostAsJsonAsync($"/api/invites/{lateToken}", new { password = "password1" });
+        Assert.Equal(HttpStatusCode.Unauthorized, expired.StatusCode);
+        Assert.Equal("invalid_invite", (await expired.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+
+        using var otherBrowser = await client.PostAsJsonAsync("/api/sessions", new { commerce = alias, user = "lucia", password = "password1" });
+        otherBrowser.EnsureSuccessStatusCode();
+        using var oldSession = await Send(client, HttpMethod.Get, "/api/session", puntoCookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, oldSession.StatusCode);
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.Contains("name=\"commerce\"", app, StringComparison.Ordinal);
+        Assert.Contains("name=\"user\"", app, StringComparison.Ordinal);
+        Assert.Contains("waMeUrl", app, StringComparison.Ordinal);
+        Assert.Contains("Enviar por WhatsApp", app, StringComparison.Ordinal);
+        Assert.Contains("/invitar/", app, StringComparison.Ordinal);
+        _ = puntoCookie;
+    }
+
+    private static async Task<string> SignUp(HttpClient client, string email)
+    {
+        using var response = await client.PostAsJsonAsync("/api/accounts", new { email, password = "password1" });
+        response.EnsureSuccessStatusCode();
+        return response.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+    }
+
+    private static async Task SetPlanCode(TransfersApiFactory factory, string cookie, string planCode)
+    {
+        using var client = factory.CreateClient();
+        using var session = await Send(client, HttpMethod.Get, "/api/session", cookie);
+        var body = await session.Content.ReadFromJsonAsync<JsonElement>();
+        var tenantId = body.GetProperty("tenantId").GetGuid();
+        using var scope = factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenant.TenantId = tenantId;
+        var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var merchant = await store.FindMerchantAsync(tenantId, CancellationToken.None);
+        merchant!.PlanCode = planCode;
+        await store.SaveChangesAsync(CancellationToken.None);
+    }
+
+    private static Task<HttpResponseMessage> Send(HttpClient client, HttpMethod method, string url, string cookie, object? body = null)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.TryAddWithoutValidation("Cookie", cookie);
+        if (body is not null)
+            request.Content = JsonContent.Create(body);
+        return client.SendAsync(request);
     }
 
     private static string RepoRoot()

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "./api";
 
 type Session = { accountId: string; tenantId: string; email: string; isOwner: boolean };
@@ -29,7 +29,15 @@ type Transfer = {
   status: string;
   statusLabel: string;
 };
-type LoginRow = { id: string; email: string; isOwner: boolean; pushApproved: boolean; revoked: boolean };
+type LoginRow = {
+  id: string;
+  email: string;
+  displayName?: string;
+  isOwner: boolean;
+  pushApproved: boolean;
+  revoked: boolean;
+  passwordSet?: boolean;
+};
 
 let firstOpen: Promise<void> | null = null;
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
@@ -82,10 +90,23 @@ function Wordmark() {
 
 function AppHeader({ onSalir, back }: { onSalir: () => Promise<void>; back: boolean }) {
   const [open, setOpen] = useState(false);
+  const [alias, setAlias] = useState("");
   const location = useLocation();
 
   useEffect(() => {
     setOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    let gone = false;
+    api("/api/alias").then(async (response) => {
+      if (gone || !response.ok) return;
+      const body = (await response.json()) as { alias?: string | null };
+      setAlias(body.alias ?? "");
+    });
+    return () => {
+      gone = true;
+    };
   }, [location.pathname]);
 
   useEffect(() => {
@@ -105,7 +126,9 @@ function AppHeader({ onSalir, back }: { onSalir: () => Promise<void>; back: bool
         <Mark />
         <span className="name">TransfersCheck</span>
       </Link>
-      <span id="alias" className="alias-slot" aria-label="Alias" />
+      <span id="alias" className="alias-slot" aria-label="Alias">
+        {alias}
+      </span>
       <div className="header-actions">
         {back ? (
           <Link className="volver" to="/">
@@ -204,6 +227,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/cuenta" element={<CreateAccount onSignedIn={setSession} />} />
+      <Route path="/invitar/:token" element={<ClaimInvite onSignedIn={setSession} />} />
       <Route path="/pagar" element={session ? <Pay onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/conectar" element={session ? <ChecklistPage onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
@@ -275,15 +299,15 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [needsCode, setNeedsCode] = useState(false);
+  const [alertPoint, setAlertPoint] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const payload: Record<string, FormDataEntryValue | null> = {
-      email: data.get("email"),
-      password: data.get("password")
-    };
-    if (needsCode) payload.code = data.get("code");
+    const payload: Record<string, FormDataEntryValue | null> = alertPoint
+      ? { commerce: data.get("commerce"), user: data.get("user"), password: data.get("password") }
+      : { email: data.get("email"), password: data.get("password") };
+    if (!alertPoint && needsCode) payload.code = data.get("code");
     const response = await api("/api/sessions", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -295,12 +319,18 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
         setError("Te enviamos un código a tu email. Ingresalo para continuar.");
         return;
       }
-      setError(body.error === "invalid_code" ? "El código no sirve o venció." : "El correo o la contraseña no sirven.");
+      setError(
+        body.error === "invalid_code"
+          ? "El código no sirve o venció."
+          : alertPoint
+            ? "El comercio, el usuario o la contraseña no sirven."
+            : "El correo o la contraseña no sirven."
+      );
       return;
     }
     const current = await api("/api/session");
     if (!current.ok) {
-      setError("El correo o la contraseña no sirven.");
+      setError("No se pudo abrir la sesión.");
       return;
     }
     onSignedIn(await current.json());
@@ -313,10 +343,23 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
       <h1>Hola de nuevo</h1>
       <p className="gate-lead">Inicia sesión en tu cuenta de TransfersCheck</p>
       <form onSubmit={submit}>
-        <label>
-          Dirección de email *
-          <input name="email" type="email" autoComplete="username" inputMode="email" required />
-        </label>
+        {alertPoint ? (
+          <>
+            <label>
+              Comercio *
+              <input name="commerce" autoComplete="organization" required />
+            </label>
+            <label>
+              Usuario *
+              <input name="user" autoComplete="username" required />
+            </label>
+          </>
+        ) : (
+          <label>
+            Dirección de email *
+            <input name="email" type="email" autoComplete="username" inputMode="email" required />
+          </label>
+        )}
         <label>
           Contraseña *
           <input
@@ -333,7 +376,7 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
         >
           {showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
         </button>
-        {needsCode ? (
+        {!alertPoint && needsCode ? (
           <label>
             Código *
             <input name="code" inputMode="numeric" autoComplete="one-time-code" required />
@@ -343,8 +386,63 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
         <button type="submit">Iniciar sesión</button>
       </form>
       <p className="switch">
+        <button
+          type="button"
+          className="linkish"
+          onClick={() => {
+            setAlertPoint((value) => !value);
+            setNeedsCode(false);
+            setError("");
+          }}
+        >
+          {alertPoint ? "Entrar como admin" : "Entrar como Punto de Alerta"}
+        </button>
+      </p>
+      <p className="switch">
         <Link to="/cuenta">Creá tu cuenta</Link>
       </p>
+    </main>
+  );
+}
+
+function ClaimInvite({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
+  const navigate = useNavigate();
+  const { token } = useParams();
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const response = await api(`/api/invites/${token}`, {
+      method: "POST",
+      body: JSON.stringify({ password: data.get("password") })
+    });
+    if (!response.ok) {
+      setError("El enlace no sirve o ya se usó.");
+      return;
+    }
+    const current = await api("/api/session");
+    if (!current.ok) {
+      setError("El enlace no sirve o ya se usó.");
+      return;
+    }
+    onSignedIn(await current.json());
+    navigate("/");
+  }
+
+  return (
+    <main className="gate">
+      <Wordmark />
+      <h1>Creá tu contraseña</h1>
+      <p className="gate-lead">Este enlace es de un solo uso.</p>
+      <form onSubmit={submit}>
+        <label>
+          Contraseña *
+          <input name="password" type="password" minLength={8} autoComplete="new-password" required />
+        </label>
+        {error ? <p className="error">{error}</p> : null}
+        <button type="submit">Guardar e ingresar</button>
+      </form>
     </main>
   );
 }
@@ -664,30 +762,69 @@ function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<
 
 function OwnerLogins() {
   const [rows, setRows] = useState<LoginRow[]>([]);
+  const [alias, setAlias] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [invite, setInvite] = useState<{ displayName: string; inviteUrl: string; waMeUrl: string } | null>(null);
+  const [previewName, setPreviewName] = useState("");
 
   async function reload() {
-    const response = await api("/api/logins");
-    if (response.ok) setRows(await response.json());
+    const [logins, aliasResponse] = await Promise.all([api("/api/logins"), api("/api/alias")]);
+    if (logins.ok) setRows(await logins.json());
+    if (aliasResponse.ok) {
+      const body = (await aliasResponse.json()) as { alias?: string | null };
+      setAlias(body.alias ?? null);
+    }
   }
 
   useEffect(() => {
     void reload();
   }, []);
 
+  async function confirmAlias(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const response = await api("/api/alias", {
+      method: "POST",
+      body: JSON.stringify({ alias: data.get("alias") })
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({} as { error?: string }));
+      setError(
+        body.error === "alias_locked"
+          ? "El alias ya está confirmado."
+          : body.error === "alias_taken"
+            ? "Ese alias ya está en uso."
+            : "El alias no sirve."
+      );
+      return;
+    }
+    setError("");
+    await reload();
+  }
+
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const response = await api("/api/logins", {
       method: "POST",
-      body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
+      body: JSON.stringify({ name: data.get("name") })
     });
     if (!response.ok) {
-      setError(response.status === 409 ? "No se puede agregar otro Punto de Alerta en este plan." : "No se pudo crear la cuenta.");
+      const body = await response.json().catch(() => ({} as { error?: string }));
+      setError(
+        body.error === "account_cap"
+          ? "No se puede agregar otro Punto de Alerta en este plan."
+          : body.error === "alias_required"
+            ? "Confirmá el alias primero."
+            : "No se pudo crear la cuenta."
+      );
       return;
     }
+    const body = (await response.json()) as { displayName: string; inviteUrl: string; waMeUrl: string };
+    setInvite(body);
     event.currentTarget.reset();
+    setPreviewName("");
     setError("");
     await reload();
   }
@@ -708,11 +845,27 @@ function OwnerLogins() {
     await reload();
   }
 
+  const aliasBare = alias?.replace(/^#/, "") ?? "";
+
   return (
     <section className="logins">
+      {alias ? (
+        <p className="alias-confirmed">
+          Alias confirmado: <strong>{alias}</strong>
+        </p>
+      ) : (
+        <form onSubmit={confirmAlias}>
+          <label>
+            Alias del comercio *
+            <input name="alias" required autoComplete="organization" />
+          </label>
+          {error ? <p className="error" role="alert">{error}</p> : null}
+          <button type="submit">Confirmar alias</button>
+        </form>
+      )}
       {rows.map((row) => (
         <div className="login-row" key={row.id}>
-          <span className="email">{row.email}</span>
+          <span className="email">{row.displayName ?? row.email}</span>
           <span className="role">{row.isOwner ? "Admin" : "Punto de Alerta"}</span>
           {row.revoked ? null : (
             <label>
@@ -733,18 +886,33 @@ function OwnerLogins() {
           )}
         </div>
       ))}
-      <form onSubmit={add}>
-        <label>
-          Dirección de email *
-          <input name="email" type="email" inputMode="email" required />
-        </label>
-        <label>
-          Contraseña *
-          <input name="password" type="password" minLength={8} required />
-        </label>
-        {error ? <p className="error" role="alert">{error}</p> : null}
-        <button type="submit">Agregar cuenta</button>
-      </form>
+      {alias ? (
+        <form onSubmit={add}>
+          <label>
+            Nombre *
+            <input
+              name="name"
+              required
+              autoComplete="nickname"
+              onChange={(event) => setPreviewName(event.target.value.trim().toLowerCase())}
+            />
+          </label>
+          {previewName ? <p className="invite-preview">{previewName}#{aliasBare}</p> : null}
+          {error ? <p className="error" role="alert">{error}</p> : null}
+          <button type="submit">Crear invitación</button>
+        </form>
+      ) : null}
+      {invite ? (
+        <div className="invite-share">
+          <p>
+            Enlace para <strong>{invite.displayName}</strong>
+          </p>
+          <input readOnly value={invite.inviteUrl} aria-label="Enlace de invitación" />
+          <a href={invite.waMeUrl} target="_blank" rel="noreferrer">
+            Enviar por WhatsApp
+          </a>
+        </div>
+      ) : null}
     </section>
   );
 }

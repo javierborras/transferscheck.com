@@ -19,11 +19,12 @@ Updated: 24 October 2026.
 | 12 | `87b8427` | Access-date web block; Pack Evento 24h from link |
 | 13 | `9416490` | Installable PWA from web/; API does not serve it |
 | 14–15 | `4bd68c2` | FCM arrived push + Habilitar Notificaciones (no mechanism name) |
-| 16 | _(pending push)_ | Email code 6 digits / 1h; door Código field |
+| 16 | `2b51f9d` | Email code 6 digits / 1h; door Código field |
+| 17 | _(pending push)_ | Alias once; invite 1h + wa.me; commerce+user door |
 
 ## Next
 
-Wave 17 — alias once, Pack Mes invite (1h), wa.me only.
+Wave 18 — Punto de Alerta last-N window.
 
 ## Verify
 

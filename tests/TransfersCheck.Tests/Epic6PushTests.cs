@@ -117,13 +117,19 @@ public sealed class Epic6PushTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql) { ServiceAccountPath = keyPath };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var owner = await ConnectOwner(client);
-        var staffEmail = $"staff-{Guid.NewGuid():N}@counter.test";
-        using var created = await Send(client, "/api/logins", owner, json: new { email = staffEmail, password = "password1" });
-        var staffId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var alias = $"push{Guid.NewGuid():N}"[..10];
+        using var aliasOk = await Send(client, "/api/alias", owner, json: new { alias });
+        Assert.Equal(HttpStatusCode.OK, aliasOk.StatusCode);
+        using var created = await Send(client, "/api/logins", owner, json: new { name = "staff1" });
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var staffId = createdBody.GetProperty("id").GetGuid();
+        var inviteToken = createdBody.GetProperty("token").GetString()!;
         using var enabled = await Send(client, $"/api/logins/{staffId}/push", owner, HttpMethod.Put, new { approved = true });
         Assert.Equal(HttpStatusCode.NoContent, enabled.StatusCode);
 
-        var staff = await TestAuth.SignInWithCode(client, factory, staffEmail);
+        using var claimed = await client.PostAsJsonAsync($"/api/invites/{inviteToken}", new { password = "password1" });
+        claimed.EnsureSuccessStatusCode();
+        var staff = claimed.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
         using var staffToken = await Send(client, "/api/push/tokens", staff, json: new { token = "device-staff" });
         Assert.Equal(HttpStatusCode.NoContent, staffToken.StatusCode);
 

@@ -212,6 +212,26 @@ main.gate .password-toggle {
   cursor: pointer;
 }
 
+button.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.invite-preview,
+.alias-confirmed,
+.invite-share {
+  margin: 0.75rem 0;
+}
+
+.invite-share input {
+  width: 100%;
+}
+
 .alias-slot {
   flex: 1 1 auto;
   min-width: 0;
