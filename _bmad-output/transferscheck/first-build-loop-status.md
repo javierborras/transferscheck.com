@@ -18,7 +18,7 @@ Updated: 24 October 2026.
 | 11 | `5f39fd3` | Five-day notice via Hangfire job + banner; NullMailSender unbound |
 | 12 | `87b8427` | Access-date web block; Pack Evento 24h from link |
 | 13 | `9416490` | Installable PWA from web/; API does not serve it |
-| 14–15 | *(this push)* | FCM arrived push + Habilitar Notificaciones (no mechanism name) |
+| 14–15 | `4bd68c2` | FCM arrived push + Habilitar Notificaciones (no mechanism name) |
 
 ## Next
 
