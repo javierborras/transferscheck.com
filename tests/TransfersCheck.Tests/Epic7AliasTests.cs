@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using TransfersCheck.Core;
+using TransfersCheck.MockServer;
 
 namespace TransfersCheck.Tests;
 
@@ -124,6 +125,62 @@ public sealed class Epic7AliasTests(SqlFixture sql)
         Assert.Contains("Enviar por WhatsApp", app, StringComparison.Ordinal);
         Assert.Contains("/invitar/", app, StringComparison.Ordinal);
         _ = puntoCookie;
+    }
+
+    [Fact]
+    public async Task Punto_de_alerta_sees_alert_point_window_and_detail_without_admin_surfaces()
+    {
+        MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        await using var factory = new TransfersApiFactory(sql) { PageSize = 20 };
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var owner = await SignUp(client, $"ap-owner-{Guid.NewGuid():N}@counter.test");
+        await SetPlanCode(factory, owner, PlanCodes.PackMes);
+        var alias = $"ap{Guid.NewGuid():N}"[..10];
+        using (var confirmed = await Send(client, HttpMethod.Post, "/api/alias", owner, new { alias }))
+            confirmed.EnsureSuccessStatusCode();
+        using var invite = await Send(client, HttpMethod.Post, "/api/logins", owner, new { name = "vista" });
+        var token = (await invite.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString()!;
+        using var claimed = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "password1" });
+        claimed.EnsureSuccessStatusCode();
+        var punto = claimed.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+
+        using var connect = await Send(client, HttpMethod.Post, "/api/connections/mercadopago", owner);
+        var authorizationUrl = (await connect.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("authorizationUrl").GetString()!;
+        using var browser = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+        using var merchantLogin = await browser.GetAsync(authorizationUrl);
+        var query = merchantLogin.Headers.Location!.Query.TrimStart('?').Split('&')
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(pair => pair[0], pair => Uri.UnescapeDataString(pair[1]));
+        using var callback = await Send(client, HttpMethod.Get, $"/api/connections/mercadopago/callback?code={query["code"]}&state={query["state"]}", owner);
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
+        using var refresh = await Send(client, HttpMethod.Post, "/api/transfers/refresh", owner);
+        Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+
+        using var list = await Send(client, HttpMethod.Get, "/api/transfers", punto);
+        var body = await list.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(10, body.GetProperty("take").GetInt32());
+        var items = body.GetProperty("items").EnumerateArray().ToArray();
+        Assert.True(items.Length <= 10);
+        Assert.Contains(items, item => item.GetProperty("payerName").GetString() is { Length: > 0 });
+
+        var firstId = items[0].GetProperty("id").GetGuid();
+        using var detail = await Send(client, HttpMethod.Get, $"/api/transfers/{firstId}", punto);
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(detailBody.TryGetProperty("payerName", out _));
+        Assert.True(detailBody.TryGetProperty("amount", out _));
+        Assert.True(detailBody.TryGetProperty("statusLabel", out _));
+
+        using var forbiddenRefresh = await Send(client, HttpMethod.Post, "/api/transfers/refresh", punto);
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenRefresh.StatusCode);
+        using var forbiddenLogins = await Send(client, HttpMethod.Get, "/api/logins", punto);
+        Assert.Equal(HttpStatusCode.Forbidden, forbiddenLogins.StatusCode);
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.DoesNotContain("Historial de Transacciones", app, StringComparison.Ordinal);
+        Assert.Contains("isOwner", app, StringComparison.Ordinal);
+        Assert.Contains("/api/transfers/", app, StringComparison.Ordinal);
     }
 
     private static async Task<string> SignUp(HttpClient client, string email)

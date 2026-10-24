@@ -11,6 +11,7 @@ public static class TransferEndpoints
     {
         var group = app.MapGroup("/api").AddEndpointFilter<LiveSessionFilter>();
         group.MapGet("/transfers", List);
+        group.MapGet("/transfers/{id:guid}", Detail);
         group.MapPost("/transfers/refresh", Refresh);
     }
 
@@ -21,7 +22,9 @@ public static class TransferEndpoints
         IOptions<SyncOptions> sync,
         CancellationToken cancellationToken)
     {
-        var rows = (await store.ListTransfersAsync(sync.Value.PageSize, cancellationToken)).ToList();
+        var account = (LoginAccount)http.Items["account"]!;
+        var take = AlertPointWindow.Take(account.IsOwner, sync.Value.PageSize, sync.Value.AlertPointRecordCount);
+        var rows = (await store.ListTransfersAsync(take, cancellationToken)).ToList();
         if (first is { } id)
         {
             var index = rows.FindIndex(row => row.Id == id);
@@ -35,19 +38,27 @@ public static class TransferEndpoints
 
         return Results.Ok(new
         {
-            items = rows.Select(row => new
-            {
-                id = row.Id,
-                payerName = string.IsNullOrWhiteSpace(row.PayerName) ? "Desconocido" : row.PayerName,
-                amount = row.Amount,
-                occurredAt = row.OccurredAt,
-                status = row.Status,
-                statusLabel = StatusWords.Label(row.Status),
-                typeCode = row.TypeCode
-            }),
+            items = rows.Select(MapRow),
+            take,
             pollIntervalSeconds = (int)sync.Value.PollInterval.TotalSeconds,
             buttonCooldownSeconds = (int)sync.Value.ButtonCooldown.TotalSeconds
         });
+    }
+
+    private static async Task<IResult> Detail(
+        Guid id,
+        HttpContext http,
+        IMerchantStore store,
+        IOptions<SyncOptions> sync,
+        CancellationToken cancellationToken)
+    {
+        var account = (LoginAccount)http.Items["account"]!;
+        var take = AlertPointWindow.Take(account.IsOwner, sync.Value.PageSize, sync.Value.AlertPointRecordCount);
+        var rows = await store.ListTransfersAsync(take, cancellationToken);
+        var row = rows.FirstOrDefault(item => item.Id == id);
+        if (row is null)
+            return Results.NotFound();
+        return Results.Ok(MapRow(row));
     }
 
     private static async Task<IResult> Refresh(
@@ -58,6 +69,8 @@ public static class TransferEndpoints
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
+        if (!account.IsOwner)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
         var status = await sync.Run(account.TenantId, manual: true, cancellationToken);
         if (status is SyncStatus.Waiting)
             return Results.Json(new { error = "waiting" }, statusCode: StatusCodes.Status429TooManyRequests);
@@ -67,4 +80,15 @@ public static class TransferEndpoints
         var rows = await store.ListTransfersAsync(options.Value.PageSize, cancellationToken);
         return Results.Ok(new { count = rows.Count });
     }
+
+    private static object MapRow(Transfer row) => new
+    {
+        id = row.Id,
+        payerName = string.IsNullOrWhiteSpace(row.PayerName) ? "Desconocido" : row.PayerName,
+        amount = row.Amount,
+        occurredAt = row.OccurredAt,
+        status = row.Status,
+        statusLabel = StatusWords.Label(row.Status),
+        typeCode = row.TypeCode
+    };
 }

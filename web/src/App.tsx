@@ -88,7 +88,7 @@ function Wordmark() {
   );
 }
 
-function AppHeader({ onSalir, back }: { onSalir: () => Promise<void>; back: boolean }) {
+function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; back: boolean; isOwner: boolean }) {
   const [open, setOpen] = useState(false);
   const [alias, setAlias] = useState("");
   const location = useLocation();
@@ -152,12 +152,16 @@ function AppHeader({ onSalir, back }: { onSalir: () => Promise<void>; back: bool
             <Link to="/" aria-current={here("/")}>
               Transacciones
             </Link>
-            <Link to="/usuarios" aria-current={here("/usuarios")}>
-              Configurar
-            </Link>
-            <Link to="/pagar" aria-current={here("/pagar")}>
-              Pagos
-            </Link>
+            {isOwner ? (
+              <>
+                <Link to="/usuarios" aria-current={here("/usuarios")}>
+                  Configurar
+                </Link>
+                <Link to="/pagar" aria-current={here("/pagar")}>
+                  Pagos
+                </Link>
+              </>
+            ) : null}
             <button className="salir" type="button" onClick={() => void onSalir()}>
               Salir
             </button>
@@ -179,16 +183,18 @@ function Shell({
   onSalir,
   back,
   counter,
+  isOwner,
   children
 }: {
   onSalir: () => Promise<void>;
   back?: boolean;
   counter?: boolean;
+  isOwner: boolean;
   children: ReactNode;
 }) {
   return (
     <div className={counter ? "shell counter" : "shell page"}>
-      <AppHeader onSalir={onSalir} back={back ?? false} />
+      <AppHeader onSalir={onSalir} back={back ?? false} isOwner={isOwner} />
       {children}
     </div>
   );
@@ -228,10 +234,10 @@ export function App() {
     <Routes>
       <Route path="/cuenta" element={<CreateAccount onSignedIn={setSession} />} />
       <Route path="/invitar/:token" element={<ClaimInvite onSignedIn={setSession} />} />
-      <Route path="/pagar" element={session ? <Pay onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
-      <Route path="/conectar" element={session ? <ChecklistPage onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="/pagar" element={session ? <Pay session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="/conectar" element={session ? <ChecklistPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
-      <Route path="*" element={session ? <Transfers onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="*" element={session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
     </Routes>
   );
 }
@@ -452,7 +458,7 @@ function helpLines(help: string) {
   return lines.length > 1 ? lines : [help];
 }
 
-function ChecklistPage({ onSalir }: { onSalir: () => Promise<void> }) {
+function ChecklistPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [checklist, setChecklist] = useState<Checklist | null>(null);
 
   async function reload() {
@@ -465,7 +471,7 @@ function ChecklistPage({ onSalir }: { onSalir: () => Promise<void> }) {
   }, []);
 
   return (
-    <Shell onSalir={onSalir} back>
+    <Shell onSalir={onSalir} back isOwner={session.isOwner}>
       {checklist ? <ChecklistView checklist={checklist} onReload={reload} /> : <main />}
     </Shell>
   );
@@ -574,9 +580,10 @@ function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload
   );
 }
 
-function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
+function Transfers({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [params] = useSearchParams();
   const [items, setItems] = useState<Transfer[]>([]);
+  const [detail, setDetail] = useState<Transfer | null>(null);
   const [notice, setNotice] = useState<Transfer | null>(null);
   const [wait, setWait] = useState("");
   const [cooldown, setCooldown] = useState(0);
@@ -629,7 +636,9 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
 
   useEffect(() => {
     let gone = false;
-    const opening = (firstOpen ??= api("/api/transfers/refresh", { method: "POST" }).then(() => undefined, () => undefined));
+    const opening = session.isOwner
+      ? (firstOpen ??= api("/api/transfers/refresh", { method: "POST" }).then(() => undefined, () => undefined))
+      : Promise.resolve();
     void opening.then(() => {
       if (!gone) void load(false);
     });
@@ -640,7 +649,7 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
       gone = true;
       window.clearInterval(timer);
     };
-  }, [first, pollSeconds]);
+  }, [first, pollSeconds, session.isOwner]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -649,7 +658,7 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
   }, [cooldown]);
 
   async function refresh() {
-    if (cooldown > 0 || loading) return;
+    if (!session.isOwner || cooldown > 0 || loading) return;
     setLoading(true);
     setWait("");
     const response = await api("/api/transfers/refresh", { method: "POST" });
@@ -658,6 +667,11 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
     else await load(true);
     setLoading(false);
     setCooldown(cooldownSeconds);
+  }
+
+  async function openDetail(id: string) {
+    const response = await api(`/api/transfers/${id}`);
+    if (response.ok) setDetail(await response.json());
   }
 
   async function enableAlerts() {
@@ -678,23 +692,23 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
   const cooling = cooldown > 0;
 
   return (
-    <Shell onSalir={onSalir} counter>
+    <Shell onSalir={onSalir} counter isOwner={session.isOwner}>
       <main className="board">
         {blocked || expired ? (
           <section className="access-block" role="alert">
             <h1>Se terminó el acceso</h1>
             <p>Para seguir viendo transferencias y avisos, extendé el acceso.</p>
-            <Link to="/pagar">Ir a Pagos</Link>
+            {session.isOwner ? <Link to="/pagar">Ir a Pagos</Link> : null}
           </section>
         ) : (
           <>
             <div className="board-scroll">
-              {fiveDayWarning ? (
+              {session.isOwner && fiveDayWarning ? (
                 <p className="banner warning" role="status">
                   <span>Quedan cinco días de acceso. Pagá para seguir recibiendo avisos.</span>
                   <Link to="/pagar">Ir a Pagos</Link>
                 </p>
-              ) : trial ? (
+              ) : session.isOwner && trial ? (
                 <p className="banner trial">La prueba está en curso.</p>
               ) : null}
               {notice ? (
@@ -721,27 +735,43 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
                   const tone = item.status === "approved" || item.status === "pending" || item.status === "rejected" ? item.status : "other";
                   return (
                     <li key={item.id} className={first === item.id ? `row ${tone} focus` : `row ${tone}`}>
-                      <div className="when">{when.format(new Date(item.occurredAt))}</div>
-                      <div className="payer">{item.payerName || "Desconocido"}</div>
-                      <div className="amount">{money.format(item.amount)}</div>
-                      <div className="status">{item.statusLabel}</div>
+                      <button type="button" className="row-open" onClick={() => void openDetail(item.id)}>
+                        <div className="when">{when.format(new Date(item.occurredAt))}</div>
+                        <div className="payer">{item.payerName || "Desconocido"}</div>
+                        <div className="amount">{money.format(item.amount)}</div>
+                        <div className="status">{item.statusLabel}</div>
+                      </button>
                     </li>
                   );
                 })}
               </ol>
             </div>
+            {detail ? (
+              <dialog className="transfer-detail" open>
+                <h2>Detalle</h2>
+                <p>{when.format(new Date(detail.occurredAt))}</p>
+                <p>{detail.payerName || "Desconocido"}</p>
+                <p>{money.format(detail.amount)}</p>
+                <p>{detail.statusLabel}</p>
+                <button type="button" onClick={() => setDetail(null)}>
+                  Cerrar
+                </button>
+              </dialog>
+            ) : null}
             {wait ? <p className="wait" role="status">{wait}</p> : null}
-            <Dock>
-              <button
-                className={cooling ? "cooldown" : undefined}
-                type="button"
-                onClick={refresh}
-                aria-disabled={cooling || loading}
-                disabled={loading}
-              >
-                {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "Actualizar ahora"}
-              </button>
-            </Dock>
+            {session.isOwner ? (
+              <Dock>
+                <button
+                  className={cooling ? "cooldown" : undefined}
+                  type="button"
+                  onClick={refresh}
+                  aria-disabled={cooling || loading}
+                  disabled={loading}
+                >
+                  {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "Actualizar ahora"}
+                </button>
+              </Dock>
+            ) : null}
           </>
         )}
       </main>
@@ -751,7 +781,7 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
 
 function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   return (
-    <Shell onSalir={onSalir} back>
+    <Shell onSalir={onSalir} back isOwner={session.isOwner}>
       <main>
         <h1>Configurar</h1>
         {session.isOwner ? <OwnerLogins /> : null}
@@ -937,7 +967,7 @@ type PayScreen = {
   plans: PayPlan[];
 };
 
-function Pay({ onSalir }: { onSalir: () => Promise<void> }) {
+function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [screen, setScreen] = useState<PayScreen | null>(null);
 
   useEffect(() => {
@@ -954,7 +984,7 @@ function Pay({ onSalir }: { onSalir: () => Promise<void> }) {
   }
 
   return (
-    <Shell onSalir={onSalir} back>
+    <Shell onSalir={onSalir} back isOwner={session.isOwner}>
       {!screen ? <main /> : (
         <>
           <main className="pay">

@@ -472,6 +472,8 @@ Completed on 24 October 2026. Alias once via `ICommerceAliasStore`; Pack Mes inv
 
 ## Wave 18 — Story 7.5
 
+Completed on 24 October 2026. `AlertPointWindow` takes N from `AlertPointRecordCount`; detail via GET `/api/transfers/{id}`; admin surfaces hidden for non-owners. Evidence: `Punto_de_alerta_sees_alert_point_window_*`.
+
 **Outcome.** A Punto de Alerta sees the last N rows, default 10, and may open the detail of one of those rows. No history, no CSV, no totals, no Mercado Pago settings, no account management, and no title Historial de Transacciones.
 
 **Precondition.** Wave 17 is green. `AlertPointRecordCount` already defaults to 10 from wave 2.
