@@ -468,6 +468,7 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
   const [alertsDone, setAlertsDone] = useState<boolean | null>(null);
   const [trial, setTrial] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [fiveDayWarning, setFiveDayWarning] = useState(false);
   const [pollSeconds, setPollSeconds] = useState(300);
   const [cooldownSeconds, setCooldownSeconds] = useState(60);
@@ -493,8 +494,9 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
     }
     const billing = await api("/api/billing");
     if (billing.ok) {
-      const { accessUntil, fiveDayWarning } = await billing.json();
-      setExpired(Boolean(accessUntil) && new Date(accessUntil).getTime() < Date.now());
+      const { accessUntil, fiveDayWarning, blocked: isBlocked } = await billing.json();
+      setExpired(Boolean(accessUntil) && new Date(accessUntil).getTime() <= Date.now());
+      setBlocked(Boolean(isBlocked));
       setFiveDayWarning(Boolean(fiveDayWarning));
     }
   }
@@ -562,65 +564,70 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
   return (
     <Shell onSalir={onSalir} counter>
       <main className="board">
-        <div className="board-scroll">
-          {expired ? (
-            <p className="banner expired" role="status">
-              <span>Sincronización pausada. Para seguir recibiendo avisos, extendé tu acceso.</span>
-              <Link to="/pagar">Extender acceso</Link>
-            </p>
-          ) : fiveDayWarning ? (
-            <p className="banner warning" role="status">
-              <span>Quedan cinco días de acceso. Pagá para seguir recibiendo avisos.</span>
-              <Link to="/pagar">Ir a Pagos</Link>
-            </p>
-          ) : trial ? (
-            <p className="banner trial">La prueba está en curso.</p>
-          ) : null}
-          {notice ? (
-            <p className="notice" role="status">
-              <strong>¡Entró un pago!</strong>
-              <span>{notice.payerName} te transfirió {money.format(notice.amount)}</span>
-            </p>
-          ) : null}
-          {alertsDone === false ? (
-            <section className="alerts">
-              <h2>Activá los avisos</h2>
-              <p>En el iPhone, agregá la app a la pantalla de inicio.</p>
-              <button type="button" onClick={enableAlerts}>Activar avisos</button>
-            </section>
-          ) : null}
-          <div className="transfer-columns" role="row">
-            <span>Fecha</span>
-            <span>Pagador</span>
-            <span>Monto</span>
-            <span>Estado</span>
-          </div>
-          <ol className="transfers">
-            {items.map((item) => {
-              const tone = item.status === "approved" || item.status === "pending" || item.status === "rejected" ? item.status : "other";
-              return (
-                <li key={item.id} className={first === item.id ? `row ${tone} focus` : `row ${tone}`}>
-                  <div className="when">{when.format(new Date(item.occurredAt))}</div>
-                  <div className="payer">{item.payerName || "Desconocido"}</div>
-                  <div className="amount">{money.format(item.amount)}</div>
-                  <div className="status">{item.statusLabel}</div>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-        {wait ? <p className="wait" role="status">{wait}</p> : null}
-        <Dock>
-          <button
-            className={cooling ? "cooldown" : undefined}
-            type="button"
-            onClick={refresh}
-            aria-disabled={cooling || loading}
-            disabled={loading}
-          >
-            {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "Actualizar ahora"}
-          </button>
-        </Dock>
+        {blocked || expired ? (
+          <section className="access-block" role="alert">
+            <h1>Se terminó el acceso</h1>
+            <p>Para seguir viendo transferencias y avisos, extendé el acceso.</p>
+            <Link to="/pagar">Ir a Pagos</Link>
+          </section>
+        ) : (
+          <>
+            <div className="board-scroll">
+              {fiveDayWarning ? (
+                <p className="banner warning" role="status">
+                  <span>Quedan cinco días de acceso. Pagá para seguir recibiendo avisos.</span>
+                  <Link to="/pagar">Ir a Pagos</Link>
+                </p>
+              ) : trial ? (
+                <p className="banner trial">La prueba está en curso.</p>
+              ) : null}
+              {notice ? (
+                <p className="notice" role="status">
+                  <strong>¡Entró un pago!</strong>
+                  <span>{notice.payerName} te transfirió {money.format(notice.amount)}</span>
+                </p>
+              ) : null}
+              {alertsDone === false ? (
+                <section className="alerts">
+                  <h2>Activá los avisos</h2>
+                  <p>En el iPhone, agregá la app a la pantalla de inicio.</p>
+                  <button type="button" onClick={enableAlerts}>Activar avisos</button>
+                </section>
+              ) : null}
+              <div className="transfer-columns" role="row">
+                <span>Fecha</span>
+                <span>Pagador</span>
+                <span>Monto</span>
+                <span>Estado</span>
+              </div>
+              <ol className="transfers">
+                {items.map((item) => {
+                  const tone = item.status === "approved" || item.status === "pending" || item.status === "rejected" ? item.status : "other";
+                  return (
+                    <li key={item.id} className={first === item.id ? `row ${tone} focus` : `row ${tone}`}>
+                      <div className="when">{when.format(new Date(item.occurredAt))}</div>
+                      <div className="payer">{item.payerName || "Desconocido"}</div>
+                      <div className="amount">{money.format(item.amount)}</div>
+                      <div className="status">{item.statusLabel}</div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+            {wait ? <p className="wait" role="status">{wait}</p> : null}
+            <Dock>
+              <button
+                className={cooling ? "cooldown" : undefined}
+                type="button"
+                onClick={refresh}
+                aria-disabled={cooling || loading}
+                disabled={loading}
+              >
+                {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "Actualizar ahora"}
+              </button>
+            </Dock>
+          </>
+        )}
       </main>
     </Shell>
   );

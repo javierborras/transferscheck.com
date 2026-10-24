@@ -157,33 +157,52 @@ public sealed class Epic5BillingTests(SqlFixture sql)
     }
 
     [Fact]
-    public async Task Day_15_stops_sync_and_the_list_stays()
+    public async Task Access_date_blocks_the_web_and_stops_sync_for_pack_mes_and_pack_evento()
     {
-        // Wave 12 replaces this withdrawn day-15 stop; keep suite green with Pack Mes 21-day trial.
         MockState.Reset();
         MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         var clock = new MutableClock();
         await using var factory = new TransfersApiFactory(sql) { Clock = clock };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var email = $"day15-{Guid.NewGuid():N}@counter.test";
+        var email = $"block-{Guid.NewGuid():N}@counter.test";
         var cookie = await ConnectOwner(client, factory, email);
+        var access = await AccessUntil(client, cookie);
+        Assert.Equal(clock.Now.AddDays(21), access);
+
         using var synced = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.OK, synced.StatusCode);
 
-        clock.Now = clock.Now.AddDays(21);
+        clock.Now = access!.Value;
         using var again = await client.PostAsJsonAsync("/api/sessions", new { email, password = "password1" });
         again.EnsureSuccessStatusCode();
         cookie = again.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
-        MockState.Payments.Add(MockState.Payment(80, "approved", "bank_transfer", 80m, "Dia Quince"));
+        MockState.Payments.Add(MockState.Payment(80, "approved", "bank_transfer", 80m, "Bloqueado"));
         using var stopped = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.Conflict, stopped.StatusCode);
-        var error = await stopped.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("not_entitled", error.GetProperty("error").GetString());
+        Assert.Equal("not_entitled", (await stopped.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
 
-        using var list = await Send(client, "/api/transfers", cookie, HttpMethod.Get);
-        var items = (await list.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items").EnumerateArray().ToArray();
-        Assert.Equal(10, items.Length);
-        Assert.DoesNotContain(items, item => item.GetProperty("payerName").GetString()!.StartsWith("Dia Quince", StringComparison.Ordinal));
+        using var billing = await Send(client, "/api/billing", cookie, HttpMethod.Get);
+        Assert.True((await billing.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("blocked").GetBoolean());
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.Contains("blocked", app, StringComparison.Ordinal);
+
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var eventoEmail = $"evento-block-{Guid.NewGuid():N}@counter.test";
+        var eventoCookie = await SignUp(client, eventoEmail);
+        await SetPlanCode(factory, eventoCookie, PlanCodes.PackEvento);
+        var linkAt = clock.Now;
+        using var connected = await Connect(client, eventoCookie);
+        Assert.Equal(HttpStatusCode.Redirect, connected.StatusCode);
+        Assert.Equal(linkAt.AddHours(24), await AccessUntil(client, eventoCookie));
+        clock.Now = linkAt.AddHours(24);
+        using var eventoSession = await client.PostAsJsonAsync("/api/sessions", new { email = eventoEmail, password = "password1" });
+        eventoSession.EnsureSuccessStatusCode();
+        eventoCookie = eventoSession.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        using var eventoBilling = await Send(client, "/api/billing", eventoCookie, HttpMethod.Get);
+        var eventoBody = await eventoBilling.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(eventoBody.GetProperty("blocked").GetBoolean());
+        Assert.False(eventoBody.GetProperty("fiveDayWarning").GetBoolean());
     }
 
     [Fact]

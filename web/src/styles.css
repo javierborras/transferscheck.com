@@ -654,6 +654,19 @@ ol.help li {
   color: var(--tc-brand-hover);
 }
 
+.access-block {
+  display: grid;
+  gap: var(--tc-space-12);
+  place-content: center;
+  min-height: 50vh;
+  text-align: center;
+  padding: var(--tc-space-24);
+}
+
+.access-block a {
+  font-weight: 700;
+}
+
 .alerts {
   background: var(--tc-surface-card);
   border: 1px solid var(--tc-border-subtle);

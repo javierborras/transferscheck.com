@@ -330,6 +330,8 @@ Completed on 24 October 2026. `FiveDayNotice` + `IMailSender`/`NullMailSender` +
 
 ## Wave 12 — Stories 5.5, 5.7
 
+Completed on 24 October 2026. `AccessBlock` + billing `blocked`; web access-block screen; Pack Evento 24h from link; Pack Mes blocks at trial end. Evidence: `Access_date_blocks_the_web_and_stops_sync_for_pack_mes_and_pack_evento` + `web/e2e/block.spec.ts`.
+
 **Outcome.** The web blocks on the access date. Pack Evento ends at 24 hours under that same block.
 
 **Precondition.** Wave 11 is green.

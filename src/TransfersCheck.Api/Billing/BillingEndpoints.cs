@@ -41,6 +41,7 @@ public static class BillingEndpoints
             planName = current?.DisplayName,
             accessUntil = merchant?.AccessUntil,
             fiveDayWarning = FiveDayNotice.ShouldWarn(merchant?.PlanCode, merchant?.AccessUntil, now),
+            blocked = AccessBlock.IsBlocked(merchant?.AccessUntil, now),
             plans = active.Select(plan => new
             {
                 code = plan.Code,
