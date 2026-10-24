@@ -225,6 +225,8 @@ Completed on 24 October 2026. Adopted connect words / badges / reconnect confirm
 
 ## Wave 8 — Stories 4.1, 4.2, 4.3, 4.4
 
+Completed on 24 October 2026. Columns Fecha/Pagador/Monto/Estado; Llegó/Pendiente/Rechazado; Desconocido for empty payer; Actualizar ahora; no Sincronizar; poll stays TransferPollWorker. Evidence: Epic4 tests + `web/e2e/transfers.spec.ts`.
+
 **Outcome.** The last-10 list, the refresh button, one stored row per payment, and one locked worker. Adopted columns and words. No Sincronizar control. The poll stays. This wave does not build story 9.1.
 
 **Precondition.** Wave 7 is green.

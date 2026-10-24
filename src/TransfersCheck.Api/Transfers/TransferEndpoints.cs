@@ -38,7 +38,7 @@ public static class TransferEndpoints
             items = rows.Select(row => new
             {
                 id = row.Id,
-                payerName = row.PayerName,
+                payerName = string.IsNullOrWhiteSpace(row.PayerName) ? "Desconocido" : row.PayerName,
                 amount = row.Amount,
                 occurredAt = row.OccurredAt,
                 status = row.Status,

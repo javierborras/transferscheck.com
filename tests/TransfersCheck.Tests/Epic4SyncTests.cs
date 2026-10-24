@@ -38,8 +38,58 @@ public sealed class Epic4SyncTests(SqlFixture sql)
         Assert.Equal(10, items.Length);
         Assert.All(items, item => Assert.NotEqual("credit_card", item.GetProperty("typeCode").GetString()));
         Assert.Contains(items, item => item.GetProperty("statusLabel").GetString() == "Llegó");
+        Assert.Contains(items, item => item.GetProperty("statusLabel").GetString() == "Pendiente");
+        Assert.Contains(items, item => item.GetProperty("statusLabel").GetString() == "Rechazado");
         Assert.Contains(items, item => item.GetProperty("payerName").GetString()!.StartsWith("Persona", StringComparison.Ordinal));
         Assert.Contains(items, item => item.GetProperty("amount").GetDecimal() > 0);
+        Assert.All(items, item =>
+        {
+            Assert.True(item.TryGetProperty("occurredAt", out _));
+            Assert.True(item.TryGetProperty("payerName", out _));
+            Assert.True(item.TryGetProperty("amount", out _));
+            Assert.True(item.TryGetProperty("statusLabel", out _));
+            Assert.False(item.TryGetProperty("medio", out _));
+            Assert.False(item.TryGetProperty("paymentMethod", out _));
+        });
+        Assert.Equal(300, body.GetProperty("pollIntervalSeconds").GetInt32());
+        Assert.Equal(60, body.GetProperty("buttonCooldownSeconds").GetInt32());
+    }
+
+    [Fact]
+    public async Task Empty_payer_name_is_desconocido_and_the_ui_has_no_sincronizar()
+    {
+        MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        MockState.Payments.Clear();
+        MockState.Payments.Add(MockState.Payment(1, "approved", "bank_transfer", 10m, ""));
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var cookie = await ConnectOwner(client);
+        using var refreshed = await Send(client, "/api/transfers/refresh", cookie);
+        Assert.Equal(HttpStatusCode.OK, refreshed.StatusCode);
+        using var list = await Send(client, "/api/transfers", cookie, HttpMethod.Get);
+        var items = (await list.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items").EnumerateArray().ToArray();
+        Assert.Contains(items, item => item.GetProperty("payerName").GetString() == "Desconocido");
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.DoesNotContain("Sincronizar", app, StringComparison.Ordinal);
+        Assert.Contains("Actualizar ahora", app, StringComparison.Ordinal);
+        Assert.Contains("Fecha", app, StringComparison.Ordinal);
+        Assert.Contains("Pagador", app, StringComparison.Ordinal);
+        Assert.Contains("Monto", app, StringComparison.Ordinal);
+        Assert.Contains("Estado", app, StringComparison.Ordinal);
+        Assert.Contains(
+            "TransferPollWorker",
+            File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "Program.cs")),
+            StringComparison.Ordinal);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "TransfersCheck.slnx")))
+            dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Repository root was not found.");
     }
 
     [Fact]

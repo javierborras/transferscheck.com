@@ -11,16 +11,16 @@ test("signup, checklist, connect against the mock, see the ten, enable avisos", 
   await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
   await page.goto("/conectar");
   await expect(page.getByText("1. Tenés que administrar esa cuenta de Mercado Pago.")).toBeVisible();
-  await expect(page.getByText("No conectado")).toBeVisible();
+  await expect(page.getByText("No conectado", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Conectar Mercado Pago" }).click();
-  // OAuth callback redirects to the list at Ui:Origin.
+  await expect(page.getByText("Conectado", { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Activar avisos" })).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "Activar avisos" }).click();
-  await expect(page.getByRole("listitem")).toHaveCount(10, { timeout: 20_000 });
+  await expect(page.locator("ol.transfers li.row")).toHaveCount(10, { timeout: 20_000 });
   await expect(page.getByText("Persona 1 Perez")).toBeVisible();
   await expect(page.getByText("Llegó").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Actualizar ahora" })).toBeVisible();
   await page.goto("/conectar");
-  await expect(page.getByText("Conectado")).toBeVisible();
+  await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Re-conectar cuenta" })).toBeVisible();
 });

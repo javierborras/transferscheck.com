@@ -97,13 +97,16 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task A_mercado_pago_account_already_linked_is_refused()
     {
         MockState.Reset();
-        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var linkedUser = Random.Shared.Next(2000, 2_000_000_000);
+        // Mock oauth increments UserId per code exchange; pin the same id for both merchants.
+        MockState.UserId = linkedUser - 1;
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var first = await SignUp(client, $"a-{Guid.NewGuid():N}@counter.test");
         using var firstDone = await Connect(client, first);
         Assert.Equal(HttpStatusCode.Redirect, firstDone.StatusCode);
 
+        MockState.UserId = linkedUser - 1;
         var second = await SignUp(client, $"b-{Guid.NewGuid():N}@counter.test");
         using var secondDone = await Connect(client, second);
         Assert.Equal(HttpStatusCode.Conflict, secondDone.StatusCode);

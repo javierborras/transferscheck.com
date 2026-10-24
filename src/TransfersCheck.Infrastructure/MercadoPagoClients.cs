@@ -27,11 +27,9 @@ public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoP
         foreach (var item in doc.RootElement.GetProperty("results").EnumerateArray())
         {
             var payer = item.GetProperty("payer");
-            var first = payer.TryGetProperty("first_name", out var given) ? given.GetString() : "";
-            var last = payer.TryGetProperty("last_name", out var family) ? family.GetString() : "";
+            var first = payer.TryGetProperty("first_name", out var given) ? given.GetString() ?? "" : "";
+            var last = payer.TryGetProperty("last_name", out var family) ? family.GetString() ?? "" : "";
             var name = $"{first} {last}".Trim();
-            if (string.IsNullOrWhiteSpace(name) && payer.TryGetProperty("email", out var email))
-                name = email.GetString() ?? "";
             transfers.Add(new IncomingTransfer(
                 item.GetProperty("id").ToString(),
                 name,

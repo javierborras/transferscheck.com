@@ -11,7 +11,7 @@ test("checklist shows adopted connect words, numbered help, no video player, no 
 
   await expect(page.getByText("Creá tu cuenta")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Conectar Mercado Pago" })).toBeVisible();
-  await expect(page.getByText("No conectado")).toBeVisible();
+  await expect(page.getByText("No conectado", { exact: true })).toBeVisible();
   await expect(page.getByText("1. Tenés que administrar esa cuenta de Mercado Pago.")).toBeVisible();
   await expect(page.getByText("2. Tocá Conectar.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Conectar Mercado Pago" })).toBeVisible();

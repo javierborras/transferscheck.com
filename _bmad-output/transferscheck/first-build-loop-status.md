@@ -11,11 +11,12 @@ Updated: 24 October 2026.
 | 4 | `27aaf0f` | Adopted door copy, menu, sign-out |
 | 5 | `dfd482e` | Pack Evento / Pack Mes login caps (`LoginAccountCap`) |
 | 6 | `d2bc703` | MP operator checklist without secrets / withdrawn prices |
-| 7 | (this push) | Checklist connect words, badges, reconnect, empty video |
+| 7 | `774d88c` / `bf9fa9c` | Checklist on real connection state; connect badges |
+| 8 | *(this push)* | Last-10 list columns + Desconocido; no Sincronizar |
 
 ## Next
 
-Start at **wave 8** (stories 4.1–4.4 — last-10 list, refresh, no Sincronizar).
+Start at **wave 9** (stories 5.1, 5.2 — Pack Evento / Pack Mes plan table, 21-day trial from link).
 
 ## Verify
 
