@@ -934,25 +934,46 @@ li.rejected .amount {
    -------------------------------------------------------------------------- */
 
 .pay {
-  text-align: center;
+  text-align: left;
 }
 
-.pay .price {
-  margin: var(--tc-space-24) 0;
+.pay .account-row,
+.pay .plan-row {
+  display: flex;
+  gap: var(--tc-space-8);
+  margin: var(--tc-space-8) 0;
+}
+
+.pay .label {
+  font-weight: 700;
+  min-width: 3.5rem;
+}
+
+.pay .plans {
+  list-style: none;
+  margin: var(--tc-space-24) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--tc-space-16);
+}
+
+.pay .plan {
+  display: grid;
+  gap: var(--tc-space-4);
 }
 
 .pay .amount {
   display: block;
-  font-size: 3.5rem;
+  font-size: 2rem;
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
-.pay .period {
+.pay .period,
+.pay .face {
   display: block;
-  margin-top: var(--tc-space-8);
   font-size: 1rem;
   color: var(--tc-text-secondary);
 }

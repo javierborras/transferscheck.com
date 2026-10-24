@@ -235,7 +235,6 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public TimeProvider? Clock { get; init; }
     public string? VideoUrl { get; init; }
     public int? PageSize { get; init; }
-    public int? PriceAmount { get; init; }
     public string? ServiceAccountPath { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
@@ -262,8 +261,6 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Firebase:Scope", "https://www.googleapis.com/auth/firebase.messaging");
         if (ServiceAccountPath is not null)
             builder.UseSetting("Firebase:ServiceAccountPath", ServiceAccountPath);
-        if (PriceAmount is not null)
-            builder.UseSetting("Commercial:PriceAmount", PriceAmount.Value.ToString());
         if (VideoUrl is not null)
             builder.UseSetting("Onboarding:MercadoPagoVideoUrl", VideoUrl);
         if (PageSize is not null)

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { setPlanCode } from "./helpers";
 
 test("signup, checklist, connect against the mock, see the ten, enable avisos", async ({ page, context }) => {
   await context.grantPermissions(["notifications"]);
@@ -9,6 +10,7 @@ test("signup, checklist, connect against the mock, see the ten, enable avisos", 
   await page.getByLabel("Contraseña *").fill("password1");
   await page.getByRole("button", { name: "Crear cuenta" }).click();
   await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
+  await setPlanCode(page, "pack_mes");
   await page.goto("/conectar");
   await expect(page.getByText("1. Tenés que administrar esa cuenta de Mercado Pago.")).toBeVisible();
   await expect(page.getByText("No conectado", { exact: true })).toBeVisible();

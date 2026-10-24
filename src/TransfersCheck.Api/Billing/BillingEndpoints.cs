@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Core;
@@ -22,40 +21,53 @@ public static class BillingEndpoints
     private static async Task<IResult> Price(
         HttpContext http,
         IMerchantStore store,
-        IOptions<CommercialOptions> commercial,
-        IConfiguration configuration,
+        IPlanCatalog plans,
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
-        // Wave 9 replaces this with the plan row.
-        var priceAmount = configuration.GetValue("Commercial:PriceAmount", 5999);
+        var active = await plans.ListActiveAsync(cancellationToken);
+        var current = merchant?.PlanCode is { } code
+            ? active.FirstOrDefault(plan => string.Equals(plan.Code, code, StringComparison.OrdinalIgnoreCase))
+            : null;
         return Results.Ok(new
         {
-            amount = priceAmount,
-            currency = commercial.Value.Currency,
-            paidPeriodDays = commercial.Value.PaidPeriodDays,
-            accessUntil = merchant?.AccessUntil
+            accountLabel = "Email",
+            email = account.Email,
+            planLabel = "Plan",
+            planCode = merchant?.PlanCode,
+            planName = current?.DisplayName,
+            accessUntil = merchant?.AccessUntil,
+            plans = active.Select(plan => new
+            {
+                code = plan.Code,
+                displayName = plan.DisplayName,
+                amount = plan.Amount,
+                currency = plan.Currency,
+                durationDays = plan.DurationDays,
+                durationHours = plan.DurationHours,
+                faceCopy = plan.FaceCopy,
+                enableCopilotHelp = plan.EnableCopilotHelp
+            })
         });
     }
 
     private static async Task<IResult> Checkout(
         HttpContext http,
         ICheckout checkout,
-        IOptions<CommercialOptions> commercial,
-        IConfiguration configuration,
+        IPlanCatalog plans,
         CancellationToken cancellationToken)
     {
         if (http.User.FindFirst("owner")?.Value != "1")
             return Results.Json(new { error = "owner_only" }, statusCode: StatusCodes.Status403Forbidden);
 
         var account = (LoginAccount)http.Items["account"]!;
-        // Wave 9 replaces this with the plan row.
-        var priceAmount = configuration.GetValue("Commercial:PriceAmount", 5999);
+        var packMes = await plans.FindByCodeAsync(PlanCodes.PackMes, cancellationToken)
+            ?? throw new InvalidOperationException("Pack Mes plan row is missing.");
         var initPoint = await checkout.CreatePreferenceAsync(
             account.TenantId,
-            priceAmount,
-            commercial.Value.Currency,
+            packMes.Amount,
+            packMes.Currency,
             "TransfersCheck",
             cancellationToken);
         return Results.Ok(new { initPoint });
@@ -66,6 +78,7 @@ public static class BillingEndpoints
         ICheckout checkout,
         IMerchantStore store,
         IEntitlement entitlement,
+        IPlanCatalog plans,
         IOptions<CheckoutOptions> checkoutOptions,
         IOptions<CommercialOptions> commercial,
         TimeProvider clock,
@@ -99,7 +112,9 @@ public static class BillingEndpoints
             return Results.Ok(new { applied = false });
 
         var paidAt = clock.GetUtcNow();
-        merchant.AccessUntil = entitlement.Extend(merchant.AccessUntil, paidAt, commercial.Value.PaidPeriodDays);
+        var packMes = await plans.FindByCodeAsync(PlanCodes.PackMes, cancellationToken);
+        var days = packMes?.DurationDays ?? commercial.Value.PaidPeriodDays;
+        merchant.AccessUntil = entitlement.Extend(merchant.AccessUntil, paidAt, days);
         await store.AddProcessedPaymentAsync(new ProcessedPayment
         {
             PaymentId = paymentId,

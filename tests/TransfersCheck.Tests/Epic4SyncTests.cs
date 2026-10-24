@@ -21,7 +21,7 @@ public sealed class Epic4SyncTests(SqlFixture sql)
         var clock = new MutableClock();
         await using var factory = new TransfersApiFactory(sql) { Clock = clock, PageSize = 20 };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var cookie = await ConnectOwner(client);
+        var cookie = await ConnectOwner(client, factory);
 
         using var first = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
@@ -64,7 +64,7 @@ public sealed class Epic4SyncTests(SqlFixture sql)
         MockState.Payments.Add(MockState.Payment(1, "approved", "bank_transfer", 10m, ""));
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var cookie = await ConnectOwner(client);
+        var cookie = await ConnectOwner(client, factory);
         using var refreshed = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.OK, refreshed.StatusCode);
         using var list = await Send(client, "/api/transfers", cookie, HttpMethod.Get);
@@ -100,7 +100,7 @@ public sealed class Epic4SyncTests(SqlFixture sql)
         var clock = new MutableClock();
         await using var factory = new TransfersApiFactory(sql) { Clock = clock };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        var cookie = await ConnectOwner(client);
+        var cookie = await ConnectOwner(client, factory);
         MockState.RateLimit = "429";
         using var limited = await Send(client, "/api/transfers/refresh", cookie);
         Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
@@ -127,7 +127,7 @@ public sealed class Epic4SyncTests(SqlFixture sql)
         MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        await ConnectOwner(client);
+        await ConnectOwner(client, factory);
         using var scope = factory.Services.CreateScope();
         var poll = scope.ServiceProvider.GetRequiredService<IPollLock>();
         var hold = await poll.TryAcquireAsync(CancellationToken.None);
@@ -141,7 +141,23 @@ public sealed class Epic4SyncTests(SqlFixture sql)
         Assert.True(MockState.SearchCount > before);
     }
 
-    private static async Task<string> ConnectOwner(HttpClient client)
+    private static async Task SetPlanCode(TransfersApiFactory factory, string cookie, string planCode)
+    {
+        using var client = factory.CreateClient();
+        using var session = await Send(client, "/api/session", cookie, HttpMethod.Get);
+        var body = await session.Content.ReadFromJsonAsync<JsonElement>();
+        var tenantId = body.GetProperty("tenantId").GetGuid();
+        using var scope = factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenant.TenantId = tenantId;
+        var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var merchant = await store.FindMerchantAsync(tenantId, CancellationToken.None);
+        Assert.NotNull(merchant);
+        merchant!.PlanCode = planCode;
+        await store.SaveChangesAsync(CancellationToken.None);
+    }
+
+    private static async Task<string> ConnectOwner(HttpClient client, TransfersApiFactory factory)
     {
         using var signup = await client.PostAsJsonAsync("/api/accounts", new
         {
@@ -150,6 +166,7 @@ public sealed class Epic4SyncTests(SqlFixture sql)
         });
         signup.EnsureSuccessStatusCode();
         var cookie = signup.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        await SetPlanCode(factory, cookie, PlanCodes.PackMes);
         using var started = await Send(client, "/api/connections/mercadopago", cookie);
         var authorizationUrl = (await started.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("authorizationUrl").GetString()!;
         using var browser = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });

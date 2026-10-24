@@ -47,6 +47,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var cookie = await SignUp(client);
+        await SetPlanCode(factory, cookie, PlanCodes.PackMes);
         using var before = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
         var checklist = await before.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Creá tu cuenta", checklist.GetProperty("accountTitle").GetString());
@@ -141,6 +142,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var cookie = await SignUp(client);
+        await SetPlanCode(factory, cookie, PlanCodes.PackMes);
 
         using var before = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
         var open = await before.Content.ReadFromJsonAsync<JsonElement>();
@@ -207,6 +209,22 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "TransfersCheck.slnx")))
             dir = dir.Parent;
         return dir?.FullName ?? throw new InvalidOperationException("Repository root was not found.");
+    }
+
+    private static async Task SetPlanCode(TransfersApiFactory factory, string cookie, string planCode)
+    {
+        using var client = factory.CreateClient();
+        using var session = await Send(client, "/api/session", cookie, HttpMethod.Get);
+        var body = await session.Content.ReadFromJsonAsync<JsonElement>();
+        var tenantId = body.GetProperty("tenantId").GetGuid();
+        using var scope = factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenant.TenantId = tenantId;
+        var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var merchant = await store.FindMerchantAsync(tenantId, CancellationToken.None);
+        Assert.NotNull(merchant);
+        merchant!.PlanCode = planCode;
+        await store.SaveChangesAsync(CancellationToken.None);
     }
 
     private static async Task<HttpResponseMessage> Connect(HttpClient client, string cookie)

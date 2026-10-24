@@ -4,7 +4,7 @@ using TransfersCheck.Core;
 namespace TransfersCheck.Api.Accounts;
 
 /// <summary>
-/// Development-only seam so browser tests can set plan code until wave 9 owns the plan table.
+/// Development-only seam so browser tests can assign an active plan code without the owner microsite.
 /// </summary>
 public static class DevPlanEndpoints
 {

@@ -29,7 +29,6 @@ test("pay screen loads after signup", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
   await page.goto("/pagar");
   await expect(page.getByRole("heading", { name: "Extendé el acceso" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator(".price .amount")).toBeVisible();
-  await expect(page.locator(".price .period")).toBeVisible();
+  await expect(page.locator(".plans .plan .amount").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Pagar con Mercado Pago" })).toBeVisible();
 });

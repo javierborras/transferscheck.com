@@ -717,12 +717,32 @@ function OwnerLogins() {
   );
 }
 
+type PayPlan = {
+  code: string;
+  displayName: string;
+  amount: number;
+  currency: string;
+  durationDays?: number | null;
+  durationHours?: number | null;
+  faceCopy: string;
+  enableCopilotHelp: boolean;
+};
+
+type PayScreen = {
+  accountLabel: string;
+  email: string;
+  planLabel: string;
+  planName?: string | null;
+  accessUntil?: string | null;
+  plans: PayPlan[];
+};
+
 function Pay({ onSalir }: { onSalir: () => Promise<void> }) {
-  const [price, setPrice] = useState<{ amount: number; currency: string; paidPeriodDays: number } | null>(null);
+  const [screen, setScreen] = useState<PayScreen | null>(null);
 
   useEffect(() => {
     api("/api/billing").then(async (response) => {
-      if (response.ok) setPrice(await response.json());
+      if (response.ok) setScreen(await response.json());
     });
   }, []);
 
@@ -735,14 +755,34 @@ function Pay({ onSalir }: { onSalir: () => Promise<void> }) {
 
   return (
     <Shell onSalir={onSalir} back>
-      {!price ? <main /> : (
+      {!screen ? <main /> : (
         <>
           <main className="pay">
             <h1>Extendé el acceso</h1>
-            <p className="price">
-              <span className="amount">{money.format(price.amount)}</span>
-              <span className="period">cada {price.paidPeriodDays} días</span>
+            <p className="account-row">
+              <span className="label">Email</span>
+              <span>{screen.email}</span>
             </p>
+            <p className="plan-row">
+              <span className="label">Plan</span>
+              <span>{screen.planName || "Sin plan"}</span>
+            </p>
+            <ul className="plans">
+              {screen.plans.map((plan) => (
+                <li key={plan.code} className="plan">
+                  <strong>{plan.displayName}</strong>
+                  <span className="amount">{money.format(plan.amount)}</span>
+                  <span className="period">
+                    {plan.durationHours
+                      ? `${plan.durationHours} horas`
+                      : plan.durationDays
+                        ? `${plan.durationDays} días`
+                        : ""}
+                  </span>
+                  {plan.faceCopy ? <span className="face">{plan.faceCopy}</span> : null}
+                </li>
+              ))}
+            </ul>
           </main>
           <Dock>
             <button type="button" onClick={pay}>Pagar con Mercado Pago</button>

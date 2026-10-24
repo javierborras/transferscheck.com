@@ -21,9 +21,42 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<ProcessedPayment> ProcessedPayments => Set<ProcessedPayment>();
+    public DbSet<Plan> Plans => Set<Plan>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Plan>(entity =>
+        {
+            entity.HasKey(p => p.Code);
+            entity.Property(p => p.Code).HasMaxLength(32);
+            entity.Property(p => p.DisplayName).HasMaxLength(64);
+            entity.Property(p => p.Currency).HasMaxLength(8);
+            entity.Property(p => p.FaceCopy).HasMaxLength(256);
+            entity.HasData(
+                new Plan
+                {
+                    Code = PlanCodes.PackEvento,
+                    DisplayName = "Pack Evento",
+                    Amount = 1000,
+                    Currency = "ARS",
+                    DurationHours = 24,
+                    FaceCopy = "Un día, un usuario. Ideal para la fiesta o el show.",
+                    EnableCopilotHelp = false,
+                    Active = true
+                },
+                new Plan
+                {
+                    Code = PlanCodes.PackMes,
+                    DisplayName = "Pack Mes",
+                    Amount = 5999,
+                    Currency = "ARS",
+                    DurationDays = 30,
+                    FaceCopy = "",
+                    EnableCopilotHelp = true,
+                    Active = true
+                });
+        });
+
         modelBuilder.Entity<Merchant>(entity =>
         {
             entity.HasKey(m => m.Id);

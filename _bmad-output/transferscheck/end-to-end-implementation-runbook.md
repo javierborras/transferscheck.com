@@ -251,6 +251,8 @@ Completed on 24 October 2026. Columns Fecha/Pagador/Monto/Estado; Llegó/Pendien
 
 ## Wave 9 — Stories 5.1, 5.2
 
+Completed on 24 October 2026. Plan table (`IPlanCatalog`) seeds Pack Evento / Pack Mes; pay screen labels Email/Plan; Pack Mes trial 21 days from link via `PackMesTrial`; `ConnectedAt` is the usage-period start. Evidence: Epic5 plan/trial tests + `web/e2e/pay.spec.ts`.
+
 **Outcome.** The pay screen shows Pack Evento and Pack Mes from the plan table. The Pack Mes trial runs 21 days from the Mercado Pago link. That link instant is the start story 10.1 will use.
 
 **Precondition.** Wave 8 is green.

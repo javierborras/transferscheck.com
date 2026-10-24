@@ -12,11 +12,12 @@ Updated: 24 October 2026.
 | 5 | `dfd482e` | Pack Evento / Pack Mes login caps (`LoginAccountCap`) |
 | 6 | `d2bc703` | MP operator checklist without secrets / withdrawn prices |
 | 7 | `774d88c` / `bf9fa9c` | Checklist on real connection state; connect badges |
-| 8 | *(this push)* | Last-10 list columns + Desconocido; no Sincronizar |
+| 8 | `aff151d` | Last-10 list columns + Desconocido; no Sincronizar |
+| 9 | *(this push)* | Plan table Pack Evento/Mes; 21-day Pack Mes trial from link |
 
 ## Next
 
-Start at **wave 9** (stories 5.1, 5.2 — Pack Evento / Pack Mes plan table, 21-day trial from link).
+Start at **wave 10** (stories 5.3, 5.6 — prepaid payment link; browser return does not move access).
 
 ## Verify
 

@@ -107,18 +107,9 @@ public static class ConnectionEndpoints
         }
 
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
-        if (merchant is not null && merchant.TrialEndsAt is null)
-        {
-            // Wave 9 replaces this with the 21-day link rule.
-            const int trialDays = 14;
-            var trialEnd = entitlement.StartTrial(now, trialDays);
-            merchant.ConnectedAt = now;
-            merchant.TrialEndsAt = trialEnd;
-            merchant.AccessUntil = trialEnd;
-        }
-
         if (merchant is not null)
         {
+            PackMesTrial.ApplyLink(merchant, now, entitlement);
             var push = await store.HasPushDeviceAsync(cancellationToken);
             merchant.ChecklistStep = ChecklistRules.Step(true, true, push);
             await store.SaveChangesAsync(cancellationToken);
