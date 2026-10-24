@@ -644,6 +644,16 @@ ol.help li {
   color: var(--tc-brand-hover);
 }
 
+.banner.warning {
+  background: var(--tc-status-warning-bg);
+  color: var(--tc-warning-text);
+  font-weight: 600;
+}
+
+.banner.warning a {
+  color: var(--tc-brand-hover);
+}
+
 .alerts {
   background: var(--tc-surface-card);
   border: 1px solid var(--tc-border-subtle);

@@ -468,6 +468,7 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
   const [alertsDone, setAlertsDone] = useState<boolean | null>(null);
   const [trial, setTrial] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [fiveDayWarning, setFiveDayWarning] = useState(false);
   const [pollSeconds, setPollSeconds] = useState(300);
   const [cooldownSeconds, setCooldownSeconds] = useState(60);
   const seen = useRef<Map<string, string> | null>(null);
@@ -492,8 +493,9 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
     }
     const billing = await api("/api/billing");
     if (billing.ok) {
-      const { accessUntil } = await billing.json();
+      const { accessUntil, fiveDayWarning } = await billing.json();
       setExpired(Boolean(accessUntil) && new Date(accessUntil).getTime() < Date.now());
+      setFiveDayWarning(Boolean(fiveDayWarning));
     }
   }
 
@@ -565,6 +567,11 @@ function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
             <p className="banner expired" role="status">
               <span>Sincronización pausada. Para seguir recibiendo avisos, extendé tu acceso.</span>
               <Link to="/pagar">Extender acceso</Link>
+            </p>
+          ) : fiveDayWarning ? (
+            <p className="banner warning" role="status">
+              <span>Quedan cinco días de acceso. Pagá para seguir recibiendo avisos.</span>
+              <Link to="/pagar">Ir a Pagos</Link>
             </p>
           ) : trial ? (
             <p className="banner trial">La prueba está en curso.</p>

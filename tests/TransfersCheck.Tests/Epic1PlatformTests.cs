@@ -236,6 +236,7 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public string? VideoUrl { get; init; }
     public int? PageSize { get; init; }
     public string? ServiceAccountPath { get; init; }
+    public RecordingMailSender? Mail { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -266,13 +267,18 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         if (PageSize is not null)
             builder.UseSetting("Sync:PageSize", PageSize.Value.ToString());
         builder.UseEnvironment("Development");
-        if (Clock is not null)
+        builder.ConfigureTestServices(services =>
         {
-            builder.ConfigureTestServices(services =>
+            if (Clock is not null)
             {
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton(Clock);
-            });
-        }
+            }
+            if (Mail is not null)
+            {
+                services.RemoveAll<IMailSender>();
+                services.AddSingleton<IMailSender>(Mail);
+            }
+        });
     }
 }

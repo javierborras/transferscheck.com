@@ -24,6 +24,8 @@ public static class DependencyInjection
         });
         services.AddScoped<IMerchantStore, EfMerchantStore>();
         services.AddScoped<IPlanCatalog, EfPlanCatalog>();
+        services.AddScoped<IFiveDayNoticeStore, EfFiveDayNoticeStore>();
+        services.AddSingleton<IMailSender, NullMailSender>();
         services.AddScoped<ITenantPlanCode, TenantPlanCode>();
         services.AddSingleton<LoginAccountCap>();
         services.AddHttpClient<MercadoPagoTransferSource>();

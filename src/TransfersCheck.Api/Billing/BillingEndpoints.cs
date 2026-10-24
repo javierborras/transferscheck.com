@@ -22,6 +22,7 @@ public static class BillingEndpoints
         HttpContext http,
         IMerchantStore store,
         IPlanCatalog plans,
+        TimeProvider clock,
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
@@ -30,6 +31,7 @@ public static class BillingEndpoints
         var current = merchant?.PlanCode is { } code
             ? active.FirstOrDefault(plan => string.Equals(plan.Code, code, StringComparison.OrdinalIgnoreCase))
             : null;
+        var now = clock.GetUtcNow();
         return Results.Ok(new
         {
             accountLabel = "Email",
@@ -38,6 +40,7 @@ public static class BillingEndpoints
             planCode = merchant?.PlanCode,
             planName = current?.DisplayName,
             accessUntil = merchant?.AccessUntil,
+            fiveDayWarning = FiveDayNotice.ShouldWarn(merchant?.PlanCode, merchant?.AccessUntil, now),
             plans = active.Select(plan => new
             {
                 code = plan.Code,

@@ -14,11 +14,12 @@ Updated: 24 October 2026.
 | 7 | `774d88c` / `bf9fa9c` | Checklist on real connection state; connect badges |
 | 8 | `aff151d` | Last-10 list columns + Desconocido; no Sincronizar |
 | 9 | `dd3a338` | Plan table Pack Evento/Mes; 21-day Pack Mes trial from link |
-| 10 | *(this push)* | Prepaid payment link; return does not move access; owner token unset |
+| 10 | `e3067e8` | Prepaid payment link; return does not move access; owner token unset |
+| 11 | *(this push)* | Five-day notice via Hangfire job + banner; NullMailSender unbound |
 
 ## Next
 
-Start at **wave 11** (story 5.4 — five-day notice email + banner; fake mail port; Hangfire job body).
+Start at **wave 12** (stories 5.5, 5.7 — web blocks on access date; Pack Evento 24h).
 
 ## Verify
 

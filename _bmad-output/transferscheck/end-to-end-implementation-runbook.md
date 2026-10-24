@@ -304,6 +304,8 @@ Completed on 24 October 2026. `ICheckout.CreatePaymentLinkAsync`; owner `Checkou
 
 ## Wave 11 — Story 5.4
 
+Completed on 24 October 2026. `FiveDayNotice` + `IMailSender`/`NullMailSender` + `IFiveDayNoticeStore`; Hangfire `five-day-notice` job body filled; billing `fiveDayWarning` banner. Evidence: `Five_day_notice_emails_pack_mes_and_skips_pack_evento` + `web/e2e/notice.spec.ts`.
+
 **Micro-step, before any production code.** A small mail port is allowed. The test uses a fake port. Do not pick the mail provider. ADR-012 leaves the concrete provider unset and does not lock SendGrid or MonsterASP SMTP. Do not build the mail card on the owner panel. Do not add a method to `IMerchantStore` for mail. Do not register a second Hangfire job. The job identity is the empty five-day job wave 3 registered.
 
 **Outcome.** Five days before the access date, a plan other than Pack Evento sends an email and the web shows a banner. Access still works.

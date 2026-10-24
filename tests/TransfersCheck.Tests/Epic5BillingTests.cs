@@ -94,6 +94,69 @@ public sealed class Epic5BillingTests(SqlFixture sql)
     }
 
     [Fact]
+    public async Task Five_day_notice_emails_pack_mes_and_skips_pack_evento()
+    {
+        MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var clock = new MutableClock();
+        var mail = new RecordingMailSender();
+        await using var factory = new TransfersApiFactory(sql) { Clock = clock, Mail = mail };
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var email = $"notice-{Guid.NewGuid():N}@counter.test";
+        var cookie = await ConnectOwner(client, factory, email);
+        var access = await AccessUntil(client, cookie);
+        Assert.NotNull(access);
+
+        clock.Now = access.Value.AddDays(-5);
+        using var session = await client.PostAsJsonAsync("/api/sessions", new { email, password = "password1" });
+        session.EnsureSuccessStatusCode();
+        cookie = session.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+
+        using var scope = factory.Services.CreateScope();
+        var job = scope.ServiceProvider.GetRequiredService<TransfersCheck.Api.Jobs.FiveDayNoticeJob>();
+        Assert.DoesNotContain("TransferPollWorker", job.GetType().Name, StringComparison.Ordinal);
+        await job.Execute();
+        Assert.Equal(1, mail.Sent.Count(item => item.To == email));
+
+        using var billing = await Send(client, "/api/billing", cookie, HttpMethod.Get);
+        var body = await billing.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(body.GetProperty("fiveDayWarning").GetBoolean());
+
+        clock.Now = clock.Now.AddSeconds(61);
+        using var refresh = await Send(client, "/api/transfers/refresh", cookie);
+        Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+
+        var beforeReplay = mail.Sent.Count(item => item.To == email);
+        await job.Execute();
+        Assert.Equal(beforeReplay, mail.Sent.Count(item => item.To == email));
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.Contains("fiveDayWarning", app, StringComparison.Ordinal);
+        Assert.Contains("Quedan cinco días", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendGrid", app, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SMTP", File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "appsettings.json")), StringComparison.OrdinalIgnoreCase);
+
+        mail.Sent.Clear();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var eventoEmail = $"evento-{Guid.NewGuid():N}@counter.test";
+        var eventoCookie = await SignUp(client, eventoEmail);
+        await SetPlanCode(factory, eventoCookie, PlanCodes.PackEvento);
+        using var connected = await Connect(client, eventoCookie);
+        Assert.Equal(HttpStatusCode.Redirect, connected.StatusCode);
+        // Pack Evento has no Pack Mes trial; seed a short AccessUntil inside the warning window.
+        using var eventoScope = factory.Services.CreateScope();
+        var tenant = eventoScope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenant.TenantId = await Tenant(client, eventoCookie);
+        var store = eventoScope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var merchant = await store.FindMerchantAsync(tenant.TenantId, CancellationToken.None);
+        merchant!.AccessUntil = clock.Now.AddDays(3);
+        merchant.PlanCode = PlanCodes.PackEvento;
+        await store.SaveChangesAsync(CancellationToken.None);
+        await job.Execute();
+        Assert.DoesNotContain(mail.Sent, item => item.To == eventoEmail);
+    }
+
+    [Fact]
     public async Task Day_15_stops_sync_and_the_list_stays()
     {
         // Wave 12 replaces this withdrawn day-15 stop; keep suite green with Pack Mes 21-day trial.

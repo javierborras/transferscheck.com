@@ -9,6 +9,7 @@ namespace TransfersCheck.Api.Accounts;
 public static class DevPlanEndpoints
 {
     public sealed record Body(string? PlanCode);
+    public sealed record AccessBody(DateTimeOffset? AccessUntil);
 
     public static void Map(WebApplication app)
     {
@@ -16,6 +17,8 @@ public static class DevPlanEndpoints
             return;
 
         app.MapPut("/api/dev/plan-code", Set)
+            .AddEndpointFilter<LiveSessionFilter>();
+        app.MapPut("/api/dev/access-until", SetAccess)
             .AddEndpointFilter<LiveSessionFilter>();
     }
 
@@ -34,6 +37,25 @@ public static class DevPlanEndpoints
             return Results.NotFound();
 
         merchant.PlanCode = body.PlanCode;
+        await store.SaveChangesAsync(cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> SetAccess(
+        AccessBody body,
+        HttpContext http,
+        IMerchantStore store,
+        CancellationToken cancellationToken)
+    {
+        var account = (LoginAccount)http.Items["account"]!;
+        if (!account.IsOwner)
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
+        if (merchant is null)
+            return Results.NotFound();
+
+        merchant.AccessUntil = body.AccessUntil;
         await store.SaveChangesAsync(cancellationToken);
         return Results.NoContent();
     }
