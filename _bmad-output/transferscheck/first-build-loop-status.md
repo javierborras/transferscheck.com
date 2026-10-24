@@ -24,7 +24,7 @@ Updated: 24 October 2026.
 | 18 | `60cfa90` | Alert-point window + detail; hide admin menu |
 | 19 | `2dd31aa` | Admin history, CSV, day/month/range totals |
 | 20 | `dae70aa` | Mi código + one free Pack Mes via referral-bonus job
-| 21 | _(pending)_ | LiveTransferArrived contract + SSE; no SignalR in UI
+| 21 | `378958f` | LiveTransferArrived contract + SSE; no SignalR in UI
 
 ## Next
 
