@@ -521,6 +521,8 @@ Completed on 24 October 2026. Admin history/CSV/totals via `ITransferHistoryStor
 
 ## Wave 20 — Stories 8.1, 8.2, 8.3
 
+Completed on 24 October 2026. `IReferralStore` + filled `ReferralBonusJob`; Mi código on Pagos; full price; one free period. Evidence: `Referral_code_is_mi_codigo_*`.
+
 **Outcome.** The referral code, labeled Mi código. The invited commerce pays full price. One free next Pack Mes for the referrer, granted by the Hangfire job wave 3 registered, and not when the referrer is blocked.
 
 **Precondition.** Wave 19 is green. A Pack Mes payment exists from wave 10. The referral-bonus job exists from wave 3 and is still empty.
@@ -647,4 +649,5 @@ Do not implement these. Do not open `later-research.md` to design them. A senten
 - The accumulable recharge of 500 queries. It is not a story.
 - A production pipeline, a host, a queue, or a cloud topology.
 - Auth0, Google sign-in, coupons, cashback, preapproval, an `AppConfiguration` bag, a generic repository, MediatR, and MonsterASP screens.
+
 

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Api.Auth;
+using TransfersCheck.Api.Jobs;
 using TransfersCheck.Core;
 
 namespace TransfersCheck.Api.Billing;
@@ -13,9 +14,22 @@ public static class BillingEndpoints
     {
         var group = app.MapGroup("/api").AddEndpointFilter<LiveSessionFilter>();
         group.MapGet("/billing", Price);
+        group.MapGet("/referral", Referral);
         group.MapPost("/billing/checkout", Checkout);
         app.MapPost("/api/billing/webhook", Webhook);
         app.MapGet("/api/billing/return", Return);
+    }
+
+    private static async Task<IResult> Referral(
+        HttpContext http,
+        IReferralStore referrals,
+        CancellationToken cancellationToken)
+    {
+        if (http.User.FindFirst("owner")?.Value != "1")
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var account = (LoginAccount)http.Items["account"]!;
+        var code = await referrals.GetOrCreateCodeAsync(account.TenantId, cancellationToken);
+        return Results.Ok(new { label = "Mi código", code, cashbackBalance = (decimal?)null });
     }
 
     private static async Task<IResult> Price(
@@ -56,25 +70,33 @@ public static class BillingEndpoints
         });
     }
 
+    private sealed record CheckoutBody(string? ReferralCode);
+
     private static async Task<IResult> Checkout(
+        CheckoutBody? body,
         HttpContext http,
         ICheckout checkout,
         IPlanCatalog plans,
+        IReferralStore referrals,
         CancellationToken cancellationToken)
     {
         if (http.User.FindFirst("owner")?.Value != "1")
             return Results.Json(new { error = "owner_only" }, statusCode: StatusCodes.Status403Forbidden);
 
         var account = (LoginAccount)http.Items["account"]!;
+        if (!string.IsNullOrWhiteSpace(body?.ReferralCode))
+            await referrals.AttachCodeAsync(account.TenantId, body.ReferralCode, cancellationToken);
+
         var packMes = await plans.FindByCodeAsync(PlanCodes.PackMes, cancellationToken)
             ?? throw new InvalidOperationException("Pack Mes plan row is missing.");
+        // Invited commerce always pays the full Pack Mes amount — referral is not a discount.
         var initPoint = await checkout.CreatePaymentLinkAsync(
             account.TenantId,
             packMes.Amount,
             packMes.Currency,
             "TransfersCheck",
             cancellationToken);
-        return Results.Ok(new { initPoint });
+        return Results.Ok(new { initPoint, amount = packMes.Amount });
     }
 
     private static async Task<IResult> Webhook(
@@ -83,6 +105,8 @@ public static class BillingEndpoints
         IMerchantStore store,
         IEntitlement entitlement,
         IPlanCatalog plans,
+        IReferralStore referrals,
+        ReferralBonusJob job,
         IOptions<CheckoutOptions> checkoutOptions,
         IOptions<CommercialOptions> commercial,
         TimeProvider clock,
@@ -119,6 +143,7 @@ public static class BillingEndpoints
         var packMes = await plans.FindByCodeAsync(PlanCodes.PackMes, cancellationToken);
         var days = packMes?.DurationDays ?? commercial.Value.PaidPeriodDays;
         merchant.AccessUntil = entitlement.Extend(merchant.AccessUntil, paidAt, days);
+        merchant.PlanCode = PlanCodes.PackMes;
         await store.AddProcessedPaymentAsync(new ProcessedPayment
         {
             PaymentId = paymentId,
@@ -126,6 +151,8 @@ public static class BillingEndpoints
             AppliedAt = paidAt
         }, cancellationToken);
         await store.SaveChangesAsync(cancellationToken);
+        await referrals.QueueGrantFromPackMesPaymentAsync(tenantId, paidAt, cancellationToken);
+        await job.Execute();
         return Results.Ok(new { applied = true });
     }
 

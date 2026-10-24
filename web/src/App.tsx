@@ -1064,15 +1064,25 @@ type PayScreen = {
 
 function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [screen, setScreen] = useState<PayScreen | null>(null);
+  const [myCode, setMyCode] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
 
   useEffect(() => {
     api("/api/billing").then(async (response) => {
       if (response.ok) setScreen(await response.json());
     });
+    api("/api/referral").then(async (response) => {
+      if (!response.ok) return;
+      const body = (await response.json()) as { code: string };
+      setMyCode(body.code);
+    });
   }, []);
 
   async function pay() {
-    const response = await api("/api/billing/checkout", { method: "POST" });
+    const response = await api("/api/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ referralCode: inviteCode || undefined })
+    });
     if (!response.ok) return;
     const body = await response.json();
     window.location.assign(body.initPoint);
@@ -1092,6 +1102,21 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
               <span className="label">Plan</span>
               <span>{screen.planName || "Sin plan"}</span>
             </p>
+            {myCode ? (
+              <p className="referral-code">
+                <span className="label">Mi código</span>
+                <span>{myCode}</span>
+              </p>
+            ) : null}
+            <label>
+              Código de invitación
+              <input
+                name="referralCode"
+                value={inviteCode}
+                onChange={(event) => setInviteCode(event.target.value)}
+                autoComplete="off"
+              />
+            </label>
             <ul className="plans">
               {screen.plans.map((plan) => (
                 <li key={plan.code} className="plan">

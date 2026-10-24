@@ -24,9 +24,16 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<EmailSignInChallenge> EmailSignInChallenges => Set<EmailSignInChallenge>();
     public DbSet<AlertInvite> AlertInvites => Set<AlertInvite>();
+    public DbSet<ReferralGrant> ReferralGrants => Set<ReferralGrant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ReferralGrant>(entity =>
+        {
+            entity.HasKey(g => g.Id);
+            entity.Property(g => g.Outcome).HasMaxLength(32);
+        });
+
         modelBuilder.Entity<EmailSignInChallenge>(entity =>
         {
             entity.HasKey(c => c.AccountId);
@@ -82,7 +89,10 @@ public sealed class TransfersCheckDb : DbContext
             entity.Property(m => m.ChecklistStep).HasMaxLength(32);
             entity.Property(m => m.PlanCode).HasMaxLength(32);
             entity.Property(m => m.Alias).HasMaxLength(32);
+            entity.Property(m => m.ReferralCode).HasMaxLength(16);
+            entity.Property(m => m.PendingReferralCode).HasMaxLength(16);
             entity.HasIndex(m => m.Alias).IsUnique().HasFilter("[Alias] IS NOT NULL");
+            entity.HasIndex(m => m.ReferralCode).IsUnique().HasFilter("[ReferralCode] IS NOT NULL");
             entity.HasQueryFilter(m => _tenant.TenantId != Guid.Empty && m.Id == _tenant.TenantId);
         });
 

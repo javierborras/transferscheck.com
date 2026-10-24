@@ -35,6 +35,10 @@ public sealed class Merchant : ITenantOwned
     public DateTimeOffset? FiveDayNoticeSentAt { get; set; }
     /// <summary>Confirmed commerce alias without #. Null until the admin confirms once.</summary>
     public string? Alias { get; set; }
+    public string? ReferralCode { get; set; }
+    public string? PendingReferralCode { get; set; }
+    public bool ReferralGrantQueued { get; set; }
+    public bool ReferralBonusGranted { get; set; }
 }
 
 public sealed class LoginAccount : ITenantOwned

@@ -85,6 +85,7 @@ if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
 builder.Services.AddSingleton<TransferPollWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TransferPollWorker>());
 builder.Services.AddTransient<FiveDayNoticeJob>();
+builder.Services.AddTransient<ReferralBonusJob>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -104,7 +105,7 @@ if (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment())
 // Cron.Never registers identity without a product schedule (ADR-011).
 var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
 recurringJobs.AddOrUpdate<FiveDayNoticeJob>("five-day-notice", job => job.Execute(), Cron.Never());
-recurringJobs.AddOrUpdate("referral-bonus", Job.FromExpression(() => ReferralBonusJob.Execute()), Cron.Never());
+recurringJobs.AddOrUpdate<ReferralBonusJob>("referral-bonus", job => job.Execute(), Cron.Never());
 
 app.UseCors("ui");
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
