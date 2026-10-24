@@ -442,3 +442,8 @@ deploy/local/
 **/*service-account*.json
 **/*firebase-adminsdk*.json
 **/*serviceAccount*.json
+
+# Local tooling state and build artifacts
+_bmad/custom/config.user.toml
+.codex/hooks.json
+*.tsbuildinfo

@@ -589,6 +589,7 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   const [params] = useSearchParams();
   const [items, setItems] = useState<Transfer[]>([]);
   const [detail, setDetail] = useState<Transfer | null>(null);
+  const detailDialog = useRef<HTMLDialogElement>(null);
   const [notice, setNotice] = useState<Transfer | null>(null);
   const [wait, setWait] = useState("");
   const [cooldown, setCooldown] = useState(0);
@@ -603,6 +604,17 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   const [cooldownSeconds, setCooldownSeconds] = useState(60);
   const seen = useRef<Map<string, string> | null>(null);
   const first = params.get("first");
+
+  // Modal via showModal() — not the open attribute (non-modal, no focus trap / Esc / backdrop).
+  useEffect(() => {
+    const dialog = detailDialog.current;
+    if (!dialog) return;
+    if (detail) {
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    if (dialog.open) dialog.close();
+  }, [detail]);
 
   async function load(announce: boolean) {
     const path = first ? `/api/transfers?first=${encodeURIComponent(first)}` : "/api/transfers";
@@ -784,18 +796,39 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
                 })}
               </ol>
             </div>
-            {detail ? (
-              <dialog className="transfer-detail" open>
-                <h2>Detalle</h2>
-                <p>{when.format(new Date(detail.occurredAt))}</p>
-                <p>{detail.payerName || "Desconocido"}</p>
-                <p>{money.format(detail.amount)}</p>
-                <p>{detail.statusLabel}</p>
-                <button type="button" onClick={() => setDetail(null)}>
-                  Cerrar
-                </button>
-              </dialog>
-            ) : null}
+            <dialog
+              ref={detailDialog}
+              className="transfer-detail"
+              closedby="any"
+              aria-labelledby="transfer-detail-title"
+              onClose={() => setDetail(null)}
+              onClick={(event) => {
+                // Safari still lacks closedby; light-dismiss by detecting backdrop clicks.
+                if ("closedBy" in HTMLDialogElement.prototype) return;
+                const dialog = event.currentTarget;
+                if (event.target !== dialog) return;
+                const rect = dialog.getBoundingClientRect();
+                const inside =
+                  rect.top <= event.clientY &&
+                  event.clientY <= rect.top + rect.height &&
+                  rect.left <= event.clientX &&
+                  event.clientX <= rect.left + rect.width;
+                if (!inside) dialog.close();
+              }}
+            >
+              {detail ? (
+                <>
+                  <h2 id="transfer-detail-title">Detalle</h2>
+                  <p>{when.format(new Date(detail.occurredAt))}</p>
+                  <p>{detail.payerName || "Desconocido"}</p>
+                  <p>{money.format(detail.amount)}</p>
+                  <p>{detail.statusLabel}</p>
+                  <form method="dialog">
+                    <button type="submit">Cerrar</button>
+                  </form>
+                </>
+              ) : null}
+            </dialog>
             {wait ? <p className="wait" role="status">{wait}</p> : null}
             {session.isOwner ? (
               <Dock>

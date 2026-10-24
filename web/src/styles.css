@@ -252,6 +252,12 @@ button.row-open {
   border-radius: 8px;
   padding: 1rem;
   max-width: 22rem;
+  background: var(--tc-surface-card);
+  color: var(--tc-text-primary);
+}
+
+.transfer-detail::backdrop {
+  background-color: rgba(26, 26, 26, 0.45);
 }
 
 .alias-slot {
