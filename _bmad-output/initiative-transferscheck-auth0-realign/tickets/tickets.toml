@@ -1,0 +1,6 @@
+[[epic]]
+id = 1
+slug = "epic-commerce-auth0-realign"
+title = "Commerce door realigned to Auth0"
+description = "Commerce signup and login go through Auth0 and still end in the API session cookie, with the retired local Código removed."
+covers = ["R1", "R2", "R3"]

@@ -74,7 +74,7 @@ Applied in-repo (batch mode per coordinator). Summary of new acceptance shape:
 - [x] 4.1–4.4 Direct Adjustment selected
 - [x] 5.1–5.5 Proposal written
 - [x] 6.1–6.2 Consistency review of main decision artifacts
-- [ ] 6.3 Explicit human approval of implementation realign (docs applied per coordinator instruction; code not started)
+- [x] 6.3 Explicit human approval of implementation realign (given 24 Oct 2026; code realign starts with wave 4, wave 16 deferred)
 - [x] 6.4 PL-12 status updated in `parking-lot-waves.md`
 - [x] 6.5 Handoff: Developer realigns waves 4 and 16
 
