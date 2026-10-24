@@ -118,6 +118,44 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
+    [Fact]
+    public void Operator_setup_is_the_pkce_checklist_with_no_secret_values()
+    {
+        var root = RepoRoot();
+        var setup = File.ReadAllText(Path.Combine(root, "_bmad-output", "transferscheck", "mp-authorization-setup.md"));
+        Assert.Contains("film script", setup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Operator checklist", setup, StringComparison.Ordinal);
+        Assert.Contains("Create one application manually", setup, StringComparison.Ordinal);
+        Assert.Contains("URLs de redireccionamiento", setup, StringComparison.Ordinal);
+        Assert.Contains("Usar el flujo de código de autorización con PKCE", setup, StringComparison.Ordinal);
+        Assert.Contains("user-secrets", setup, StringComparison.Ordinal);
+        Assert.Contains("Rotate any client id or client secret that was in the old proof", setup, StringComparison.Ordinal);
+        Assert.Contains("Confirm with one real OAuth", setup, StringComparison.Ordinal);
+        Assert.Contains("Merchants never create a Mercado Pago application", setup, StringComparison.Ordinal);
+        Assert.Contains("not shown to a Punto de Alerta", setup, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("APP_USR-", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("TEST-", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("TrialDays", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("PriceAmount", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("5999", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("already locked", setup, StringComparison.Ordinal);
+
+        var options = File.ReadAllText(Path.Combine(root, "src", "TransfersCheck.Core", "Options.cs"));
+        Assert.Contains("DataProtectionPathOptions", options, StringComparison.Ordinal);
+        Assert.Contains("KeyPath", options, StringComparison.Ordinal);
+        var di = File.ReadAllText(Path.Combine(root, "src", "TransfersCheck.Infrastructure", "DependencyInjection.cs"));
+        Assert.Contains("PersistKeysToFileSystem", di, StringComparison.Ordinal);
+        Assert.Contains("DataProtection", di, StringComparison.Ordinal);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "TransfersCheck.slnx")))
+            dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Repository root was not found.");
+    }
+
     private static async Task<HttpResponseMessage> Connect(HttpClient client, string cookie)
     {
         using var started = await Send(client, "/api/connections/mercadopago", cookie);

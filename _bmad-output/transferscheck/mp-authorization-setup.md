@@ -22,8 +22,6 @@ Do not use the documented AI agent, the Asistente de Mercado Pago Developers, or
 6. Rotate any client id or client secret that was in the old proof.
 7. Confirm with one real OAuth. The connect step shows done only when a `MerchantConnection` is stored.
 
-Checkout Pro stays on transferscheck's own Mercado Pago account and is not this checklist. Price, trial length, and payment stay as already locked.
-
 ## Film script
 
 Say the step number, do only the clicks named below, and read labels from the screen when this file marks the click unverified.

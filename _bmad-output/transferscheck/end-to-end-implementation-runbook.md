@@ -177,6 +177,8 @@ Completed on 24 October 2026. `LoginAccountCap` + `ITenantPlanCode` (no new `IMe
 
 ## Wave 6 — Stories 3.1, 3.2, 3.5, 3.7
 
+Completed on 24 October 2026. PKCE connect and one-merchant link kept; setup checklist cleaned of withdrawn Checkout Pro / price / trial lock; `Operator_setup_is_the_pkce_checklist_with_no_secret_values` locks the film script and Data Protection key path.
+
 **Outcome.** Mercado Pago connect by authorization code with PKCE, one merchant per account, the merchant never creates an application, and `mp-authorization-setup.md` has the operator checklist and no secret values.
 
 **Precondition.** Wave 5 is green.
