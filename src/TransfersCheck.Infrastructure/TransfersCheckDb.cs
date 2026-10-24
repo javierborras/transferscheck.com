@@ -21,14 +21,87 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<PushDevice> PushDevices => Set<PushDevice>();
     public DbSet<ProcessedPayment> ProcessedPayments => Set<ProcessedPayment>();
+    public DbSet<Plan> Plans => Set<Plan>();
+    public DbSet<EmailSignInChallenge> EmailSignInChallenges => Set<EmailSignInChallenge>();
+    public DbSet<AlertInvite> AlertInvites => Set<AlertInvite>();
+    public DbSet<ReferralGrant> ReferralGrants => Set<ReferralGrant>();
+    public DbSet<ConsultaEvent> ConsultaEvents => Set<ConsultaEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ReferralGrant>(entity =>
+        {
+            entity.HasKey(g => g.Id);
+            entity.Property(g => g.Outcome).HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<ConsultaEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.TenantId, e.OccurredAt });
+            entity.HasQueryFilter(e => _tenant.TenantId != Guid.Empty && e.TenantId == _tenant.TenantId);
+        });
+
+
+        modelBuilder.Entity<EmailSignInChallenge>(entity =>
+        {
+            entity.HasKey(c => c.AccountId);
+            entity.Property(c => c.Email).HasMaxLength(256);
+            entity.Property(c => c.CodeHash).HasMaxLength(64);
+            entity.HasIndex(c => c.Email);
+        });
+
+        modelBuilder.Entity<AlertInvite>(entity =>
+        {
+            entity.HasKey(i => i.Id);
+            entity.Property(i => i.Token).HasMaxLength(64);
+            entity.HasIndex(i => i.Token).IsUnique();
+            entity.HasQueryFilter(i => _tenant.TenantId != Guid.Empty && i.TenantId == _tenant.TenantId);
+        });
+
+        modelBuilder.Entity<Plan>(entity =>
+        {
+            entity.HasKey(p => p.Code);
+            entity.Property(p => p.Code).HasMaxLength(32);
+            entity.Property(p => p.DisplayName).HasMaxLength(64);
+            entity.Property(p => p.Currency).HasMaxLength(8);
+            entity.Property(p => p.FaceCopy).HasMaxLength(256);
+            entity.HasData(
+                new Plan
+                {
+                    Code = PlanCodes.PackEvento,
+                    DisplayName = "Pack Evento",
+                    Amount = 1000,
+                    Currency = "ARS",
+                    DurationHours = 24,
+                    FaceCopy = "Un día, un usuario. Ideal para la fiesta o el show.",
+                    EnableCopilotHelp = false,
+                    Active = true
+                },
+                new Plan
+                {
+                    Code = PlanCodes.PackMes,
+                    DisplayName = "Pack Mes",
+                    Amount = 5999,
+                    Currency = "ARS",
+                    DurationDays = 30,
+                    FaceCopy = "",
+                    EnableCopilotHelp = true,
+                    Active = true
+                });
+        });
+
         modelBuilder.Entity<Merchant>(entity =>
         {
             entity.HasKey(m => m.Id);
             entity.Ignore(m => m.TenantId);
             entity.Property(m => m.ChecklistStep).HasMaxLength(32);
+            entity.Property(m => m.PlanCode).HasMaxLength(32);
+            entity.Property(m => m.Alias).HasMaxLength(32);
+            entity.Property(m => m.ReferralCode).HasMaxLength(16);
+            entity.Property(m => m.PendingReferralCode).HasMaxLength(16);
+            entity.HasIndex(m => m.Alias).IsUnique().HasFilter("[Alias] IS NOT NULL");
+            entity.HasIndex(m => m.ReferralCode).IsUnique().HasFilter("[ReferralCode] IS NOT NULL");
             entity.HasQueryFilter(m => _tenant.TenantId != Guid.Empty && m.Id == _tenant.TenantId);
         });
 
@@ -36,6 +109,7 @@ public sealed class TransfersCheckDb : DbContext
         {
             entity.HasKey(a => a.Id);
             entity.Property(a => a.Email).HasMaxLength(256);
+            entity.Property(a => a.UserName).HasMaxLength(32);
             entity.Property(a => a.PasswordHash).HasMaxLength(500);
             entity.HasIndex(a => a.Email).IsUnique();
             entity.HasQueryFilter(a => _tenant.TenantId != Guid.Empty && a.TenantId == _tenant.TenantId);

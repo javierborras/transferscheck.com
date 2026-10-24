@@ -30,6 +30,15 @@ public sealed class Merchant : ITenantOwned
     public string ChecklistStep { get; set; } = "account";
     public DateTimeOffset? RateLimitedUntil { get; set; }
     public DateTimeOffset? RefreshNotBefore { get; set; }
+    /// <summary>Plan code for login caps and the plan table.</summary>
+    public string? PlanCode { get; set; }
+    public DateTimeOffset? FiveDayNoticeSentAt { get; set; }
+    /// <summary>Confirmed commerce alias without #. Null until the admin confirms once.</summary>
+    public string? Alias { get; set; }
+    public string? ReferralCode { get; set; }
+    public string? PendingReferralCode { get; set; }
+    public bool ReferralGrantQueued { get; set; }
+    public bool ReferralBonusGranted { get; set; }
 }
 
 public sealed class LoginAccount : ITenantOwned
@@ -37,10 +46,14 @@ public sealed class LoginAccount : ITenantOwned
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
     public string Email { get; set; } = "";
+    /// <summary>Local user name for a Punto de Alerta (shown as usuario#alias). Empty for the admin.</summary>
+    public string UserName { get; set; } = "";
     public string PasswordHash { get; set; } = "";
     public bool IsOwner { get; set; }
     public bool Revoked { get; set; }
     public bool PushApproved { get; set; }
+    /// <summary>False until the invite link sets a password.</summary>
+    public bool PasswordSet { get; set; } = true;
     public Guid? LiveSessionId { get; set; }
 }
 

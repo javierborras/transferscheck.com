@@ -1,36 +1,56 @@
 # Parking lot
 
-Locked 21 October 2026. Explicitly out of the MVP. Do not build these in the first version. Do not treat this list as a backlog to pull forward.
+Locked 21 October 2026. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 where a sentence below was no longer true, including the night close of the week start. Items now in scope point at an ADR. Discarded items stay discarded. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. That file is not a backlog.
 
-## Product
+## Now in scope
 
-- **24-hour day pass.** Access is the 14-day trial and the 30-day prepaid period.
-- **Prepaid packs of 50, 100, 500, and more than 1000.** The offer is one price, ARS 5999 every 30 days.
-- **Merchant credit ledger (cuenta corriente).** There is no ledger.
-- **Store product.** Internal point-of-sale admin, 1000 transactions a week, five points of sale, a role matrix, and a per-seat price. transferscheck is five logins on one merchant, not that product.
-- **A second payment provider already connected.** `ITransferSource` exists. The only implementation is `mercadopago`. The second implementation stays unbuilt.
-- **Native apps.** The client is the React PWA. React Native and other native apps stay out. iPhone push depends on Add to Home Screen.
-- **The 500-transaction weekly cap.** There is no usage cap.
+- **Pack Evento, 24 hours.** ADR-009 and ADR-004. The old "no day pass" line is withdrawn.
+- **Plan table and two starting offers.** ADR-009. The owner edits plans on the microsite (ADR-014). The plan table is in the first bmad-build. The microsite editor is not (`later-research.md`).
+- **Referral code.** ADR-015. One free next Pack Mes, once, and only for an active referrer.
+- **Weekly usage cap of 500 queries, warning gap 50.** ADR-007. The commerce is warned at 450. At 500, new queries and alerts wait. The weekly-cap cutoff instant is the moment Mercado Pago is linked. From that instant, seven consecutive days run. The next period starts when the previous one ends. The 21-day trial uses that same start. The recharge is not in scope.
+- **SignalR beside the poll and the browser notification.** ADR-010. No hub method is named.
+- **Hangfire runs the five-day notice and the referral bonus.** ADR-011. No other Hangfire job. The poll stays `TransferPollWorker`.
+- **Owner services panel.** ADR-012. Not a key-value bag. Not the first bmad-build (`later-research.md`). The mail provider value stays unset.
+- **Commerce admin, Punto de Alerta, and the alias.** ADR-008 and ADR-013.
+- **Commerce Auth0 Universal Login (SSO or Database email/password).** ADR-018. Punto de Alerta stays usuario/clave. Mercado Pago OAuth stays collection-account linking, not the IdP. Owner microsite stays out of Auth0 (ADR-014).
+- **Owner microsite sign-in.** ADR-014. Not the first bmad-build (`later-research.md`). Do not design a host.
+- **Help pages in `web/help/`, plus the plan flag and the two help modes.** ADR-016 and ADR-017. Not a help CMS. Not a chatbot on the connect screen. Pack Mes `EnableCopilotHelp` and the Pack Evento static menu stay decided. Implementation of the copilot, Jev, and the production pipeline is not the first bmad-build (`later-research.md`).
+- **Brand manual as a design reference.** `Docs/ManualdeMarcayUI.html`. Not a product module and not an approval gate.
 
-## Support and publishing
+## Still do not build
 
-- **LLM support, including System One.**
-- **Auto-published help, a help publisher, and an FAQ CMS.** The onboarding video is one typed URL, `Onboarding:MercadoPagoVideoUrl`, not a CMS entry.
+### Product
 
-## Onboarding
+- **Prepaid quantity packs of 50, 100, 500, and 1000+.**
+- **A credit ledger.** Access is a date.
+- **Cashback and discount coupons.**
+- **A store product.** No tills, no cajas, no cashier role, no per-seat price, and no permission matrix. The second role is Punto de Alerta (ADR-013).
+- **A second payment provider already connected.** `ITransferSource` stays. The only implementation is `mercadopago`. Do not list providers. Do not build a second one.
+- **Native apps and app-store clients.** The client is the commerce webapp. The phone is the Pack Evento situation.
 
-- **Semantic onboarding assistant.** Jev, RAG, multi-provider chat, and a tool-calling bot stay out. The human rejected that assistant on 21 Oct 2026.
-- The static checklist and the video are in the MVP. They are specified in `brief.md` and `mp-authorization-setup.md`. They are not items to pull from this list.
+### Support
 
-## Commercial extras
+- **A provider leader, a ranking ladder, or a second help service.** ADR-017 keeps an explicit choice among two or three adapters inside the existing API. Do not add the leader. Provider names, model thresholds, and the index name stay unset in `later-research.md`. Do not design them. The help corpus itself is in scope (ADR-016). Implementation of the copilot waits.
+- **A help CMS or an FAQ publisher.** Help is the folder `web/help/`.
+- **A connect-screen chatbot.** The human rejected that assistant on 21 Oct 2026. The first run is still a checklist.
 
-- **Coupons, referrals, and cashback.**
-- **Auth0.** Login is the local JWT and the HttpOnly Secure cookie.
-- **Business-config admin UI.** Intervals, price, and secrets stay in typed configuration.
+### Commercial extras that stay out
 
-## This pack
+- **Auth0, Google, Cloudflare Access, and any other third party for the owner microsite login.** Commerce Auth0 (ADR-018) does not open that microsite. Mercado Pago OAuth does not open that microsite.
+- **A business-config screen on the commerce webapp, including Backend Config / Pruebas.** Plan editing and the services panel are on the owner microsite.
+- **The owner marking a payment by hand, or watching a bank account.**
+- **Preapproval, automatic debit, and an extra debit layer.**
 
-- **Brand manual.** UI copy for this MVP is the UI rules paragraph and the setup checklist in `brief.md`. A separate brand manual stays out.
-- **Skills and process gates.** TransfersCheck.Tests remains the test project named in ADR-002. Skill files and extra gate documents are out of this pack.
+### Later, not an epic
 
-Architecture exclusions that are already decided, and are not queued work, live in `adrs.md`: MediatR, a generic repository, Hangfire, SignalR, a key-value configuration bag, plan tables, and preapproval.
+- **An accumulable recharge of 500 queries.** The human may evaluate it later from real application telemetry. They believe 500 will be enough. Not a story.
+- **The microsite helpdesk.** Pending research. Not the first bmad-build (`later-research.md`).
+- **A Cursor agent that reads logs, files bugs, and opens a GitHub pull request for the owner to approve.** Intent only. Not specified. Parked with the helpdesk. Not the first bmad-build (`later-research.md`).
+
+The owner microsite, the help copilot, Jev, and the production pipeline stay product decisions and are not the first bmad-build. `later-research.md`. There is no GitHub Actions pipeline today. Do not invent one.
+
+### This pack
+
+- **Process skills and gates.** Verification remains tests in `tests/TransfersCheck.Tests`, Swagger, and the browser.
+
+MediatR, a generic repository, and a key-value configuration bag stay out. They are not queued work.

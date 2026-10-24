@@ -36,6 +36,7 @@ public static class PushEndpoints
             return Results.BadRequest(new { error = "token_required" });
 
         var account = (LoginAccount)http.Items["account"]!;
+        account.PushApproved = true;
         await store.AddPushDeviceAsync(new PushDevice
         {
             Id = Guid.NewGuid(),
@@ -43,6 +44,7 @@ public static class PushEndpoints
             AccountId = account.Id,
             Token = body.Token.Trim()
         }, cancellationToken);
+        await store.SaveChangesAsync(cancellationToken);
 
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
         if (merchant is not null)

@@ -11,7 +11,7 @@ namespace TransfersCheck.Tests;
 public sealed class Epic6PushTests(SqlFixture sql)
 {
     [Fact]
-    public async Task Push_reaches_only_an_approved_account_and_only_when_it_arrived()
+    public async Task Arrived_push_uses_fcm_and_pending_rejected_stay_silent()
     {
         MockState.Reset();
         MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
@@ -20,22 +20,8 @@ public sealed class Epic6PushTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql) { Clock = clock, ServiceAccountPath = keyPath };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var owner = await ConnectOwner(client);
-        var staffEmail = $"staff-{Guid.NewGuid():N}@counter.test";
-        using var created = await Send(client, "/api/logins", owner, json: new { email = staffEmail, password = "password1" });
-        var staffId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
-        using var approved = await Send(client, $"/api/logins/{staffId}/push", owner, HttpMethod.Put, new { approved = true });
-        Assert.Equal(HttpStatusCode.NoContent, approved.StatusCode);
-
-        using var staffSignIn = await client.PostAsJsonAsync("/api/sessions", new { email = staffEmail, password = "password1" });
-        var staff = staffSignIn.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
-        using var staffToken = await Send(client, "/api/push/tokens", staff, json: new { token = "device-approved" });
-        Assert.Equal(HttpStatusCode.NoContent, staffToken.StatusCode);
         using var ownerToken = await Send(client, "/api/push/tokens", owner, json: new { token = "device-owner" });
         Assert.Equal(HttpStatusCode.NoContent, ownerToken.StatusCode);
-
-        using var checklist = await Send(client, "/api/checklist", owner, HttpMethod.Get);
-        var alertsDone = (await checklist.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("alertsDone").GetBoolean();
-        Assert.True(alertsDone);
 
         MockState.SentPushes.Clear();
         using var synced = await Send(client, "/api/transfers/refresh", owner);
@@ -45,8 +31,9 @@ public sealed class Epic6PushTests(SqlFixture sql)
         {
             using var doc = JsonDocument.Parse(body);
             var message = doc.RootElement.GetProperty("message");
-            Assert.Equal("device-approved", message.GetProperty("token").GetString());
+            Assert.Equal("device-owner", message.GetProperty("token").GetString());
             Assert.Equal("Llegó", message.GetProperty("notification").GetProperty("title").GetString());
+            Assert.True(message.TryGetProperty("webpush", out _));
             Assert.DoesNotContain("Pendiente Uno", message.GetProperty("notification").GetProperty("body").GetString(), StringComparison.Ordinal);
             Assert.DoesNotContain("Rechazado Dos", message.GetProperty("notification").GetProperty("body").GetString(), StringComparison.Ordinal);
         });
@@ -54,6 +41,8 @@ public sealed class Epic6PushTests(SqlFixture sql)
 
         using var list = await Send(client, "/api/transfers", owner, HttpMethod.Get);
         var items = (await list.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items").EnumerateArray().ToArray();
+        Assert.Contains(items, item => item.GetProperty("statusLabel").GetString() == "Pendiente");
+        Assert.Contains(items, item => item.GetProperty("statusLabel").GetString() == "Rechazado");
         var last = items[^1].GetProperty("id").GetGuid();
         using var focused = await Send(client, $"/api/transfers?first={last}", owner, HttpMethod.Get);
         var first = (await focused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items")[0].GetProperty("id").GetGuid();
@@ -71,6 +60,17 @@ public sealed class Epic6PushTests(SqlFixture sql)
             Assert.Contains("Pendiente Uno", message.GetProperty("notification").GetProperty("body").GetString(), StringComparison.Ordinal);
             Assert.Equal("Llegó", message.GetProperty("notification").GetProperty("title").GetString());
         }
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.Contains("beep()", app, StringComparison.Ordinal);
+        Assert.Contains("¡Entró un pago!", app, StringComparison.Ordinal);
+        Assert.Contains("notificationclick", File.ReadAllText(Path.Combine(RepoRoot(), "web", "public", "sw.js")), StringComparison.Ordinal);
+        Assert.Contains("/?first=", File.ReadAllText(Path.Combine(RepoRoot(), "web", "public", "sw.js")), StringComparison.Ordinal);
+
+        var firebase = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "appsettings.json"));
+        Assert.Contains("\"ProjectId\": \"\"", firebase, StringComparison.Ordinal);
+        Assert.Contains("\"ApiKey\": \"\"", firebase, StringComparison.Ordinal);
+        Assert.DoesNotContain("SendGrid", firebase, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -86,7 +86,13 @@ public sealed class Epic6PushTests(SqlFixture sql)
         Assert.Contains("notificationclick", worker, StringComparison.Ordinal);
         Assert.Contains("/?first=", worker, StringComparison.Ordinal);
         Assert.Contains("manifest.webmanifest", index, StringComparison.Ordinal);
+        Assert.Contains("icon.svg", index, StringComparison.Ordinal);
         Assert.DoesNotContain("web/", docker, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("manifest.webmanifest", docker, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(Path.Combine(root, "web", "public", "icon.svg")));
+        Assert.True(File.Exists(Path.Combine(root, "web", "public", "sw.js")));
+        var apiCsproj = File.ReadAllText(Path.Combine(root, "src", "TransfersCheck.Api", "TransfersCheck.Api.csproj"));
+        Assert.DoesNotContain("wwwroot", apiCsproj, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -100,6 +106,46 @@ public sealed class Epic6PushTests(SqlFixture sql)
             .Where(path => File.ReadAllText(path).Contains("private_key", StringComparison.Ordinal))
             .ToArray();
         Assert.Empty(hits);
+    }
+
+    [Fact]
+    public async Task Configurar_habilitar_notificaciones_reaches_punto_de_alerta()
+    {
+        MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var keyPath = WriteServiceAccount();
+        await using var factory = new TransfersApiFactory(sql) { ServiceAccountPath = keyPath };
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var owner = await ConnectOwner(client);
+        var alias = $"push{Guid.NewGuid():N}"[..10];
+        using var aliasOk = await Send(client, "/api/alias", owner, json: new { alias });
+        Assert.Equal(HttpStatusCode.OK, aliasOk.StatusCode);
+        using var created = await Send(client, "/api/logins", owner, json: new { name = "staff1" });
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var staffId = createdBody.GetProperty("id").GetGuid();
+        var inviteToken = createdBody.GetProperty("token").GetString()!;
+        using var enabled = await Send(client, $"/api/logins/{staffId}/push", owner, HttpMethod.Put, new { approved = true });
+        Assert.Equal(HttpStatusCode.NoContent, enabled.StatusCode);
+
+        using var claimed = await client.PostAsJsonAsync($"/api/invites/{inviteToken}", new { password = "password1" });
+        claimed.EnsureSuccessStatusCode();
+        var staff = claimed.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        using var staffToken = await Send(client, "/api/push/tokens", staff, json: new { token = "device-staff" });
+        Assert.Equal(HttpStatusCode.NoContent, staffToken.StatusCode);
+
+        MockState.SentPushes.Clear();
+        using var synced = await Send(client, "/api/transfers/refresh", owner);
+        Assert.Equal(HttpStatusCode.OK, synced.StatusCode);
+        Assert.All(MockState.SentPushes, body =>
+        {
+            using var doc = JsonDocument.Parse(body);
+            Assert.Equal("device-staff", doc.RootElement.GetProperty("message").GetProperty("token").GetString());
+        });
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.Contains("Habilitar Notificaciones", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("Firebase", app, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Avisos", app, StringComparison.Ordinal);
     }
 
     private static string WriteServiceAccount()
@@ -132,6 +178,8 @@ public sealed class Epic6PushTests(SqlFixture sql)
         });
         signup.EnsureSuccessStatusCode();
         var cookie = signup.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        using var plan = await Send(client, "/api/dev/plan-code", cookie, HttpMethod.Put, new { planCode = "pack_mes" });
+        Assert.Equal(HttpStatusCode.NoContent, plan.StatusCode);
         using var started = await Send(client, "/api/connections/mercadopago", cookie);
         var authorizationUrl = (await started.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("authorizationUrl").GetString()!;
         using var browser = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });

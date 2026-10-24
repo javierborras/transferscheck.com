@@ -47,13 +47,23 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var cookie = await SignUp(client);
+        await SetPlanCode(factory, cookie, PlanCodes.PackMes);
         using var before = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
         var checklist = await before.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Creá tu cuenta", checklist.GetProperty("accountTitle").GetString());
+        Assert.Equal("Conectar Mercado Pago", checklist.GetProperty("connectTitle").GetString());
         Assert.Equal("Conectar Mercado Pago", checklist.GetProperty("button").GetString());
+        Assert.Equal("Re-conectar cuenta", checklist.GetProperty("reconnectButton").GetString());
+        Assert.Equal("No conectado", checklist.GetProperty("connectionBadge").GetString());
+        Assert.Equal(
+            "¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?",
+            checklist.GetProperty("reconnectConfirm").GetString());
         Assert.Equal(ConnectionEndpoints.Help, checklist.GetProperty("help").GetString());
+        Assert.Contains("1.", checklist.GetProperty("help").GetString(), StringComparison.Ordinal);
+        Assert.Contains("2.", checklist.GetProperty("help").GetString(), StringComparison.Ordinal);
         Assert.Equal("Activá los avisos", checklist.GetProperty("alertsTitle").GetString());
         Assert.Equal("La prueba está en curso.", checklist.GetProperty("trialLine").GetString());
+        Assert.False(checklist.TryGetProperty("payTitle", out _));
         Assert.True(checklist.GetProperty("accountDone").GetBoolean());
         Assert.False(checklist.GetProperty("connectDone").GetBoolean());
         Assert.False(checklist.GetProperty("trialRunning").GetBoolean());
@@ -67,6 +77,9 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         Assert.True(ready.GetProperty("connectDone").GetBoolean());
         Assert.True(ready.GetProperty("listReachable").GetBoolean());
         Assert.True(ready.GetProperty("trialRunning").GetBoolean());
+        Assert.Equal("Conectado", ready.GetProperty("connectionBadge").GetString());
+        Assert.Equal("Conectar Mercado Pago", ready.GetProperty("button").GetString());
+        Assert.Equal("Re-conectar cuenta", ready.GetProperty("reconnectButton").GetString());
         Assert.Equal("alerts", ready.GetProperty("currentStep").GetString());
 
         using var scope = factory.Services.CreateScope();
@@ -85,13 +98,16 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task A_mercado_pago_account_already_linked_is_refused()
     {
         MockState.Reset();
-        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var linkedUser = Random.Shared.Next(2000, 2_000_000_000);
+        // Mock oauth increments UserId per code exchange; pin the same id for both merchants.
+        MockState.UserId = linkedUser - 1;
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var first = await SignUp(client, $"a-{Guid.NewGuid():N}@counter.test");
         using var firstDone = await Connect(client, first);
         Assert.Equal(HttpStatusCode.Redirect, firstDone.StatusCode);
 
+        MockState.UserId = linkedUser - 1;
         var second = await SignUp(client, $"b-{Guid.NewGuid():N}@counter.test");
         using var secondDone = await Connect(client, second);
         Assert.Equal(HttpStatusCode.Conflict, secondDone.StatusCode);
@@ -116,6 +132,99 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         var cookie = await SignUp(client);
         using var response = await Send(client, "/api/checklist", cookie, HttpMethod.Post);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Checklist_exposes_connect_words_trial_status_and_no_client_advance()
+    {
+        MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var cookie = await SignUp(client);
+        await SetPlanCode(factory, cookie, PlanCodes.PackMes);
+
+        using var before = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
+        var open = await before.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Creá tu cuenta", open.GetProperty("accountTitle").GetString());
+        Assert.Equal("Conectar Mercado Pago", open.GetProperty("connectTitle").GetString());
+        Assert.Equal("Activá los avisos", open.GetProperty("alertsTitle").GetString());
+        Assert.Equal("La prueba está en curso.", open.GetProperty("trialLine").GetString());
+        Assert.Equal(ConnectionEndpoints.Help, open.GetProperty("help").GetString());
+        Assert.Equal("Conectar Mercado Pago", open.GetProperty("button").GetString());
+        Assert.Equal("Re-conectar cuenta", open.GetProperty("reconnectButton").GetString());
+        Assert.Equal("¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?", open.GetProperty("reconnectConfirm").GetString());
+        Assert.Equal("No conectado", open.GetProperty("connectionBadge").GetString());
+        Assert.Equal("", open.GetProperty("videoUrl").GetString());
+        Assert.DoesNotContain("Pagar", open.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("chatbot", open.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        using var advance = await Send(client, "/api/checklist", cookie, HttpMethod.Post);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, advance.StatusCode);
+
+        using var connected = await Connect(client, cookie);
+        Assert.Equal(HttpStatusCode.Redirect, connected.StatusCode);
+        using var after = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
+        var ready = await after.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Conectado", ready.GetProperty("connectionBadge").GetString());
+        Assert.True(ready.GetProperty("connectDone").GetBoolean());
+        Assert.True(ready.GetProperty("listReachable").GetBoolean());
+        Assert.True(ready.GetProperty("trialRunning").GetBoolean());
+        Assert.Equal("", ready.GetProperty("videoUrl").GetString());
+    }
+
+    [Fact]
+    public void Operator_setup_is_the_pkce_checklist_with_no_secret_values()
+    {
+        var root = RepoRoot();
+        var setup = File.ReadAllText(Path.Combine(root, "_bmad-output", "transferscheck", "mp-authorization-setup.md"));
+        Assert.Contains("film script", setup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Operator checklist", setup, StringComparison.Ordinal);
+        Assert.Contains("Create one application manually", setup, StringComparison.Ordinal);
+        Assert.Contains("URLs de redireccionamiento", setup, StringComparison.Ordinal);
+        Assert.Contains("Usar el flujo de código de autorización con PKCE", setup, StringComparison.Ordinal);
+        Assert.Contains("user-secrets", setup, StringComparison.Ordinal);
+        Assert.Contains("Rotate any client id or client secret that was in the old proof", setup, StringComparison.Ordinal);
+        Assert.Contains("Confirm with one real OAuth", setup, StringComparison.Ordinal);
+        Assert.Contains("Merchants never create a Mercado Pago application", setup, StringComparison.Ordinal);
+        Assert.Contains("not shown to a Punto de Alerta", setup, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("APP_USR-", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("TEST-", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("TrialDays", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("PriceAmount", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("5999", setup, StringComparison.Ordinal);
+        Assert.DoesNotContain("already locked", setup, StringComparison.Ordinal);
+
+        var options = File.ReadAllText(Path.Combine(root, "src", "TransfersCheck.Core", "Options.cs"));
+        Assert.Contains("DataProtectionPathOptions", options, StringComparison.Ordinal);
+        Assert.Contains("KeyPath", options, StringComparison.Ordinal);
+        var di = File.ReadAllText(Path.Combine(root, "src", "TransfersCheck.Infrastructure", "DependencyInjection.cs"));
+        Assert.Contains("PersistKeysToFileSystem", di, StringComparison.Ordinal);
+        Assert.Contains("DataProtection", di, StringComparison.Ordinal);
+    }
+
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "TransfersCheck.slnx")))
+            dir = dir.Parent;
+        return dir?.FullName ?? throw new InvalidOperationException("Repository root was not found.");
+    }
+
+    private static async Task SetPlanCode(TransfersApiFactory factory, string cookie, string planCode)
+    {
+        using var client = factory.CreateClient();
+        using var session = await Send(client, "/api/session", cookie, HttpMethod.Get);
+        var body = await session.Content.ReadFromJsonAsync<JsonElement>();
+        var tenantId = body.GetProperty("tenantId").GetGuid();
+        using var scope = factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenant.TenantId = tenantId;
+        var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var merchant = await store.FindMerchantAsync(tenantId, CancellationToken.None);
+        Assert.NotNull(merchant);
+        merchant!.PlanCode = planCode;
+        await store.SaveChangesAsync(CancellationToken.None);
     }
 
     private static async Task<HttpResponseMessage> Connect(HttpClient client, string cookie)

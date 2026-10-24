@@ -1,0 +1,23 @@
+[[entry]]
+id = 1
+type = "story"
+title = "Wave 4: commerce door signs in through Auth0 and issues the session cookie"
+description = "Realigns stories 2.1 and 2.3 so Auth0 Universal Login (SSO or Database password) is the commerce IdP and the API still issues the HttpOnly Secure SameSite=None session cookie."
+verify = "A commerce sign-in through Auth0 (or its test double) yields a server-owned tenant session; a second sign-in ends the first; Salir returns to login; door e2e no longer expects zero Auth0."
+covers = ["R1", "R3"]
+after = []
+hitl = false
+risk = "medium"
+references = ["_bmad-output/transferscheck/end-to-end-implementation-runbook.md#wave-4--stories-21-23", "_bmad-output/transferscheck/adrs.md#adr-018--commerce-identity-via-auth0-universal-login"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Wave 16: retire the local Código on the commerce door"
+description = "Realigns story 7.1 so commerce sign-in needs no TransfersCheck-owned email code; Auth0 owns any extra verification."
+verify = "Commerce Auth0 sign-in lands an API session with no local Código step; Punto de Alerta tests still use usuario/clave."
+covers = ["R2", "R3"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["_bmad-output/transferscheck/end-to-end-implementation-runbook.md#wave-16--story-71"]

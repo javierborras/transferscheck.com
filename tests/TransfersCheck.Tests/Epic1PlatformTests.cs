@@ -1,10 +1,15 @@
+using System.Reflection;
+using Hangfire;
+using Hangfire.Storage;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
 
@@ -49,14 +54,20 @@ public sealed class Epic1PlatformTests
         var commercial = scope.ServiceProvider.GetRequiredService<IOptions<CommercialOptions>>().Value;
         var sync = scope.ServiceProvider.GetRequiredService<IOptions<SyncOptions>>().Value;
         var onboarding = scope.ServiceProvider.GetRequiredService<IOptions<OnboardingOptions>>().Value;
-        Assert.Equal(14, commercial.TrialDays);
-        Assert.Equal(5999, commercial.PriceAmount);
+        var session = scope.ServiceProvider.GetRequiredService<IOptions<LoginSessionOptions>>().Value;
+        Assert.Equal(500, commercial.WeeklyQueryCap);
+        Assert.Equal(50, commercial.WeeklyQueryWarningGap);
         Assert.Equal("ARS", commercial.Currency);
         Assert.Equal(30, commercial.PaidPeriodDays);
         Assert.Equal(10, sync.PageSize);
+        Assert.Equal(10, sync.AlertPointRecordCount);
         Assert.Equal(TimeSpan.FromMinutes(5), sync.PollInterval);
         Assert.Equal(TimeSpan.FromSeconds(60), sync.ButtonCooldown);
         Assert.Equal("", onboarding.MercadoPagoVideoUrl);
+        Assert.Equal(TimeSpan.FromHours(1), session.EmailCodeLifetime);
+        Assert.Equal(TimeSpan.FromHours(1), session.InviteLinkLifetime);
+        Assert.Null(typeof(CommercialOptions).GetProperty("TrialDays", BindingFlags.Instance | BindingFlags.Public));
+        Assert.Null(typeof(CommercialOptions).GetProperty("PriceAmount", BindingFlags.Instance | BindingFlags.Public));
     }
 
     [Fact]
@@ -131,6 +142,34 @@ public sealed class Epic1PlatformTests
         Assert.Equal("http://localhost:5183", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
     }
 
+    [Fact]
+    public async Task Hangfire_registers_only_the_five_day_notice_and_referral_bonus_jobs()
+    {
+        var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "TransfersCheck.Api.csproj"));
+        Assert.Contains("""PackageReference Include="Hangfire.AspNetCore" Version="1.8.25" """, csproj, StringComparison.Ordinal);
+        Assert.Contains("""PackageReference Include="Hangfire.SqlServer" Version="1.8.25" """, csproj, StringComparison.Ordinal);
+
+        var program = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "Program.cs"));
+        Assert.Contains("MapHangfireDashboard(\"/hangfire\"", program, StringComparison.Ordinal);
+        Assert.Contains("IsDevelopment()", program, StringComparison.Ordinal);
+
+        await using var factory = new TransfersApiFactory(_sql);
+        var storage = factory.Services.GetRequiredService<JobStorage>();
+        var recurring = storage.GetConnection().GetRecurringJobs();
+        Assert.Equal(2, recurring.Count);
+        Assert.Contains(recurring, job => job.Id == "five-day-notice");
+        Assert.Contains(recurring, job => job.Id == "referral-bonus");
+        Assert.DoesNotContain(recurring, job =>
+            job.Id.Contains("poll", StringComparison.OrdinalIgnoreCase) ||
+            (job.Job?.ToString().Contains("TransferPollWorker", StringComparison.Ordinal) ?? false));
+
+        Assert.Contains(factory.Services.GetServices<IHostedService>(), service => service is TransferPollWorker);
+
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = true });
+        using var dashboard = await client.GetAsync("/hangfire");
+        Assert.True(dashboard.IsSuccessStatusCode, $"Expected /hangfire in Development, got {(int)dashboard.StatusCode}");
+    }
+
     private static Transfer TransferFor(Guid tenantId, string externalId) => new()
     {
         Id = Guid.NewGuid(),
@@ -196,8 +235,10 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public TimeProvider? Clock { get; init; }
     public string? VideoUrl { get; init; }
     public int? PageSize { get; init; }
-    public int? PriceAmount { get; init; }
     public string? ServiceAccountPath { get; init; }
+    public RecordingMailSender Mail { get; init; } = new();
+    /// <summary>Turns the commerce Auth0 door on against the mock tenant (ADR-018).</summary>
+    public bool Auth0 { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -220,23 +261,30 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Checkout:ReturnUrl", "http://localhost:5183/");
         builder.UseSetting("Firebase:MessagingUrl", "http://127.0.0.1:5099/v1/projects/mock/messages:send");
         builder.UseSetting("Firebase:ProjectId", "mock");
+        if (Auth0)
+        {
+            builder.UseSetting("Auth0:Authority", "http://127.0.0.1:5099/auth0");
+            builder.UseSetting("Auth0:ClientId", TransfersCheck.MockServer.Auth0Mock.ClientId);
+            builder.UseSetting("Auth0:ClientSecret", TransfersCheck.MockServer.Auth0Mock.ClientSecret);
+            builder.UseSetting("Auth0:RedirectUri", "http://localhost/api/auth0/callback");
+        }
         builder.UseSetting("Firebase:Scope", "https://www.googleapis.com/auth/firebase.messaging");
         if (ServiceAccountPath is not null)
             builder.UseSetting("Firebase:ServiceAccountPath", ServiceAccountPath);
-        if (PriceAmount is not null)
-            builder.UseSetting("Commercial:PriceAmount", PriceAmount.Value.ToString());
         if (VideoUrl is not null)
             builder.UseSetting("Onboarding:MercadoPagoVideoUrl", VideoUrl);
         if (PageSize is not null)
             builder.UseSetting("Sync:PageSize", PageSize.Value.ToString());
         builder.UseEnvironment("Development");
-        if (Clock is not null)
+        builder.ConfigureTestServices(services =>
         {
-            builder.ConfigureTestServices(services =>
+            if (Clock is not null)
             {
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton(Clock);
-            });
-        }
+            }
+            services.RemoveAll<IMailSender>();
+            services.AddSingleton<IMailSender>(Mail);
+        });
     }
 }

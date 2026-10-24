@@ -27,11 +27,9 @@ public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoP
         foreach (var item in doc.RootElement.GetProperty("results").EnumerateArray())
         {
             var payer = item.GetProperty("payer");
-            var first = payer.TryGetProperty("first_name", out var given) ? given.GetString() : "";
-            var last = payer.TryGetProperty("last_name", out var family) ? family.GetString() : "";
+            var first = payer.TryGetProperty("first_name", out var given) ? given.GetString() ?? "" : "";
+            var last = payer.TryGetProperty("last_name", out var family) ? family.GetString() ?? "" : "";
             var name = $"{first} {last}".Trim();
-            if (string.IsNullOrWhiteSpace(name) && payer.TryGetProperty("email", out var email))
-                name = email.GetString() ?? "";
             transfers.Add(new IncomingTransfer(
                 item.GetProperty("id").ToString(),
                 name,
@@ -51,7 +49,7 @@ public sealed class MercadoPagoCheckout(
     IOptions<CheckoutOptions> checkout,
     IOptions<MercadoPagoOptions> mercadoPago) : ICheckout
 {
-    public async Task<string> CreatePreferenceAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
+    public async Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
     {
         var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{root}/checkout/preferences");

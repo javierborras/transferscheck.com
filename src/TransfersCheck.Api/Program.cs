@@ -1,10 +1,16 @@
 using System.Text;
+using Hangfire;
+using Hangfire.Common;
+using Hangfire.Dashboard;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TransfersCheck.Api.Accounts;
+using TransfersCheck.Api.Auth;
 using TransfersCheck.Api.Billing;
 using TransfersCheck.Api.Connections;
+using TransfersCheck.Api.Jobs;
 using TransfersCheck.Api.Push;
 using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
@@ -23,6 +29,7 @@ builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOpt
 builder.Services.Configure<DataProtectionPathOptions>(builder.Configuration.GetSection(DataProtectionPathOptions.Section));
 builder.Services.Configure<FirebaseOptions>(builder.Configuration.GetSection(FirebaseOptions.Section));
 builder.Services.Configure<UiOptions>(builder.Configuration.GetSection(UiOptions.Section));
+builder.Services.Configure<Auth0Options>(builder.Configuration.GetSection(Auth0Options.Section));
 
 var uiOrigin = builder.Configuration[$"{CorsOptions.Section}:UiOrigin"] ?? "";
 builder.Services.AddCors(options =>
@@ -35,6 +42,17 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddTransfersCheckInfrastructure(builder.Configuration);
+
+var connectionString = builder.Configuration.GetConnectionString("TransfersCheck") ?? "";
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+    {
+        PrepareSchemaIfNecessary = true
+    }));
+builder.Services.AddHangfireServer();
 
 var signingKey = builder.Configuration["Session:SigningKey"] ?? "";
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
@@ -67,6 +85,8 @@ if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
 
 builder.Services.AddSingleton<TransferPollWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TransferPollWorker>());
+builder.Services.AddTransient<FiveDayNoticeJob>();
+builder.Services.AddTransient<ReferralBonusJob>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -75,14 +95,30 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment())
+// ADR-018: a tenant with a missing client id, secret or redirect would lock every commerce admin out (the local door closes). Fail at startup instead.
+var auth0Options = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Auth0Options>>().Value;
+if (auth0Options.Enabled
+    && (string.IsNullOrWhiteSpace(auth0Options.ClientId)
+        || string.IsNullOrWhiteSpace(auth0Options.ClientSecret)
+        || string.IsNullOrWhiteSpace(auth0Options.RedirectUri)))
+    throw new InvalidOperationException("Auth0:Authority is set, so Auth0:ClientId, Auth0:ClientSecret and Auth0:RedirectUri are required.");
+
+// The repo has no migrations and EnsureCreated skips any database that already has tables, so an older database drifts from the
+// model (missing LoginAccounts.PasswordSet, whole tables). SchemaBootstrap adds what is missing and never alters or drops.
+// Development and Test always run it; other environments opt in with Database:EnsureSchema=true.
+if (!string.IsNullOrWhiteSpace(connectionString)
+    && (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment()
+        || app.Configuration.GetValue<bool>("Database:EnsureSchema")))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
-    var connection = builder.Configuration.GetConnectionString("TransfersCheck");
-    if (!string.IsNullOrWhiteSpace(connection))
-        db.Database.EnsureCreated();
+    await SchemaBootstrap.EnsureAsync(db, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaBootstrap"));
 }
+
+// Cron.Never registers identity without a product schedule (ADR-011).
+var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
+recurringJobs.AddOrUpdate<FiveDayNoticeJob>("five-day-notice", job => job.Execute(), Cron.Never());
+recurringJobs.AddOrUpdate<ReferralBonusJob>("referral-bonus", job => job.Execute(), Cron.Never());
 
 app.UseCors("ui");
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
@@ -96,10 +132,21 @@ app.UseSwaggerUI(options =>
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "TransfersCheck");
 });
 
+if (app.Environment.IsDevelopment())
+{
+    app.MapHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = [new AuthenticatedDashboardFilter()]
+    });
+}
+
 AccountEndpoints.Map(app);
+Auth0Endpoints.Map(app);
+DevPlanEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
 BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);
+HistoryEndpoints.Map(app);
 PushEndpoints.Map(app);
 
 app.Run();

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Api.Auth;
+using TransfersCheck.Api.Jobs;
 using TransfersCheck.Core;
 
 namespace TransfersCheck.Api.Billing;
@@ -13,45 +14,103 @@ public static class BillingEndpoints
     {
         var group = app.MapGroup("/api").AddEndpointFilter<LiveSessionFilter>();
         group.MapGet("/billing", Price);
+        group.MapGet("/referral", Referral);
         group.MapPost("/billing/checkout", Checkout);
         app.MapPost("/api/billing/webhook", Webhook);
         app.MapGet("/api/billing/return", Return);
     }
 
+    private static async Task<IResult> Referral(
+        HttpContext http,
+        IReferralStore referrals,
+        CancellationToken cancellationToken)
+    {
+        if (http.User.FindFirst("owner")?.Value != "1")
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        var account = (LoginAccount)http.Items["account"]!;
+        var code = await referrals.GetOrCreateCodeAsync(account.TenantId, cancellationToken);
+        return Results.Ok(new { label = "Mi código", code, cashbackBalance = (decimal?)null });
+    }
+
     private static async Task<IResult> Price(
         HttpContext http,
         IMerchantStore store,
+        IPlanCatalog plans,
+        IConsultaCounter consultas,
         IOptions<CommercialOptions> commercial,
+        TimeProvider clock,
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
+        var active = await plans.ListActiveAsync(cancellationToken);
+        var current = merchant?.PlanCode is { } code
+            ? active.FirstOrDefault(plan => string.Equals(plan.Code, code, StringComparison.OrdinalIgnoreCase))
+            : null;
+        var now = clock.GetUtcNow();
+        var quotaLevel = QuotaLevel.Ok;
+        var used = 0;
+        if (merchant?.ConnectedAt is { } link)
+        {
+            var (periodStart, periodEnd) = WeeklyQueryQuota.Period(link, now);
+            used = await consultas.CountAsync(account.TenantId, periodStart, periodEnd, cancellationToken);
+            quotaLevel = WeeklyQueryQuota.Evaluate(used, commercial.Value.WeeklyQueryCap, commercial.Value.WeeklyQueryWarningGap);
+        }
         return Results.Ok(new
         {
-            amount = commercial.Value.PriceAmount,
-            currency = commercial.Value.Currency,
-            paidPeriodDays = commercial.Value.PaidPeriodDays,
-            accessUntil = merchant?.AccessUntil
+            accountLabel = "Email",
+            email = account.Email,
+            planLabel = "Plan",
+            planCode = merchant?.PlanCode,
+            planName = current?.DisplayName,
+            accessUntil = merchant?.AccessUntil,
+            fiveDayWarning = FiveDayNotice.ShouldWarn(merchant?.PlanCode, merchant?.AccessUntil, now),
+            blocked = AccessBlock.IsBlocked(merchant?.AccessUntil, now),
+            consultaWarn = quotaLevel is QuotaLevel.Warn,
+            consultaWait = quotaLevel is QuotaLevel.Wait,
+            consultasUsed = used,
+            consultasCap = commercial.Value.WeeklyQueryCap,
+            plans = active.Select(plan => new
+            {
+                code = plan.Code,
+                displayName = plan.DisplayName,
+                amount = plan.Amount,
+                currency = plan.Currency,
+                durationDays = plan.DurationDays,
+                durationHours = plan.DurationHours,
+                faceCopy = plan.FaceCopy,
+                enableCopilotHelp = plan.EnableCopilotHelp
+            })
         });
     }
 
+    private sealed record CheckoutBody(string? ReferralCode);
+
     private static async Task<IResult> Checkout(
+        CheckoutBody? body,
         HttpContext http,
         ICheckout checkout,
-        IOptions<CommercialOptions> commercial,
+        IPlanCatalog plans,
+        IReferralStore referrals,
         CancellationToken cancellationToken)
     {
         if (http.User.FindFirst("owner")?.Value != "1")
             return Results.Json(new { error = "owner_only" }, statusCode: StatusCodes.Status403Forbidden);
 
         var account = (LoginAccount)http.Items["account"]!;
-        var initPoint = await checkout.CreatePreferenceAsync(
+        if (!string.IsNullOrWhiteSpace(body?.ReferralCode))
+            await referrals.AttachCodeAsync(account.TenantId, body.ReferralCode, cancellationToken);
+
+        var packMes = await plans.FindByCodeAsync(PlanCodes.PackMes, cancellationToken)
+            ?? throw new InvalidOperationException("Pack Mes plan row is missing.");
+        // Invited commerce always pays the full Pack Mes amount — referral is not a discount.
+        var initPoint = await checkout.CreatePaymentLinkAsync(
             account.TenantId,
-            commercial.Value.PriceAmount,
-            commercial.Value.Currency,
+            packMes.Amount,
+            packMes.Currency,
             "TransfersCheck",
             cancellationToken);
-        return Results.Ok(new { initPoint });
+        return Results.Ok(new { initPoint, amount = packMes.Amount });
     }
 
     private static async Task<IResult> Webhook(
@@ -59,6 +118,9 @@ public static class BillingEndpoints
         ICheckout checkout,
         IMerchantStore store,
         IEntitlement entitlement,
+        IPlanCatalog plans,
+        IReferralStore referrals,
+        ReferralBonusJob job,
         IOptions<CheckoutOptions> checkoutOptions,
         IOptions<CommercialOptions> commercial,
         TimeProvider clock,
@@ -92,7 +154,10 @@ public static class BillingEndpoints
             return Results.Ok(new { applied = false });
 
         var paidAt = clock.GetUtcNow();
-        merchant.AccessUntil = entitlement.Extend(merchant.AccessUntil, paidAt, commercial.Value.PaidPeriodDays);
+        var packMes = await plans.FindByCodeAsync(PlanCodes.PackMes, cancellationToken);
+        var days = packMes?.DurationDays ?? commercial.Value.PaidPeriodDays;
+        merchant.AccessUntil = entitlement.Extend(merchant.AccessUntil, paidAt, days);
+        merchant.PlanCode = PlanCodes.PackMes;
         await store.AddProcessedPaymentAsync(new ProcessedPayment
         {
             PaymentId = paymentId,
@@ -100,6 +165,8 @@ public static class BillingEndpoints
             AppliedAt = paidAt
         }, cancellationToken);
         await store.SaveChangesAsync(cancellationToken);
+        await referrals.QueueGrantFromPackMesPaymentAsync(tenantId, paidAt, cancellationToken);
+        await job.Execute();
         return Results.Ok(new { applied = true });
     }
 

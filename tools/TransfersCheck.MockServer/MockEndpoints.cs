@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 
 namespace TransfersCheck.MockServer;
 
@@ -30,6 +31,7 @@ public static class MockState
         Payments.Clear();
         SentPushes.Clear();
         CheckoutTenants.Clear();
+        Auth0Mock.Reset();
         RateLimit = "";
         UserId = 1001;
         RefreshCount = 0;
@@ -59,7 +61,12 @@ public static class MockState
             currency_id = "ARS",
             status,
             payment_type_id = type,
-            payer = new { first_name = name, last_name = "Perez", email = $"p{id}@counter.test" }
+            payer = new
+            {
+                first_name = name,
+                last_name = string.IsNullOrWhiteSpace(name) ? "" : "Perez",
+                email = $"p{id}@counter.test"
+            }
         });
         return JsonDocument.Parse(json).RootElement.Clone();
     }
@@ -69,6 +76,7 @@ public static class MockEndpoints
 {
     public static void Map(WebApplication app)
     {
+        Auth0Mock.Map(app);
         app.MapGet("/authorization", (HttpRequest request) =>
         {
             var query = request.Query;
@@ -115,14 +123,17 @@ public static class MockEndpoints
                 return Results.BadRequest(new { error = "invalid_client" });
 
             MockState.UsedCodes[code] = verifier;
+            // Each authorization code binds a distinct Mercado Pago user so parallel e2e
+            // merchants do not collide on ExternalAccountLinkedElsewhere.
+            var userId = Interlocked.Increment(ref MockState.UserId);
             var refreshToken = "refresh-" + Guid.NewGuid().ToString("N");
-            MockState.RefreshUsers[refreshToken] = MockState.UserId.ToString();
+            MockState.RefreshUsers[refreshToken] = userId.ToString();
             return Results.Json(new
             {
                 access_token = "mock-access-token",
                 refresh_token = refreshToken,
                 expires_in = 3600,
-                user_id = MockState.UserId
+                user_id = userId
             });
         });
 

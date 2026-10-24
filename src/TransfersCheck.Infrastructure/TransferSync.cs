@@ -19,6 +19,7 @@ public sealed class TransferSync(
     IEntitlement entitlement,
     ITokenProtector protector,
     IPushSender push,
+    ILiveListPublisher liveList,
     IOptions<SyncOptions> syncOptions,
     TimeProvider clock)
 {
@@ -76,6 +77,20 @@ public sealed class TransferSync(
         {
             merchant.RefreshNotBefore = now.Add(syncOptions.Value.ButtonCooldown);
             await store.SaveChangesAsync(cancellationToken);
+        }
+
+        foreach (var change in changes)
+        {
+            await liveList.PublishAsync(
+                tenantId,
+                new LiveTransferArrived(
+                    change.TransferId,
+                    string.IsNullOrWhiteSpace(change.PayerName) ? "Desconocido" : change.PayerName,
+                    change.Amount,
+                    change.OccurredAt,
+                    change.Status,
+                    StatusWords.Label(change.Status)),
+                cancellationToken);
         }
 
         if (entitlement.AllowsSyncAndPush(merchant.AccessUntil, now))

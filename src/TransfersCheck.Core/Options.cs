@@ -3,10 +3,10 @@ namespace TransfersCheck.Core;
 public sealed class CommercialOptions
 {
     public const string Section = "Commercial";
-    public int TrialDays { get; set; } = 14;
-    public int PriceAmount { get; set; } = 5999;
     public string Currency { get; set; } = "ARS";
     public int PaidPeriodDays { get; set; } = 30;
+    public int WeeklyQueryCap { get; set; } = 500;
+    public int WeeklyQueryWarningGap { get; set; } = 50;
 }
 
 public sealed class SyncOptions
@@ -15,6 +15,7 @@ public sealed class SyncOptions
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromMinutes(5);
     public TimeSpan ButtonCooldown { get; set; } = TimeSpan.FromSeconds(60);
     public int PageSize { get; set; } = 10;
+    public int AlertPointRecordCount { get; set; } = 10;
 }
 
 public sealed class OnboardingOptions
@@ -38,6 +39,7 @@ public sealed class MercadoPagoOptions
 public sealed class CheckoutOptions
 {
     public const string Section = "Checkout";
+    /// <summary>SaaS owner Mercado Pago token for payment links. Stays empty in the repo; story 12.3 fills it outside this build.</summary>
     public string AccessToken { get; set; } = "";
     public string WebhookSecret { get; set; } = "";
     public string NotificationUrl { get; set; } = "";
@@ -48,6 +50,8 @@ public sealed class LoginSessionOptions
 {
     public const string Section = "Session";
     public TimeSpan Lifetime { get; set; } = TimeSpan.FromHours(12);
+    public TimeSpan EmailCodeLifetime { get; set; } = TimeSpan.FromHours(1);
+    public TimeSpan InviteLinkLifetime { get; set; } = TimeSpan.FromHours(1);
     public string SigningKey { get; set; } = "";
     public string CookieName { get; set; } = "tc_session";
 }
@@ -82,4 +86,18 @@ public sealed class UiOptions
 {
     public const string Section = "Ui";
     public string Origin { get; set; } = "";
+}
+
+public sealed class Auth0Options
+{
+    public const string Section = "Auth0";
+    /// <summary>Tenant base URL, for example https://your-tenant.auth0.com. Empty keeps the local door (development without a tenant).</summary>
+    public string Authority { get; set; } = "";
+    public string ClientId { get; set; } = "";
+    /// <summary>Stays in user-secrets or environment (ADR-018). Never committed.</summary>
+    public string ClientSecret { get; set; } = "";
+    public string RedirectUri { get; set; } = "";
+    public TimeSpan AttemptLifetime { get; set; } = TimeSpan.FromMinutes(10);
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(Authority);
 }

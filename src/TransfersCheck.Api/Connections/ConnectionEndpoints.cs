@@ -52,7 +52,6 @@ public static class ConnectionEndpoints
         ITokenProtector protector,
         IMerchantAuthorizer authorizer,
         IEntitlement entitlement,
-        IOptions<CommercialOptions> commercial,
         IOptions<UiOptions> ui,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -108,16 +107,9 @@ public static class ConnectionEndpoints
         }
 
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
-        if (merchant is not null && merchant.TrialEndsAt is null)
-        {
-            var trialEnd = entitlement.StartTrial(now, commercial.Value.TrialDays);
-            merchant.ConnectedAt = now;
-            merchant.TrialEndsAt = trialEnd;
-            merchant.AccessUntil = trialEnd;
-        }
-
         if (merchant is not null)
         {
+            PackMesTrial.ApplyLink(merchant, now, entitlement);
             var push = await store.HasPushDeviceAsync(cancellationToken);
             merchant.ChecklistStep = ChecklistRules.Step(true, true, push);
             await store.SaveChangesAsync(cancellationToken);
@@ -125,7 +117,7 @@ public static class ConnectionEndpoints
 
         await store.DeleteOAuthAttemptAsync(attempt, cancellationToken);
         var origin = ui.Value.Origin.TrimEnd('/');
-        return Results.Redirect(string.IsNullOrEmpty(origin) ? "/" : origin + "/");
+        return Results.Redirect(string.IsNullOrEmpty(origin) ? "/conectar" : origin + "/conectar");
     }
 
     private static async Task<IResult> Checklist(
@@ -139,7 +131,8 @@ public static class ConnectionEndpoints
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
         var connection = await store.FindConnectionAsync(cancellationToken);
         var push = await store.HasPushDeviceAsync(cancellationToken);
-        var step = ChecklistRules.Step(true, connection is not null, push);
+        var connected = connection is not null;
+        var step = ChecklistRules.Step(true, connected, push);
         if (merchant is not null && merchant.ChecklistStep != step)
         {
             merchant.ChecklistStep = step;
@@ -156,11 +149,14 @@ public static class ConnectionEndpoints
             trialLine = "La prueba está en curso.",
             help = Help,
             button = "Conectar Mercado Pago",
+            reconnectButton = "Re-conectar cuenta",
+            reconnectConfirm = "¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?",
+            connectionBadge = connected ? "Conectado" : "No conectado",
             accountDone = true,
-            connectDone = connection is not null,
+            connectDone = connected,
             alertsDone = push,
             trialRunning = merchant?.TrialEndsAt is { } trial && now < trial,
-            listReachable = connection is not null,
+            listReachable = connected,
             currentStep = step,
             videoUrl = onboarding.Value.MercadoPagoVideoUrl ?? ""
         });

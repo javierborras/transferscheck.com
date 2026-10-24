@@ -9,7 +9,7 @@ public sealed record IncomingTransfer(
     string Status,
     string TypeCode);
 
-public sealed record TransferChange(Guid TransferId, string ExternalId, string PayerName, decimal Amount, string Status, bool NewlyArrived);
+public sealed record TransferChange(Guid TransferId, string ExternalId, string PayerName, decimal Amount, DateTimeOffset OccurredAt, string Status, bool NewlyArrived);
 
 public sealed class RateLimitedException : Exception
 {
@@ -113,6 +113,16 @@ public interface IPushSender
 
 public interface ICheckout
 {
-    Task<string> CreatePreferenceAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken);
+    /// <summary>Creates a prepaid Mercado Pago payment link (not preapproval). Owner AccessToken may be empty until story 12.3.</summary>
+    Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken);
     Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
+}
+
+/// <summary>Who Auth0 says the commerce admin is. Only a verified email may open a session.</summary>
+public sealed record IdentityClaims(string Subject, string Email, bool EmailVerified);
+
+public interface IIdentityProvider
+{
+    string BuildAuthorizationUrl(string state, string codeChallenge, string nonce, bool signUp, string? loginHint);
+    Task<IdentityClaims> ExchangeAsync(string code, string codeVerifier, string nonce, CancellationToken cancellationToken);
 }
