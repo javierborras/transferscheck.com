@@ -270,6 +270,177 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         Assert.NotEmpty(await SignUp(client, $"local-{Guid.NewGuid():N}@counter.test"));
     }
 
+    [Fact]
+    public async Task Local_door_validates_sign_up_refuses_duplicates_and_bad_credentials()
+    {
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient();
+
+        foreach (var (email, password) in new[]
+                 {
+                     ("", "password1"), ("no-at-sign", "password1"), ("has space@counter.test", "password1"),
+                     ("short@counter.test", "short"), ("empty@counter.test", ""), (new string('a', 250) + "@counter.test", "password1")
+                 })
+        {
+            using var invalid = await client.PostAsJsonAsync("/api/accounts", new { email, password });
+            Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+            Assert.Equal("invalid_account", (await invalid.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        }
+
+        var address = $"dup-{Guid.NewGuid():N}@counter.test";
+        await SignUp(client, address);
+        using var duplicate = await client.PostAsJsonAsync("/api/accounts", new { email = address.ToUpperInvariant(), password = "password1" });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Equal("email_taken", (await duplicate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+
+        using var wrongPassword = await client.PostAsJsonAsync("/api/sessions", new { email = address, password = "not-the-password" });
+        using var unknownEmail = await client.PostAsJsonAsync("/api/sessions", new { email = $"nobody-{Guid.NewGuid():N}@counter.test", password = "password1" });
+        using var noPassword = await client.PostAsJsonAsync("/api/sessions", new { email = address });
+        Assert.Equal(HttpStatusCode.Unauthorized, wrongPassword.StatusCode);
+        Assert.Equal("invalid_credentials", (await wrongPassword.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        Assert.Equal("invalid_credentials", (await unknownEmail.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        Assert.Equal(HttpStatusCode.Unauthorized, noPassword.StatusCode);
+
+        // The right password still needs the mailed code; a wrong code is refused.
+        using var wrongCode = await client.PostAsJsonAsync("/api/sessions", new { email = address, password = "password1", code = "000000" });
+        Assert.Equal("invalid_code", (await wrongCode.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Session_endpoint_refuses_a_missing_or_forged_cookie_and_survives_a_reload_with_the_real_one()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+        using var client = factory.CreateClient();
+
+        using var none = await client.GetAsync("/api/session");
+        Assert.Equal(HttpStatusCode.Unauthorized, none.StatusCode);
+        using var forged = await Send(client, HttpMethod.Get, "/api/session", "tc_session=not-a-jwt");
+        Assert.Equal(HttpStatusCode.Unauthorized, forged.StatusCode);
+
+        var run = await TestAuth.SignInWithAuth0(factory, $"reload-{Guid.NewGuid():N}@counter.test", signUp: true);
+        for (var reload = 0; reload < 3; reload++)
+        {
+            using var again = await Send(client, HttpMethod.Get, "/api/session", run.SessionCookie!);
+            Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+        }
+
+        // Signing out twice with the same cookie is refused the second time, never a 500.
+        using var out1 = await Send(client, HttpMethod.Delete, "/api/sessions", run.SessionCookie!);
+        using var out2 = await Send(client, HttpMethod.Delete, "/api/sessions", run.SessionCookie!);
+        Assert.Equal(HttpStatusCode.NoContent, out1.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, out2.StatusCode);
+    }
+
+    [Fact]
+    public async Task Auth0_sign_up_for_an_existing_email_reuses_the_account_and_a_revoked_owner_is_refused()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+        using var client = factory.CreateClient();
+        var email = $"again-{Guid.NewGuid():N}@counter.test";
+
+        var first = await TestAuth.SignInWithAuth0(factory, email, signUp: true);
+        var again = await TestAuth.SignInWithAuth0(factory, email, signUp: true);
+        Assert.NotNull(again.SessionCookie);
+        var tenantA = (await (await Send(client, HttpMethod.Get, "/api/session", again.SessionCookie!)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tenantId").GetGuid();
+        using var scope = factory.Services.CreateScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenant.TenantId = tenantA;
+        var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var account = await store.FindAccountByEmailAsync(email, CancellationToken.None);
+        Assert.NotNull(account);
+        Assert.False(account!.PasswordSet);
+        Assert.True(account.IsOwner);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Send(client, HttpMethod.Get, "/api/session", first.SessionCookie!)).StatusCode);
+
+        account.Revoked = true;
+        await store.SaveChangesAsync(CancellationToken.None);
+        var refused = await TestAuth.SignInWithAuth0(factory, email);
+        Assert.Null(refused.SessionCookie);
+        Assert.EndsWith("/?auth0_error=not_allowed", refused.Location);
+    }
+
+    [Fact]
+    public async Task Punto_de_alerta_door_checks_the_invite_the_credentials_and_revocation()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+        using var client = factory.CreateClient();
+        var owner = await TestAuth.SignInWithAuth0(factory, $"owner-{Guid.NewGuid():N}@counter.test", signUp: true);
+        await SetPlanCode(factory, owner.SessionCookie!, PlanCodes.PackMes);
+        var alias = $"pa{Guid.NewGuid():N}"[..10];
+        using (var confirmed = await Send(client, HttpMethod.Post, "/api/alias", owner.SessionCookie!, new { alias }))
+            confirmed.EnsureSuccessStatusCode();
+
+        using var badName = await Send(client, HttpMethod.Post, "/api/logins", owner.SessionCookie!, new { name = "no good!" });
+        Assert.Equal(HttpStatusCode.BadRequest, badName.StatusCode);
+        using var created = await Send(client, HttpMethod.Post, "/api/logins", owner.SessionCookie!, new { name = "Caja1" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var accountId = createdBody.GetProperty("id").GetGuid();
+        var token = createdBody.GetProperty("token").GetString()!;
+        using var duplicate = await Send(client, HttpMethod.Post, "/api/logins", owner.SessionCookie!, new { name = "caja1" });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+
+        async Task<string?> Error(HttpResponseMessage response)
+            => (await response.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("error", out var error) ? error.GetString() : null;
+        Task<HttpResponseMessage> LogIn(string commerce, string user, string password)
+            => client.PostAsJsonAsync("/api/sessions", new { commerce, user, password });
+
+        // Invite not claimed yet: no password exists, so the door stays shut.
+        using (var early = await LogIn(alias, "caja1", "password1"))
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, early.StatusCode);
+            Assert.Equal("invalid_credentials", await Error(early));
+        }
+
+        using (var shortPassword = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "short" }))
+            Assert.Equal("invalid_password", await Error(shortPassword));
+        using (var unknown = await client.PostAsJsonAsync($"/api/invites/{new string('0', 48)}", new { password = "password1" }))
+            Assert.Equal("invalid_invite", await Error(unknown));
+        using var claimed = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "password1" });
+        Assert.Equal(HttpStatusCode.OK, claimed.StatusCode);
+        var claimedCookie = claimed.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        using (var replay = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "otherpass1" }))
+            Assert.Equal("invalid_invite", await Error(replay));
+
+        foreach (var (commerce, user, password) in new[]
+                 {
+                     (alias, "caja1", "wrong-password"), (alias, "nadie", "password1"), ("otrocomercio", "caja1", "password1"),
+                     (alias, "bad user!", "password1"), ("!!", "caja1", "password1")
+                 })
+        {
+            using var denied = await LogIn(commerce, user, password);
+            Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+            Assert.Equal("invalid_credentials", await Error(denied));
+        }
+
+        using var signedIn = await LogIn(alias.ToUpperInvariant(), "CAJA1", "password1");
+        Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
+        var body = await signedIn.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal($"caja1#{alias}", body.GetProperty("displayName").GetString());
+        Assert.False(body.GetProperty("isOwner").GetBoolean());
+        var cookie = signedIn.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+
+        // The invite-claim session was replaced by the new login.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Send(client, HttpMethod.Get, "/api/session", claimedCookie)).StatusCode);
+        using var session = await Send(client, HttpMethod.Get, "/api/session", cookie);
+        Assert.Equal(HttpStatusCode.OK, session.StatusCode);
+        Assert.Equal("caja1", (await session.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("userName").GetString());
+        // A Punto de Alerta never reaches the admin screens.
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(client, HttpMethod.Get, "/api/logins", cookie)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Send(client, HttpMethod.Post, "/api/alias", cookie, new { alias = "hackhack" })).StatusCode);
+
+        using var signedOut = await Send(client, HttpMethod.Delete, "/api/sessions", cookie);
+        Assert.Equal(HttpStatusCode.NoContent, signedOut.StatusCode);
+        using var again = await LogIn(alias, "caja1", "password1");
+        Assert.Equal(HttpStatusCode.OK, again.StatusCode);
+
+        using var revoked = await Send(client, HttpMethod.Delete, $"/api/logins/{accountId}", owner.SessionCookie!);
+        Assert.Equal(HttpStatusCode.NoContent, revoked.StatusCode);
+        using var afterRevoke = await LogIn(alias, "caja1", "password1");
+        Assert.Equal(HttpStatusCode.Unauthorized, afterRevoke.StatusCode);
+        Assert.Equal("invalid_credentials", await Error(afterRevoke));
+    }
+
     private static async Task<string> SignUp(HttpClient client, string email)
     {
         using var response = await client.PostAsJsonAsync("/api/accounts", new { email, password = "password1" });

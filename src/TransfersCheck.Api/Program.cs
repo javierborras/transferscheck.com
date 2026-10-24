@@ -103,12 +103,16 @@ if (auth0Options.Enabled
         || string.IsNullOrWhiteSpace(auth0Options.RedirectUri)))
     throw new InvalidOperationException("Auth0:Authority is set, so Auth0:ClientId, Auth0:ClientSecret and Auth0:RedirectUri are required.");
 
-if (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment())
+// The repo has no migrations and EnsureCreated skips any database that already has tables, so an older database drifts from the
+// model (missing LoginAccounts.PasswordSet, whole tables). SchemaBootstrap adds what is missing and never alters or drops.
+// Development and Test always run it; other environments opt in with Database:EnsureSchema=true.
+if (!string.IsNullOrWhiteSpace(connectionString)
+    && (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment()
+        || app.Configuration.GetValue<bool>("Database:EnsureSchema")))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
-    if (!string.IsNullOrWhiteSpace(connectionString))
-        db.Database.EnsureCreated();
+    await SchemaBootstrap.EnsureAsync(db, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaBootstrap"));
 }
 
 // Cron.Never registers identity without a product schedule (ADR-011).

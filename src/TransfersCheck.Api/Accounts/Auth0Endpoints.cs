@@ -102,34 +102,44 @@ public static class Auth0Endpoints
         if (!claims.EmailVerified)
             return Fail("email_unverified");
 
-        var account = await store.FindAccountByEmailAsync(claims.Email, cancellationToken);
-        if (account is null)
+        try
         {
-            var merchant = new Merchant
+            var account = await store.FindAccountByEmailAsync(claims.Email, cancellationToken);
+            if (account is null)
             {
-                Id = Guid.NewGuid(),
-                CreatedAt = clock.GetUtcNow(),
-                ChecklistStep = ChecklistRules.Step(true, false, false)
-            };
-            await store.AddMerchantAsync(merchant, cancellationToken);
-            account = new LoginAccount
+                var merchant = new Merchant
+                {
+                    Id = Guid.NewGuid(),
+                    CreatedAt = clock.GetUtcNow(),
+                    ChecklistStep = ChecklistRules.Step(true, false, false)
+                };
+                await store.AddMerchantAsync(merchant, cancellationToken);
+                account = new LoginAccount
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = merchant.Id,
+                    Email = claims.Email,
+                    // No local password: Auth0 owns the credential, so the local door cannot be used for this account.
+                    PasswordHash = PasswordHasher.Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
+                    IsOwner = true,
+                    PasswordSet = false
+                };
+                await store.AddAccountAsync(account, cancellationToken);
+            }
+            else if (!account.IsOwner || account.Revoked)
             {
-                Id = Guid.NewGuid(),
-                TenantId = merchant.Id,
-                Email = claims.Email,
-                // No local password: Auth0 owns the credential, so the local door cannot be used for this account.
-                PasswordHash = PasswordHasher.Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
-                IsOwner = true,
-                PasswordSet = false
-            };
-            await store.AddAccountAsync(account, cancellationToken);
+                return Fail("not_allowed");
+            }
+
+            await AccountEndpoints.Issue(store, tenantContext, sessionOptions.Value, clock, http.Response, account, cancellationToken);
         }
-        else if (!account.IsOwner || account.Revoked)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return Fail("not_allowed");
+            // A database fault (or a double-clicked callback racing on the unique email) must end on the login screen, not on the API's raw 500.
+            logger.LogError(exception, "Auth0 sign-in could not open a session.");
+            return Fail("server_error");
         }
 
-        await AccountEndpoints.Issue(store, tenantContext, sessionOptions.Value, clock, http.Response, account, cancellationToken);
         return Results.Redirect(string.IsNullOrEmpty(origin) ? "/" : origin + "/");
     }
 

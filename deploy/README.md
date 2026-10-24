@@ -70,6 +70,10 @@ Suggested Actions publish shape (not checked in yet):
 # - paths filter: src/TransfersCheck.Api/**, src/TransfersCheck.Core/**, src/TransfersCheck.Infrastructure/**
 ```
 
+## Database schema
+
+The repo has no EF migrations. `SchemaBootstrap` (Infrastructure) runs at API startup and only adds what the model needs: missing tables (with seed rows), missing columns and missing indexes. It never drops or alters existing objects and is idempotent. Development and Test always run it. Production runs it only with `Database:EnsureSchema=true` (env `Database__EnsureSchema=true`); set it for the first deploy of a build that adds columns, otherwise a database created by an older build fails with `Invalid column name ...`.
+
 ## Auth and deploy notes
 
 - Commerce identity uses Auth0 (ADR-018). Auth0 domain / client id / client secret are typed configuration outside the repo (user-secrets or environment). Do not commit them.

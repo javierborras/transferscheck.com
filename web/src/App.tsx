@@ -281,6 +281,8 @@ function auth0Message(code: string | null) {
       return "Esa cuenta no puede entrar como admin.";
     case "invalid_state":
       return "El inicio de sesión venció. Probá de nuevo.";
+    case "server_error":
+      return "No pudimos abrir tu sesión. Probá de nuevo en un momento.";
     default:
       return "No se pudo iniciar sesión con Auth0.";
   }
