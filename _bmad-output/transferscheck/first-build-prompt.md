@@ -5,7 +5,7 @@ Paste the block below into a new Multitask chat. Do not run it in the planning c
 ```text
 TransfersCheck first build — one bmad-build-auto wave at a time, in order, until this boundary is pushed.
 
-You are the Multitask parent. You coordinate. You do not implement a wave. You do not edit src/ or web/. The only repo is D:\Repo\transferscheck.com\transferscheck.com. Start there and stay there. SimpleCheckMercadoPago is evidence of behavior already mined. Do not open it to copy, port, or extend. Do not port Auth0, coupons, cashback, preapproval, an AppConfiguration bag, a generic repository, MediatR, or MonsterASP screens.
+You are the Multitask parent. You coordinate. You do not implement a wave. You do not edit src/ or web/. The only repo is D:\Repo\transferscheck.com\transferscheck.com. Start there and stay there. SimpleCheckMercadoPago is evidence of behavior already mined. Do not open it to copy, port, or extend. Commerce Auth0 is in scope (ADR-018): Universal Login with Database and Social (Google default), then API session cookie. Do not put Auth0 on the owner microsite or on the Punto de Alerta usuario/clave door. Do not confuse Mercado Pago OAuth with login SSO. Do not port coupons, cashback, preapproval, an AppConfiguration bag, a generic repository, MediatR, or MonsterASP screens.
 
 Before wave 1, run git status. If the tree has dirty or untracked files that are not this build, stop and ask. Do not stage them. Do not clean them.
 
@@ -34,7 +34,7 @@ This grouping is 22 waves. Do not add, drop, merge, or reorder them. A wave is t
 1. Stories 1.1, 1.2, 1.5 — The web shell and Swagger come up as two deployables, with the three projects and the composition root.
 2. Stories 1.3, 1.4 — A tenant sees only its rows, and the process reads the closed typed settings.
 3. Story 1.6 — Hangfire.AspNetCore 1.8.25 and Hangfire.SqlServer 1.8.25 register the five-day notice job and the referral-bonus job, and the dashboard is only in Development at /hangfire. Do not fill those job bodies. The poll stays TransferPollWorker. No other Hangfire job.
-4. Stories 2.1, 2.3 — The commerce door and one live session. Signed-in header and menu: Transacciones, Configurar, Pagos, and Salir, with Cerrar sesión for leaving. Login and signup show the wordmark and no menu. No Auth0 and no Google. The #alias value waits for story 7.2.
+4. Stories 2.1, 2.3 — The commerce door (Auth0 Universal Login: SSO or Database email/password) and one live session after the API cookie. Signed-in header and menu: Transacciones, Configurar, Pagos, and Salir, with Cerrar sesión for leaving. Login and signup show the wordmark and no menu. The #alias value waits for story 7.2.
 5. Stories 2.2, 2.4 — Configurar enforces the plan account cap and revokes a login. Pack Evento is the admin alone. Pack Mes is one admin and at most four Puntos de Alerta. The invite itself is stories 7.3 and 7.4. No permission matrix. No pay screen.
 6. Stories 3.1, 3.2, 3.5, 3.7 — Mercado Pago connect by authorization code with PKCE, one merchant per account, the merchant never creates an application, and mp-authorization-setup.md with no secret values.
 7. Stories 3.3, 3.4, 3.6 — The checklist in the browser, the step stored on the server, and the video only when Onboarding:MercadoPagoVideoUrl is set. Leave that URL unset. No chatbot. Do not build story 11.1.
@@ -46,7 +46,7 @@ This grouping is 22 waves. Do not add, drop, merge, or reorder them. A wave is t
 13. Story 6.1 — The installable PWA from web/. The API does not serve it.
 14. Stories 6.2, 6.3, 6.4 — After a transfer is stored, the arrival is heard and shown, and one tap opens that row first. Pending and rejected stay silent. The service-account JSON stays out of the repo. Do not invent Firebase project values.
 15. Story 6.5 — Configurar shows Habilitar Notificaciones. The button does not name the mechanism. A Punto de Alerta receives alerts. No permission matrix.
-16. Story 7.1 — Every commerce sign-in also requires the email code. The code lives 1 hour. Do not set the code length.
+16. Story 7.1 — Commerce identity challenge is Auth0 Universal Login (no local Código field on every commerce sign-in). Extra MFA is Auth0 configuration.
 17. Stories 7.2, 7.3, 7.4 — The admin confirms the alias once, as #alias; Pack Mes gets a single-use invite that lives 1 hour; the Punto de Alerta sets a password from that link. WhatsApp only carries the message, via wa.me.
 18. Story 7.5 — A Punto de Alerta sees the last N rows, default 10, and may open the detail of one of those rows. No history, no CSV, no totals, no Mercado Pago settings, no account management, and no title Historial de Transacciones.
 19. Story 7.6 — The commerce admin gets that tenant's history, a CSV, and the totals by day, by month, and by a date range. Title Historial de Transacciones. Columns Fecha, Pagador, Monto, Estado. No Medio column, no search box, and no 10-row cap.

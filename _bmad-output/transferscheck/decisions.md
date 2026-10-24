@@ -69,7 +69,7 @@ Question: the locked stories require signup, PKCE, a short-lived session, Checko
 
 The table did not vote as one voice. Mary, John, Sofia, Sally, Winston, Dana, and Killjoy closed on the bundle below. Amelia, Smithy, Vex, Grumbal, Boundary, Yui, Level, and Splinter amended names or asked that the choices be written as choices. Wildcard preferred a username. The ADRs are not contradicted. These are recorded choices, not text found in the locked docs.
 
-- Login is email and password. Email is required and unique across tenants, because `TenantId` is resolved by the server before a session exists and the client does not choose it. A tenant-scoped email would need a merchant picker. Password is stored as a slow hash. A failed sign-in is one generic refusal. Empty email is refused.
+- ~~Login is email and password.~~ Superseded 24 Oct 2026 for commerce admin: Auth0 Universal Login (SSO or Database email/password), then API session cookie (ADR-018). Email remains the commerce-admin identifier unique across tenants for tenant resolution. Punto de Alerta stays local usuario/clave. A failed sign-in is one generic refusal where the product owns the form.
 - The signup account is the owner (`IsOwner`). That flag is not a role matrix. The owner creates the other accounts and revokes them. The owner account is not revoked by this action.
 - `Session:Lifetime` is typed configuration. The default is 12 hours. "Short-lived" in the ADR did not name 12 hours. This default is the choice. The cookie remains HttpOnly, Secure, and `SameSite=None`.
 - Authorization query sends `code_challenge`, `code_challenge_method=S256`, and `state`. It does not send `code_method`. It does not send `platform_id`. The mock accepts that set. If a live application requires the other name, that rename is part of the existing real-OAuth debt.
@@ -118,7 +118,7 @@ Closed in this review:
 - Prepaid quantity packs (50, 100, 500, 1000+) are discarded. The single price and the 14-day trial are withdrawn.
 - Access is a date, prepaid, paid by a Mercado Pago payment link into the owner's account, the one set in the services panel. No preapproval, no automatic debit, no extra debit layer, no cashback, no coupons. Five days before the date, an email and a banner warn them, except on Pack Evento. On the date, the web blocks. A payment while days remain continues without a gap. A payment after the block starts at payment. The owner does not mark payments by hand.
 - A referral code only. The first Pack Mes paid with that code makes the active referrer's next Pack Mes free, once. A blocked referrer is not unblocked and the free month is not stored. Pack Evento does not grant it. The invited commerce pays full price.
-- The primary client is the commerce webapp on the computer where stock and collections already run. The phone is Pack Evento. No native app. The second role is Punto de Alerta. Admin sign-in is email, password, and a code to that email. The alias is chosen once. A Punto de Alerta enters by a single-use short-lived link. WhatsApp only carries the message.
+- The primary client is the commerce webapp on the computer where stock and collections already run. The phone is Pack Evento. No native app. The second role is Punto de Alerta. ~~Admin sign-in is email, password, and a code to that email.~~ Superseded 24 Oct 2026: commerce admin identifies with Auth0 (ADR-018). The alias is chosen once. A Punto de Alerta enters by a single-use short-lived link (usuario/clave, not Auth0 SSO). WhatsApp only carries the message.
 - Superadmin is the product owner on a separate microsite. The first account comes from server configuration. No public signup. No Auth0 and no other third party for that login. Mercado Pago OAuth does not open the microsite.
 - The last 10, the poll, and the browser notification stay. While the webapp is open, a new transfer appears immediately. No hub method was named.
 - A weekly cap exists, is typed, and is unset. Hangfire 1.8.25 is already installed, dashboard only in Development at `/hangfire`, with no jobs. The poll stays `TransferPollWorker`. MediatR and a generic repository stay out.
@@ -187,7 +187,7 @@ Closed by the human:
 
 Folds:
 
-- Login door (story 2.1): "Hola de nuevo", "Inicia sesión en tu cuenta de TransfersCheck", "Dirección de email *", "Contraseña *", "Iniciar sesión", and the show/hide control on the password. Centered card, one column. No Auth0 and no Google on that door. The email code on every login stays (story 7.1). The earlier door words Entrá, Correo, and Contraseña are the previous wording.
+- Login door (story 2.1): "Hola de nuevo", "Inicia sesión en tu cuenta de TransfersCheck", "Dirección de email *", "Contraseña *", "Iniciar sesión", and the show/hide control on the password. Centered card, one column. ~~No Auth0 and no Google on that door. The email code on every login stays (story 7.1).~~ Superseded 24 Oct 2026 by Auth0 course correction (ADR-018): Auth0 Universal Login in; local email-code door withdrawn. Spanish email/password labels remain usable when Universal Login shows that form. The earlier door words Entrá, Correo, and Contraseña are the previous wording.
 - Menu: Transacciones, Configurar, Pagos, Salir on desktop, and Cerrar sesión in the menu. The bar shows the email, truncated. The slot beside the logo shows `#alias`. Configurar is Mercado Pago and the Puntos de Alerta. The first-run walk stays. Volver stays.
 - History (stories 4.1 and 7.6, ADR-013): title "Historial de Transacciones" on the admin history only. Columns Fecha, Pagador, Monto, Estado. No Medio column. "Desconocido" when the payer name is empty. Amounts use es-AR and ARS. Dates use `dd/MM/yyyy HH:mm`. Admin history is not capped at 10 rows. The alert-point window stays the last N, default 10.
 - Mercado Pago connect labels (story 3.3): "Conectar Mercado Pago", "Re-conectar cuenta", "Conectado", "No conectado", and the confirm "¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?".
@@ -197,7 +197,7 @@ Folds:
 
 Leaves:
 
-- No Auth0 on the commerce door. ADR-002 already says Auth0 is out. No Google on that door.
+- ~~No Auth0 on the commerce door. ADR-002 already says Auth0 is out. No Google on that door.~~ Superseded 24 Oct 2026 (ADR-018). Owner microsite and Punto de Alerta Auth0 exclusions remain.
 - No cashback balance. ADR-004 and ADR-015 already say no cashback.
 - No recurring-subscription legal text. Nothing already written asked for that paragraph. ADR-004 records that it is not adopted.
 - No Backend Config / Pruebas screen on the commerce webapp. ADR-007.
@@ -212,3 +212,29 @@ The closed screen words stay Llegó for approved, Pendiente for pending, and Rec
 Other rescued labels in the adopted file, including the empty-list sentence, the footer, and the in-page toast, did not change an existing check. They stay in that file.
 
 The first bmad-build boundary is the First build note in `later-research.md`. The owner microsite, the help copilot, Jev, and the production pipeline are not in that build.
+
+## Human decision — 24 October 2026, commerce Auth0 course correction
+
+Source: the human. Corrects the prior "email/password only, Auth0/Google out of scope" lock for the commerce door. This entry does not delete the earlier ones. Where it conflicts with the 23 Oct night leave "No Auth0 on the commerce door" and with ADR-002 / ADR-013 sentences that Auth0 was out of commerce login, this entry wins. Detail is ADR-018. Sprint change proposal: `sprint-change-proposal-2026-10-24-auth0-commerce.md`. Nothing was committed by this documentation pass. Prefer docs before code realign.
+
+Closed by the human:
+
+- Commerce signup and login identify with Auth0 as the main path.
+- Simplify that door: SSO via Auth0 Universal Login, or create usuario y contraseña (Auth0 Database connection). Default social SSO provider recorded here: Google. More Auth0 social providers may be enabled later without a new product ADR.
+- Exception: Punto de Alerta enters with usuario/clave (invite + local password). Not the Auth0 SSO door. ADR-013, stories 7.3 and 7.4.
+- Do not confuse Mercado Pago OAuth (collection-account linking) with login SSO. MP OAuth stays payment-account linking. ADR-004.
+- Owner microsite login stays local. No Auth0 there. ADR-014.
+- After Auth0 identity succeeds, the API still issues the local HttpOnly Secure `SameSite=None` session cookie. `TenantId` still comes only from the server session. ADR-002, ADR-008.
+- The previous local "email + password + 6-digit email code on every commerce admin sign-in" door (story 7.1 as previously written) is withdrawn for the Auth0 path. Extra verification/MFA, if wanted, is Auth0 Universal Login configuration.
+
+Leaves that stay:
+
+- No Auth0 on the owner microsite (ADR-014).
+- No Auth0 SSO door for Punto de Alerta (ADR-013).
+- Mercado Pago OAuth is not the IdP.
+
+Defaults recorded so implementers are not guessing (reversible by the human):
+
+- Auth0 Universal Login + Database connection + Social (Google default).
+- Bridge pattern: Auth0 IdP → API local session cookie.
+- Story 7.1 becomes Auth0-owned verification, not a local Código field on the commerce door.

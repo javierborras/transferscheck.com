@@ -12,9 +12,29 @@ What is still unknown is `later-research.md`. That file is pending research, res
 
 ## Closed 24 October 2026 (first-build)
 
-- Email sign-in code length: **6 numeric digits** (example 482913), lifetime 1 hour. ADR-013 / story 7.1.
 - Live-list contract: API and web/ share a message type a test can fail first; UI copy must not say SignalR. ADR-010 / story 9.1.
 - A **consulta** is an on-demand transfer refresh/query (not opening the menu or settings). Cap 500, warn at 450, seven days from the Mercado Pago link. ADR-007 / story 10.1.
+
+## Closed 24 October 2026 (Auth0 course correction)
+
+- Commerce signup/login identify with Auth0 Universal Login: SSO **or** Database email/password. ADR-018 / story 2.1.
+- Punto de Alerta stays usuario/clave (not Auth0 SSO). ADR-013 / stories 7.3–7.4.
+- Owner microsite stays out of Auth0. ADR-014.
+- Mercado Pago OAuth stays collection-account linking, not the IdP. ADR-004.
+- After Auth0, API still issues the local session cookie. ADR-002 / ADR-008.
+- Local product-issued 6-digit email code on every commerce sign-in is withdrawn for the Auth0 path. Story 7.1. (Earlier same-day lock of "6 numeric digits" applied to that withdrawn local door.)
+
+### Defaults recorded (reversible)
+
+- Social SSO default provider: **Google** via Auth0. More social providers may be enabled in the Auth0 tenant without a new ADR.
+- Auth0 Database connection for usuario/contraseña (not a separate custom password store for commerce admin).
+- Bridge: Auth0 IdP → API HttpOnly Secure `SameSite=None` cookie.
+
+### Still open (do not invent in code without a decision)
+
+- Whether Auth0 MFA is required for every commerce admin, optional, or off by default.
+- Exact Auth0 tenant / application names and callback URLs for production (typed config; values not in this pack).
+- Whether Universal Login is hosted redirect only or also embedded widget in `web/`.
 
 ## Not this file
 

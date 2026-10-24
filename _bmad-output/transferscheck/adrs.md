@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Locked 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended again 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. One section each: context, decision, consequences. These records match `brief.md`. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. It is not decided here.
+Locked 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended again 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018); the previous "Auth0 out / no Google on the commerce door" lock is withdrawn. One section each: context, decision, consequences. These records match `brief.md`. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. It is not decided here.
 
 ## ADR-001 — .NET 10 LTS
 
@@ -20,7 +20,7 @@ TransfersCheck.Core, TransfersCheck.Infrastructure, TransfersCheck.Api, and Tran
 
 ## ADR-002 — Backend in three projects, UI on Cloudflare Workers, one shared SQL Server 2019 database
 
-Source: architecture lock 21 Oct 2026. Amended 22 Oct 2026. Amended 22 Oct 2026 during the parking-lot review: MediatR and a generic repository stay out; Hangfire and SignalR are no longer exclusions. Hosts, queues, and cloud topology were not redesigned. Amended 23 Oct 2026 so the Hangfire sentence matches ADR-011. Amended 23 Oct 2026, night: the commerce door has no Auth0 and no Google, and production deploy points at `later-research.md`.
+Source: architecture lock 21 Oct 2026. Amended 22 Oct 2026. Amended 22 Oct 2026 during the parking-lot review: MediatR and a generic repository stay out; Hangfire and SignalR are no longer exclusions. Hosts, queues, and cloud topology were not redesigned. Amended 23 Oct 2026 so the Hangfire sentence matches ADR-011. Amended 23 Oct 2026, night: production deploy points at `later-research.md`; that night's "commerce door has no Auth0 and no Google" lock is withdrawn 24 Oct 2026 (ADR-018).
 
 ### Context
 
@@ -32,7 +32,7 @@ Two deployables. The backend stays one monolith in three projects:
 
 - TransfersCheck.Core: entities, use cases, and ports. No EF Core. No ASP.NET.
 - TransfersCheck.Infrastructure: EF Core, Mercado Pago HTTP, and token encryption.
-- TransfersCheck.Api: composition, local login JWT, and the worker. It does not serve the PWA.
+- TransfersCheck.Api: composition, session issuance after identity, and the worker. It does not serve the PWA.
 
 TransfersCheck.Tests is a test project, not a layer. `web/` is a separate Vite React PWA project, deployed to Cloudflare Workers. It is not built into the API. The API is its own deployable: one Docker image for the API only. SQL Server 2019 stays outside that image, reached by a connection string, with EF compatibility level fixed at 150. One shared database. Tenant-owned rows carry `TenantId`. An EF global filter applies it. `TenantId` comes only from the server session.
 
@@ -44,13 +44,13 @@ Dependency direction: Api references Infrastructure and Core. Infrastructure ref
 
 A second API replica shares this database. Isolation is the session plus the global filter. The API image does not contain SQL Server and does not contain the PWA.
 
-The browser calls the API from the Cloudflare Workers origin. That is cross-origin. The API allow-lists the UI origin and accepts credentialed requests. The session stays the API-issued local login JWT in an HttpOnly Secure cookie with a short TTL. The cookie is cross-site (`SameSite=None`; `Secure`) so the browser attaches it on those calls. `TenantId` comes only from the server session. The client does not choose it. This does not add a second login system.
+The browser calls the API from the Cloudflare Workers origin. That is cross-origin. The API allow-lists the UI origin and accepts credentialed requests. After commerce identity succeeds (ADR-018), the session stays the API-issued local login JWT in an HttpOnly Secure cookie with a short TTL. The cookie is cross-site (`SameSite=None`; `Secure`) so the browser attaches it on those calls. `TenantId` comes only from the server session. The client does not choose it. Auth0 is the commerce IdP; it does not replace the tenant session cookie, and it is not a second product login beside the cookie.
 
 The PWA and its service worker ship with the UI. Their scope is the Workers origin, not the API origin. Push registration stays in the PWA. The API still sends FCM. A notification tap opens the UI. The list data comes from the API contract.
 
-Mercado Pago still redirects to the API's static https callback. After the server stores the connection, the browser continues on the UI.
+Mercado Pago still redirects to the API's static https callback. After the server stores the connection, the browser continues on the UI. Mercado Pago OAuth links the commerce collection account (ADR-004). It is not the commerce IdP and is not confused with Auth0 SSO.
 
-The backend does not adopt MediatR or a generic repository. The request path stays direct. Auth0 is out, including the commerce login door. That door has no Google sign-in (story 2.1). Hangfire runs the five-day notice and the referral bonus, and the poll stays on `TransferPollWorker` (ADR-011). SignalR runs beside the poll and the browser notification (ADR-010). This review does not add a host, a queue, or a cloud topology. Production deploy is pending research (`later-research.md`). It is not the first bmad-build.
+The backend does not adopt MediatR or a generic repository. The request path stays direct. Commerce signup and login identify with Auth0 (ADR-018, story 2.1). Hangfire runs the five-day notice and the referral bonus, and the poll stays on `TransferPollWorker` (ADR-011). SignalR runs beside the poll and the browser notification (ADR-010). This review does not add a host, a queue, or a cloud topology. Production deploy is pending research (`later-research.md`). It is not the first bmad-build.
 
 ## ADR-003 — Server poll plus the commerce webapp; FCM web push in; React Native out; iOS push requires home-screen install
 
@@ -166,7 +166,7 @@ Settings that are not plan rows stay typed and come from appsettings, environmen
 - a weekly query cap, typed as `WeeklyQueryCap`, value 500
 - a warning gap, typed as `WeeklyQueryWarningGap`, value 50
 - how many records a Punto de Alerta sees, typed as `AlertPointRecordCount`, default 10
-- `EmailCodeLifetime` of 1 hour, and `InviteLinkLifetime` of 1 hour
+- `InviteLinkLifetime` of 1 hour (Pack Mes Punto de Alerta invite). `EmailCodeLifetime` of 1 hour remains typed for any residual local code path; commerce-admin identity verification on the Auth0 path is Auth0 Universal Login (ADR-018), not this product-issued code
 
 There is no key-value `AppConfiguration` bag. The commerce webapp has no free-settings screen. The owner services panel (ADR-012) is not that bag.
 
@@ -184,7 +184,7 @@ A new process setting is a typed property. The weekly cap default is 500. An imp
 
 ## ADR-008 — Account caps, one session each, admin deactivate
 
-Source: human decision 21 Oct 2026. Amended 22 Oct 2026. Amended 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. Amended 23 Oct 2026, evening.
+Source: human decision 21 Oct 2026. Amended 22 Oct 2026. Amended 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. Amended 23 Oct 2026, evening. Amended 24 Oct 2026: commerce identity is Auth0 (ADR-018); session cookie stays API-issued.
 
 ### Context
 
@@ -196,13 +196,13 @@ Pack Mes has one commerce admin and up to four Punto de Alerta accounts. Pack Ev
 
 Each account has one live session. A new sign-in on that account closes the previous one. The admin can deactivate a Punto de Alerta. Deactivation ends that session, deletes its FCM token, and stops polling for that browser.
 
-The session cookie is HttpOnly and Secure, with a short TTL, and `SameSite=None` because the UI origin and the API origin differ (ADR-002). The API issues the local login JWT. `TenantId` comes only from the server session. This record does not choose a new TTL.
+The session cookie is HttpOnly and Secure, with a short TTL, and `SameSite=None` because the UI origin and the API origin differ (ADR-002). After identity succeeds, the API issues the local login JWT. Commerce admin identity is Auth0 (ADR-018). Punto de Alerta identity is local usuario/clave (ADR-013). `TenantId` comes only from the server session. This record does not choose a new TTL.
 
 There is no permission matrix. The adopted split is ADR-013, including the transaction detail the human adopted on the evening of 23 Oct 2026.
 
 ### Consequences
 
-A fifth Punto de Alerta on Pack Mes is refused. Two browsers on one account cannot both stay signed in. Deactivation is immediate and server-side. The invite link and the email sign-in code each live 1 hour. The invite link stays single-use. This record does not define a permission grid or the email-code length.
+A fifth Punto de Alerta on Pack Mes is refused. Two browsers on one account cannot both stay signed in. Deactivation is immediate and server-side. The Pack Mes invite link lives 1 hour and stays single-use. Commerce admin MFA or email verification, if enabled, is Auth0 Universal Login configuration (ADR-018), not a separate local email-code door. This record does not define a permission grid.
 
 ## ADR-009 — Plan table and the two starting offers
 
@@ -276,7 +276,7 @@ The owner microsite has one card per service the product already uses. Fields ar
 Cards named in this decision:
 
 - Mercado Pago platform application. This is not each commerce connection.
-- Mail, for the sign-in code and the five-day notice. The card does not lock SendGrid and does not lock MonsterASP SMTP. One active sender. The choice is a typed setting on that card. The concrete provider value stays unset.
+- Mail, for product mail such as the five-day notice (and any Auth0-adjacent mail the tenant still routes through the product). The card does not lock SendGrid and does not lock MonsterASP SMTP. One active sender. The choice is a typed setting on that card. The concrete provider value stays unset. Commerce admin identity mail (verification / MFA) is Auth0 Universal Login when that path is used (ADR-018).
 - Browser-push credentials.
 - WhatsApp. No key today. `wa.me` only carries a message.
 
@@ -286,27 +286,27 @@ A card that was not named is not added. Commerce OAuth tokens stay on the commer
 
 ## ADR-013 — Commerce admin, Punto de Alerta, and the alias
 
-Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. Amended 23 Oct 2026, evening. Amended 23 Oct 2026, night.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. Amended 23 Oct 2026, evening. Amended 23 Oct 2026, night. Amended 24 Oct 2026: commerce admin identifies with Auth0 (ADR-018); Punto de Alerta stays usuario/clave.
 
 ### Context
 
-The commerce admin is the person who connects Mercado Pago. The second person is a Punto de Alerta. This pack does not call that person a cashier and does not talk about cajas. Account caps are ADR-008.
+The commerce admin is the person who connects Mercado Pago. The second person is a Punto de Alerta. This pack does not call that person a cashier and does not talk about cajas. Account caps are ADR-008. Commerce identity detail is ADR-018.
 
 ### Decision
 
-Commerce admin. They have dominion over their own tenant account. Every sign-in is email, password, and a code sent to that same email. The code lives 1 hour. The human said that lifetime was already defined as 1 hour. The commerce login door has no Auth0 and no Google sign-in. They choose the commerce alias once, see it, confirm it, and it never changes. It is shown as `#alias`. The slot beside the logo shows that alias. They can query transaction history, export a CSV report, and see the grand total of transfers by day, by month, and by a date range. That history title is Historial de Transacciones. The columns are Fecha, Pagador, Monto, and Estado. There is no Medio column and no search box. That history is not capped at 10 rows. The 10-row window is the alert-point list, not this history. An empty payer name is shown as Desconocido. Amounts use es-AR and ARS. Dates use `dd/MM/yyyy HH:mm`.
+Commerce admin. They have dominion over their own tenant account. They identify with Auth0: SSO through Auth0 Universal Login, or email and password on the Auth0 Database connection (ADR-018). Mercado Pago OAuth is not that login. They choose the commerce alias once, see it, confirm it, and it never changes. It is shown as `#alias`. The slot beside the logo shows that alias. They can query transaction history, export a CSV report, and see the grand total of transfers by day, by month, and by a date range. That history title is Historial de Transacciones. The columns are Fecha, Pagador, Monto, and Estado. There is no Medio column and no search box. That history is not capped at 10 rows. The 10-row window is the alert-point list, not this history. An empty payer name is shown as Desconocido. Amounts use es-AR and ARS. Dates use `dd/MM/yyyy HH:mm`.
 
-Punto de Alerta. The admin creates a name. The screen shows `usuario#alias`. The form is two fields, commerce and user, so the hash is not part of a URL. Entry is a single-use link that lives 1 hour. The human said that lifetime was already defined as 1 hour. Single-use stays as previously closed. The admin copies it or sends it with `wa.me`. WhatsApp only carries the message. The person opens the link, sets a password, and that browser is registered. A later sign-in elsewhere closes the previous one. The admin can deactivate the account. That person sees the last N rows. N is the typed setting `AlertPointRecordCount`, default 10. They may open the detail of one of those rows, because Mercado Pago sometimes does not show the sender name. The row columns are Fecha, Pagador, Monto, and Estado. An empty payer name is Desconocido. Dates use `dd/MM/yyyy HH:mm`. Amounts use es-AR and ARS. They do not get the title Historial de Transacciones. They receive alerts. They cannot open history, a CSV, the totals, or Mercado Pago account settings. They do not manage accounts.
+Punto de Alerta. Exception: this role does not use the Auth0 SSO door. Entry is usuario y clave. The admin creates a name. The screen shows `usuario#alias`. The form is two fields, commerce and user, so the hash is not part of a URL. Entry is a single-use link that lives 1 hour. The human said that lifetime was already defined as 1 hour. Single-use stays as previously closed. The admin copies it or sends it with `wa.me`. WhatsApp only carries the message. The person opens the link, sets a password, and that browser is registered. A later sign-in elsewhere closes the previous one. The admin can deactivate the account. That person sees the last N rows. N is the typed setting `AlertPointRecordCount`, default 10. They may open the detail of one of those rows, because Mercado Pago sometimes does not show the sender name. The row columns are Fecha, Pagador, Monto, and Estado. An empty payer name is Desconocido. Dates use `dd/MM/yyyy HH:mm`. Amounts use es-AR and ARS. They do not get the title Historial de Transacciones. They receive alerts. They cannot open history, a CSV, the totals, or Mercado Pago account settings. They do not manage accounts.
 
 There is no permission matrix. The human adopted this split on the evening of 23 Oct 2026. The party record is `party-permissions-2026-10-23.md`.
 
 ### Consequences
 
-The email-code lifetime and the invite-link lifetime are each 1 hour. The email-code length is 6 numeric digits (human decision 24 Oct 2026). The alias is immutable after confirmation. A Punto de Alerta has no Mercado Pago account features and no account-management action. They may open the detail of one of the last N rows. They do not get the title Historial de Transacciones. They cannot open history, a CSV, or the totals. Those stay with the commerce admin, by day, by month, and by a date range. The admin history is not capped at 10 rows.
+The invite-link lifetime is 1 hour. The alias is immutable after confirmation. A Punto de Alerta has no Mercado Pago account features and no account-management action. They may open the detail of one of the last N rows. They do not get the title Historial de Transacciones. They cannot open history, a CSV, or the totals. Those stay with the commerce admin, by day, by month, and by a date range. The admin history is not capped at 10 rows. The previous commerce-admin rule that every sign-in required a local email, password, and 6-digit email code is withdrawn; Auth0 Universal Login owns that challenge (ADR-018, story 7.1).
 
 ## ADR-014 — Owner microsite sign-in
 
-Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026, night.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026, night. Amended 24 Oct 2026: clarified that Auth0 for commerce (ADR-018) does not open this microsite.
 
 ### Context
 
@@ -314,7 +314,7 @@ The product owner is not a commerce. The commerce webapp must not be the place w
 
 ### Decision
 
-Superadmin is the product owner. The owner uses a separate microsite. Sign-in is email and password issued by TransfersCheck. The first account comes from server configuration. There is no public superadmin signup. Auth0, Google, Cloudflare Access, and any other third party do not perform this login. Mercado Pago OAuth connects a commerce collection account. It does not open the microsite.
+Superadmin is the product owner. The owner uses a separate microsite. Sign-in is email and password issued by TransfersCheck. The first account comes from server configuration. There is no public superadmin signup. Auth0, Google, Cloudflare Access, and any other third party do not perform this login. Commerce Auth0 (ADR-018) does not open the microsite. Mercado Pago OAuth connects a commerce collection account. It does not open the microsite.
 
 The microsite holds plan and price editing, the services panel (ADR-012), and later the helpdesk. The commerce webapp does not get those screens. The microsite, including this sign-in, plan editing, the services panel, the helpdesk, and the log/PR agent, is pending research. It is not the first bmad-build (`later-research.md`). This record does not design a host.
 
@@ -397,3 +397,29 @@ ADR-016 still owns the folder, the separate refresh, and the rule that a failed 
 Still unset, and not decided here: the index name; which of Noul, Choice, and Score run first, and the thresholds, models, and ambiguity behavior; the generative provider names, model ids, order, timeouts, and quotas; whether fallback is enabled and, if so, the attempt count; whether the first version stores a short conversation context (if it does not, the person must be able to ask a complete question); the concrete HTTP route, JSON names, and status codes behind the conceptual `help-copilot` endpoint. Provider names, model thresholds, and the index name stay unset. This record does not design them. Pack Mes `EnableCopilotHelp` and the Pack Evento static menu stay product decisions. Implementation waits. Those points, and production deploy, are `later-research.md`. They are not the first bmad-build.
 
 Pscielo.Llm shows the pattern and is not the design. A turn there is a prompt walked through steps: a local match can stop the turn before generation, a router then ranks providers by tier and can call a second one in parallel, and help articles are scored from files so a strong match returns the article and a weaker match is handed to a leader step. TransfersCheck keeps the local short-circuit, a small retrieval, and one explicit provider choice. It does not keep that ladder, that leader, that debate, those score cutoffs, or that file-path layout.
+
+## ADR-018 — Commerce identity via Auth0 Universal Login
+
+Source: human decision 24 Oct 2026 (course correction). Supersedes the 23 Oct 2026 night leave "No Auth0 on the commerce door" and the ADR-002 sentence that Auth0 was out of the commerce login.
+
+### Context
+
+The earlier lock kept commerce signup and login as a local email/password door with no Auth0 and no Google, plus a local email code on every admin sign-in. The human corrected that: commerce account creation and login should identify with Auth0, simplify signup to SSO or usuario/contraseña, keep Punto de Alerta on usuario/clave, and keep Mercado Pago OAuth as payment-account linking only.
+
+### Decision
+
+Commerce admin signup and login identify with Auth0.
+
+- Prefer Auth0 Universal Login.
+- Email/password uses an Auth0 Database connection.
+- SSO uses Auth0 Social connections. Default social provider for this pack: Google. Additional social providers may be enabled in the Auth0 tenant without a new ADR; the product language is SSO via Auth0, not "Google only forever."
+- After Auth0 identity succeeds, the API still issues the local session cookie (ADR-002, ADR-008). Auth0 is the IdP. `TenantId` still comes only from the server session.
+- Mercado Pago OAuth remains the commerce collection-account link (ADR-004). It is not the commerce IdP and is not login SSO.
+- Exception: Punto de Alerta enters with usuario y clave (invite link, then local password). That path does not use the Auth0 SSO door (ADR-013, stories 7.3 and 7.4).
+- Owner microsite login stays local and out of Auth0 (ADR-014).
+
+The previous local requirement that every commerce-admin sign-in also required a product-issued 6-digit email code (story 7.1 as of 24 Oct morning) is withdrawn for the Auth0 path. Extra verification or MFA, if the product wants it, is Auth0 Universal Login configuration.
+
+### Consequences
+
+Story 2.1 and the commerce door accept Auth0 Universal Login (SSO or Database password). Story 7.1 no longer requires a local email-code field on the commerce door. Wave and e2e checks that asserted "no Auth0 and no Google" are obsolete and must realign. Auth0 domain, client id, and client secret stay typed configuration outside the repo. PL-12 in `parking-lot-waves.md` is unparked for commerce only. Superadmin and Punto de Alerta rules above stay.

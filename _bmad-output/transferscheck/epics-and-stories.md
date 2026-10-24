@@ -1,6 +1,6 @@
 # Epics and stories
 
-Locked MVP, 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Epics are in build order. Each story is accepted or rejected on its checks. Source is the human decision or the architecture lock of that date, plus the amendment where a story says so. The first bmad-build is the note in `later-research.md`. Epics 11 and 12 stay product decisions and are not that build.
+Locked MVP, 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018); stories 2.1 and 7.1 realign. Epics are in build order. Each story is accepted or rejected on its checks. Source is the human decision or the architecture lock of that date, plus the amendment where a story says so. The first bmad-build is the note in `later-research.md`. Epics 11 and 12 stay product decisions and are not that build.
 
 A story is closed only after unit tests in `tests/TransfersCheck.Tests`, Swagger, and the browser. Commit and push happen only when the human asks. This documentation pass does not run that ritual.
 
@@ -68,7 +68,8 @@ As a deployer, I want secrets and intervals in typed configuration, so that cred
 **And** page size for the last-10 list is 10
 **And** `WeeklyQueryCap` is 500 and `WeeklyQueryWarningGap` is 50
 **And** `AlertPointRecordCount` defaults to 10
-**And** `EmailCodeLifetime` is 1 hour and `InviteLinkLifetime` is 1 hour
+**And** `InviteLinkLifetime` is 1 hour
+**And** `EmailCodeLifetime` remains typed at 1 hour for any residual local code path; commerce-admin Auth0 verification is ADR-018, not that product-issued code
 **And** each of those is a typed property, not a new subsystem
 **And** plan price and duration are not a single `TrialDays` of 14 or a single `PriceAmount` of 5999
 
@@ -111,14 +112,16 @@ As a merchant owner, I want to create an account and sign in, so that I can open
 
 Acceptance:
 
-- Sign-in sets an HttpOnly Secure cookie with a short TTL. The cookie is cross-site (`SameSite=None`) so the Workers UI can send it on credentialed calls to the API.
+- Commerce signup and login identify with Auth0 (ADR-018): SSO via Auth0 Universal Login, or email and password on the Auth0 Database connection.
+- After Auth0 identity succeeds, sign-in sets an HttpOnly Secure cookie with a short TTL. The cookie is cross-site (`SameSite=None`) so the Workers UI can send it on credentialed calls to the API.
 - The API allow-lists the UI origin for those credentialed calls.
 - `TenantId` comes from the server session. The client does not choose it.
-- The door is a centered card, one column. It shows "Hola de nuevo", "Inicia sesión en tu cuenta de TransfersCheck", "Dirección de email *", "Contraseña *", "Iniciar sesión", and a show/hide control on the password.
-- This door has no Auth0 and no Google sign-in.
-- This story is the commerce admin. The email code is story 7.1. The code lives 1 hour. This door copy does not remove that code. This story does not choose the code length.
+- The commerce door uses Auth0 Universal Login (hosted or embedded). Product chrome around that door still shows the TransfersCheck wordmark and no authenticated menu. Adopted Spanish labels for email/password fields remain usable when Universal Login shows that form: "Hola de nuevo", "Inicia sesión en tu cuenta de TransfersCheck", "Dirección de email *", "Contraseña *", "Iniciar sesión", and a show/hide control on the password when the password field is visible.
+- SSO is available on that door (default social provider: Google via Auth0). Mercado Pago OAuth is not this door.
+- This story is the commerce admin. Extra verification or MFA, if enabled, is Auth0 configuration (story 7.1). This story does not choose Auth0 MFA factors.
+- Punto de Alerta does not use this Auth0 door; that exception is stories 7.3 and 7.4.
 
-Source: human decision 21 Oct 2026. Amended 22 Oct 2026. Amended 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. Amended 23 Oct 2026, night. The earlier door words Entrá, Correo, and Contraseña are the previous wording.
+Source: human decision 21 Oct 2026. Amended 22 Oct 2026. Amended 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. Amended 23 Oct 2026, night. Amended 24 Oct 2026: Auth0 in for commerce. The earlier door words Entrá, Correo, and Contraseña are the previous wording. The 23 Oct night leave "no Auth0 and no Google" is withdrawn.
 
 ### Story 2.2
 
@@ -497,18 +500,18 @@ Build this after Epic 2. The account cap is story 2.2.
 
 ### Story 7.1
 
-As a commerce admin, I want every sign-in to require a code sent to my email, so that the password alone does not open the commerce.
+As a commerce admin, I want Auth0 to own the identity challenge on signup and login, so that SSO or usuario/contraseña opens the commerce without a separate local email-code door.
 
 **Acceptance Criteria:**
 
 **Given** a commerce admin
-**When** they sign in
-**Then** the sign-in requires email, password, and a code sent to that same email
-**And** a sign-in without that code is refused
-**And** the code lives 1 hour
-**And** the code is 6 numeric digits (human decision 24 Oct 2026)
+**When** they sign up or sign in
+**Then** identity is Auth0 Universal Login (SSO or Database email/password) per ADR-018 and story 2.1
+**And** there is no product-issued local email-code field required on every commerce sign-in
+**And** any extra verification or MFA is Auth0 Universal Login configuration, not a TransfersCheck-owned 6-digit code store
+**And** this story does not apply to Punto de Alerta (stories 7.3 and 7.4)
 
-Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. The human said the 1-hour lifetime was already defined. Amended 24 Oct 2026: length locked to 6 digits.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. Amended 24 Oct 2026 morning: length locked to 6 digits for the then-local code. Amended 24 Oct 2026 course correction: local email-code door withdrawn for commerce Auth0 path (ADR-018).
 
 ### Story 7.2
 
@@ -534,13 +537,14 @@ As a commerce admin, I want to hand a Punto de Alerta a single-use link, so that
 **Then** the screen shows `usuario#alias`
 **And** the sign-in form is two fields, commerce and user
 **And** the hash is not part of a URL
+**And** that form is usuario/clave for Punto de Alerta and is not the Auth0 SSO door (ADR-013, ADR-018)
 **And** the admin receives a single-use link they can copy or send with `wa.me`
 **And** WhatsApp only carries the message
 **And** the link lives 1 hour
 **And** the link does not work after that hour
 **And** single-use stays
 
-Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. The human said the 1-hour lifetime was already defined.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026. The human said the 1-hour lifetime was already defined. Amended 24 Oct 2026: Auth0 exception made explicit.
 
 ### Story 7.4
 
@@ -552,11 +556,12 @@ As a Punto de Alerta, I want to set my password from that link, so that this bro
 **When** the person opens it and sets a password
 **Then** that browser is registered
 **And** the link does not work a second time
+**And** that password is local usuario/clave for this role, not Auth0 Universal Login / SSO
 **When** they sign in on another browser
 **Then** the previous session ends
 **And** the admin can deactivate the account
 
-Source: human decision 22 Oct 2026 during the parking-lot review.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 24 Oct 2026: Auth0 exception made explicit.
 
 ### Story 7.5
 

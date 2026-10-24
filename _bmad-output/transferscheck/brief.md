@@ -1,6 +1,6 @@
 # Product Brief: transferscheck.com
 
-Locked 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. A reviewer accepts or rejects this pack. The decisions below are closed. What is still unknown is `later-research.md`, indexed from `open-decisions.md`.
+Locked 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018). A reviewer accepts or rejects this pack. The decisions below are closed. What is still unknown is `later-research.md`, indexed from `open-decisions.md`.
 
 Companion files in this folder: `epics-and-stories.md`, `adrs.md`, `parking-lot.md`, `mp-authorization-setup.md`.
 
@@ -39,7 +39,7 @@ The product owner is a superadmin on a separate microsite. That person is not a 
 In this MVP:
 
 - Last 10 incoming transfers, types `bank_transfer` and `account_money`, on a clock and from a button.
-- Pack Mes: one commerce admin and up to four Punto de Alerta accounts. Pack Evento: the admin only. One live session each. The admin can deactivate a Punto de Alerta.
+- Pack Mes: one commerce admin and up to four Punto de Alerta accounts. Pack Evento: the admin only. One live session each. The admin can deactivate a Punto de Alerta. Commerce admin identity is Auth0; Punto de Alerta is usuario/clave (ADR-018, ADR-013).
 - Mercado Pago connect (authorization code + PKCE, server-side) and encrypted tokens. One platform application. The commerce grants OAuth consent and does not create an application, paste a client secret, or upload a JSON.
 - One server-owned first-run walk after signup. The client does not advance the step. Later guidance is the help page. No chatbot on the connect screen.
 - Pack Mes: 21 days from the moment Mercado Pago is activated and the account is linked, then ARS 5999 for 30 days. Access during the trial ends at that same clock time 21 days later. Pack Evento: ARS 1000 for 24 hours. The commerce pays by a Mercado Pago payment link into the owner's account.
@@ -109,7 +109,7 @@ Prices live on the plan table so the pay screen does not hardcode one number.
 - Foreground: a short sound and an on-page notice. Background or locked screen: a system notification with sound. The card shows amount, payer name, and the word for arrived. Pending and rejected stay on the list and stay silent.
 - The commerce admin can deactivate a Punto de Alerta from the server. That session ends, its FCM token is deleted, and polling for that browser stops.
 - A new sign-in on the same account closes the previous session. `TenantId` comes from the server session. The session cookie is HttpOnly, Secure, and short-lived. Because the UI and the API are different origins, that cookie is cross-site (`SameSite=None`) and the UI sends it on credentialed API calls.
-- Commerce admin sign-in is email, password, and a code sent to that same email. The alias is chosen once, shown, confirmed, and never changed.
+- Commerce admin signup and login identify with Auth0 (Universal Login): SSO or email/password on the Auth0 Database connection. After Auth0 succeeds, the API issues the local session cookie. Punto de Alerta enters with usuario/clave, not the Auth0 SSO door. Mercado Pago OAuth links the collection account; it is not login SSO. The alias is chosen once, shown, confirmed, and never changed.
 - While the webapp is open, a new transfer appears immediately. The poll and the browser notification stay. No hub method is named.
 - Hangfire.AspNetCore and Hangfire.SqlServer 1.8.25 are already on TransfersCheck.Api. The dashboard is only in Development at `/hangfire`. The five-day notice and the referral bonus are Hangfire jobs. No other Hangfire job is registered. The poll stays `TransferPollWorker`.
 - Poll default is 5 minutes. Button cooldown default is 60 seconds. On Mercado Pago 429 or 2001, that merchant waits until the next round.

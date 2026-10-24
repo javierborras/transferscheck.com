@@ -12,6 +12,7 @@ Locked 21 October 2026. Amended 22 October 2026 during the parking-lot review. A
 - **Hangfire runs the five-day notice and the referral bonus.** ADR-011. No other Hangfire job. The poll stays `TransferPollWorker`.
 - **Owner services panel.** ADR-012. Not a key-value bag. Not the first bmad-build (`later-research.md`). The mail provider value stays unset.
 - **Commerce admin, Punto de Alerta, and the alias.** ADR-008 and ADR-013.
+- **Commerce Auth0 Universal Login (SSO or Database email/password).** ADR-018. Punto de Alerta stays usuario/clave. Mercado Pago OAuth stays collection-account linking, not the IdP. Owner microsite stays out of Auth0 (ADR-014).
 - **Owner microsite sign-in.** ADR-014. Not the first bmad-build (`later-research.md`). Do not design a host.
 - **Help pages in `web/help/`, plus the plan flag and the two help modes.** ADR-016 and ADR-017. Not a help CMS. Not a chatbot on the connect screen. Pack Mes `EnableCopilotHelp` and the Pack Evento static menu stay decided. Implementation of the copilot, Jev, and the production pipeline is not the first bmad-build (`later-research.md`).
 - **Brand manual as a design reference.** `Docs/ManualdeMarcayUI.html`. Not a product module and not an approval gate.
@@ -35,7 +36,7 @@ Locked 21 October 2026. Amended 22 October 2026 during the parking-lot review. A
 
 ### Commercial extras that stay out
 
-- **Auth0, Google, Cloudflare Access, and any other third party for the owner microsite login.** Mercado Pago OAuth does not open that microsite.
+- **Auth0, Google, Cloudflare Access, and any other third party for the owner microsite login.** Commerce Auth0 (ADR-018) does not open that microsite. Mercado Pago OAuth does not open that microsite.
 - **A business-config screen on the commerce webapp, including Backend Config / Pruebas.** Plan editing and the services panel are on the owner microsite.
 - **The owner marking a payment by hand, or watching a bank account.**
 - **Preapproval, automatic debit, and an extra debit layer.**

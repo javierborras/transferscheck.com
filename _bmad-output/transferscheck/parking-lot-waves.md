@@ -114,8 +114,9 @@ Jev, RAG, multi-provider chat, and a tool-calling bot.
 
 ### PL-12 — Auth0
 
-- **Blocking decision:** ADR-002: "The backend does not adopt MediatR, a generic repository, Hangfire, Auth0, or SignalR." "The session stays the API-issued local login JWT in an HttpOnly Secure cookie." ADR-008: "The API issues the local login JWT." `parking-lot.md`: "Login is the local JWT and the HttpOnly Secure cookie." `decisions.md` records login as email and password.
-- **What must change first:** Amend ADR-002 and ADR-008 to replace the local JWT and the cookie session. Story 2.1 would have to change with them.
+- **Status (24 Oct 2026):** Unparked for **commerce** identity. ADR-018, amended ADR-002 / ADR-008 / ADR-013, stories 2.1 and 7.1. Session cookie after Auth0 still API-issued. Owner microsite remains out of Auth0 (ADR-014). Punto de Alerta remains usuario/clave.
+- **Previous blocking decision (history):** ADR-002 used to say Auth0 was out of the commerce door; the 23 Oct night leave said no Auth0 and no Google on that door. Those locks are withdrawn.
+- **What must change next:** Realign implementation and tests (wave 4 / wave 16 runbook, `web/e2e/door.spec.ts`) to Auth0 Universal Login + Database + Social (Google default). Do not put Auth0 on the owner microsite or on the Punto de Alerta door.
 
 ### PL-13 — Business-config admin UI
 
@@ -186,7 +187,7 @@ Jev, RAG, multi-provider chat, and a tool-calling bot.
 | PL-09 | Help publisher and FAQ CMS | Do not schedule |
 | PL-10 | Semantic onboarding assistant | Do not schedule |
 | PL-11 | Coupons, referrals, and cashback | Do not schedule |
-| PL-12 | Auth0 | Do not schedule |
+| PL-12 | Auth0 (commerce) | In scope — ADR-018; owner microsite still out |
 | PL-13 | Business-config admin UI | Do not schedule |
 | PL-14 | Brand manual | Do not schedule |
 | PL-15 | Skills and process gates | Do not schedule |

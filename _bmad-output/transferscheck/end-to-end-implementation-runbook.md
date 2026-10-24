@@ -126,29 +126,29 @@ Completed on 24 October 2026. Hangfire.AspNetCore/SqlServer 1.8.25, jobs `five-d
 
 ## Wave 4 — Stories 2.1, 2.3
 
-Completed on 24 October 2026. Adopted door copy, menu (Transacciones, Configurar, Pagos, Salir / Cerrar sesión), empty `#alias`, sign-out ends live session. Evidence: Epic2 login tests + `web/e2e/door.spec.ts` and updated smoke/onboarding.
+Completed on 24 October 2026 under the then-local door (no Auth0). **Course correction 24 Oct 2026 (ADR-018):** this wave must be realigned so commerce signup/login identify with Auth0 Universal Login (SSO or Database email/password), then the API still issues the local session cookie. Evidence from the first close: Epic2 login tests + `web/e2e/door.spec.ts` and updated smoke/onboarding — those asserts that forbade Auth0/Google are obsolete.
 
-**Outcome.** The commerce door and one live session. Signed-in header and menu use the adopted words. Login and signup show the wordmark and no menu.
+**Outcome.** The commerce door (Auth0) and one live session. Signed-in header and menu use the adopted words. Login and signup show the wordmark and no menu.
 
 **Precondition.** Wave 3 is green.
 
-**Red.** Existing tests in `tests/TransfersCheck.Tests/Epic2LoginTests.cs`: keep `Sign_up_sets_a_cross_site_cookie_and_ignores_a_client_tenant` and `A_new_login_replaces_the_previous_session` if they already match the bullets below. The uncommitted `Sign_out_ends_the_live_session` is not a closed wave. Change `web/e2e/onboarding.spec.ts` first so it no longer types the label "Correo".
+**Red.** Existing tests in `tests/TransfersCheck.Tests/Epic2LoginTests.cs`: keep cookie and one-live-session checks if they still match after the Auth0 bridge. Replace any check that forbids Auth0 or Google. Change `web/e2e/door.spec.ts` so it no longer expects Auth0 count 0. Change `web/e2e/onboarding.spec.ts` if it still types the retired label "Correo".
 
-- Given a commerce signup and sign-in, when the API sets the session, then the cookie is HttpOnly, Secure, and `SameSite=None`, and `TenantId` comes from the server session. A client-supplied tenant is ignored.
+- Given a commerce signup and sign-in through Auth0, when the API sets the session, then the cookie is HttpOnly, Secure, and `SameSite=None`, and `TenantId` comes from the server session. A client-supplied tenant is ignored.
 - Given one login account, when a second sign-in happens on that same account, then the previous session no longer works.
 - Given a live session, when the person leaves with Salir or with Cerrar sesión, then that session ends and the screen is the login screen.
-- Given the login and signup screens, when they render, then they show the wordmark and no menu, and the door shows "Hola de nuevo", "Inicia sesión en tu cuenta de TransfersCheck", "Dirección de email *", "Contraseña *", "Iniciar sesión", and a show/hide control on the password.
-- And the door has no Auth0 and no Google.
+- Given the login and signup screens, when they render, then they show the wordmark and no authenticated menu, and commerce identity is Auth0 Universal Login (SSO and/or Database password per ADR-018). Adopted Spanish email/password labels remain usable when that form is shown.
+- And Mercado Pago OAuth is not this door.
 - Given a signed-in header, when the menu opens, then the entries are Transacciones, Configurar, Pagos, and Salir, and leaving uses Cerrar sesión.
-- The `#alias` slot stays empty. Story 7.2 fills it. This wave does not choose the email-code length. Story 7.1 adds the code.
+- The `#alias` slot stays empty. Story 7.2 fills it. Story 7.1 is Auth0-owned verification, not a local Código field.
 
-**Green.** Realign `src/TransfersCheck.Api` session issuance and `web/`. The seam is the existing session and account flow. Do not add a method to `IMerchantStore` for the menu. Do not add an identity provider.
+**Green.** Realign `src/TransfersCheck.Api` session issuance and `web/` to Auth0 as IdP plus the existing cookie session. The seam is Auth0 → API session. Do not add a method to `IMerchantStore` for the menu. Do not put Auth0 on the Punto de Alerta path (waves 17–18). Do not put Auth0 on the owner microsite.
 
-**Verify.** The unit-test command. After the code exists, `npm run e2e` in `web/` for the door and the menu this wave changed. Exercise sign-in, a second sign-in replacing the first, and Salir / Cerrar sesión returning to the login screen. No new Swagger document. The existing session routes stay on the current Swagger check.
+**Verify.** The unit-test command. After the code exists, `npm run e2e` in `web/` for the door and the menu this wave changed. Exercise Auth0 sign-in (or a test double of that bridge), a second sign-in replacing the first, and Salir / Cerrar sesión returning to the login screen. No new Swagger document. The existing session routes stay on the current Swagger check.
 
-**Stop.** None in this wave. Do not stop to choose the email-code length. Do not build story 7.1 here.
+**Stop.** Stop if Auth0 tenant credentials would be committed to the repo. Leave them in user-secrets or environment.
 
-**Realign.** Committed login is `0c69c7f`, plus the dirty sign-out edits. The visible copy is still the retired door. Change the copy. Do not rewrite the cookie test.
+**Realign.** Prior local-only door commits and e2e that asserted no Auth0 are the retired behavior. Keep the cookie test shape; change the identity provider.
 
 ## Wave 5 — Stories 2.2, 2.4
 
@@ -422,28 +422,24 @@ Completed on 24 October 2026. Configurar label `Habilitar Notificaciones`; token
 
 ## Wave 16 — Story 7.1
 
-Completed on 24 October 2026. Email sign-in code is 6 numeric digits, 1-hour lifetime, via `IEmailCodeStore` + existing mail port. Door gains Código without naming length. Evidence: `Sign_in_requires_the_email_code_and_refuses_it_after_one_hour`, `e2e/email-code.spec.ts`.
+Completed on 24 October 2026 under the then-local 6-digit email-code door. **Course correction 24 Oct 2026 (ADR-018):** that local Código requirement is withdrawn for commerce. This wave realigns so Auth0 Universal Login owns the commerce identity challenge; no product-issued email-code field on every commerce sign-in. Prior evidence (`Sign_in_requires_the_email_code_and_refuses_it_after_one_hour`, `e2e/email-code.spec.ts`) is obsolete for the Auth0 path and must be retired or replaced.
 
-**Micro-step, before any production code.** Length locked 24 Oct 2026: 6 numeric digits, lifetime 1 hour. Proceed.
+**Outcome.** Commerce admin identity challenge is Auth0 (SSO or Database password). Extra MFA/verification, if any, is Auth0 configuration. Punto de Alerta stays on waves 17–18.
 
-**Outcome.** Every commerce sign-in also requires the email code. The code is 6 digits and lives 1 hour.
+**Precondition.** Wave 15 is green. Wave 4 Auth0 realign is green.
 
-**Precondition.** Wave 15 is green. The mail port from wave 11 exists. Reuse it. Do not pick a provider.
+**Red.** Replace the local email-code tests with checks that commerce sign-in does not require a TransfersCheck-owned Código field, and that identity still lands as an API session cookie after Auth0.
 
-**Red.** A failing test in `tests/TransfersCheck.Tests/Epic7AliasTests.cs` (new class in the existing test project, one class per epic, matching the current layout). The fake mail port captures the code the use case emits.
+- Given a commerce admin, when they complete Auth0 Universal Login, then the API session is issued without a local email-code step.
+- Given Punto de Alerta flows, when they run, then they still use usuario/clave (do not pull Auth0 into those tests here).
 
-- Given a commerce admin, when they sign in without the code, then the sign-in is refused.
-- When they sign in with email, password, and the code the fake port captured, inside 1 hour, then the sign-in is accepted.
-- When the same code is used after 1 hour, then it is refused.
-- And the test does not assert a character count, a digit count, or an alphabet.
+**Green.** Remove or gate the local `IEmailCodeStore` commerce-admin path. Do not add a method to `IMerchantStore`. Do not rebuild a local Código field on the commerce door. Auth0 credentials stay out of the repo.
 
-**Green.** A Core use case checks the code and the 1-hour lifetime. The existing mail port sends it. A small port stores the issued code and its expiry. Do not add a method to `IMerchantStore`. The door in `web/` gains the code field without naming a length. Do not add Auth0 or Google.
+**Verify.** The unit-test command. After the code exists, exercise commerce Auth0 sign-in without a local Código field.
 
-**Verify.** The unit-test command. After the code exists, exercise the door in the browser: missing code is refused, and the screen does not state a length.
+**Stop.** Stop if Auth0 secrets would be committed. Stop if this wave starts changing the Punto de Alerta invite path (that is wave 17).
 
-**Stop.** The length stop in the micro-step. Also stop if sending the code requires a real provider. The fake port is enough.
-
-**Realign.** Story 2.1's door stays. This wave adds the code requirement. It does not replace the door copy from wave 4.
+**Realign.** The morning 24 Oct local email-code close is the retired behavior for commerce.
 
 ## Wave 17 — Stories 7.2, 7.3, 7.4
 
@@ -630,7 +626,7 @@ Exercise the path below in the browser with `scripts/dev-up.ps1` and `npm run e2
 13. The PWA installs from `web/`. The API does not serve it.
 14. An arrived transfer is heard and shown. Pending and rejected stay silent. One tap opens that row. No service-account JSON in the repo. No invented Firebase project values.
 15. Configurar shows Habilitar Notificaciones and does not name the mechanism. A Punto de Alerta receives alerts.
-16. Sign-in without the email code is refused. The code dies at 1 hour. No length is asserted.
+16. Commerce identity is Auth0 Universal Login; no local Código field on every commerce sign-in (ADR-018 / story 7.1 realign).
 17. The alias is confirmed once as `#alias`. The Pack Mes invite is single-use, lives 1 hour, and is carried with `wa.me`. The password is set from that link.
 18. A Punto de Alerta sees the last N rows, default 10, may open one of them, and does not see Historial de Transacciones.
 19. The admin sees Historial de Transacciones, the CSV, and the totals by day, by month, and by a date range. No Medio column, no search box, no 10-row cap.
@@ -652,7 +648,8 @@ Do not implement these. Do not open `later-research.md` to design them. A senten
 - Choosing or documenting an SDK install. `net10.0` is the target. A machine with only SDK 9 is the execution stop above, not a new design.
 - The accumulable recharge of 500 queries. It is not a story.
 - A production pipeline, a host, a queue, or a cloud topology.
-- Auth0, Google sign-in, coupons, cashback, preapproval, an `AppConfiguration` bag, a generic repository, MediatR, and MonsterASP screens.
+- Coupons, cashback, preapproval, an `AppConfiguration` bag, a generic repository, MediatR, and MonsterASP screens.
+- Auth0 on the **owner microsite** or on the **Punto de Alerta** door (commerce Auth0 is in scope — ADR-018; those two stay out).
 
 
 
