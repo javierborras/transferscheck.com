@@ -64,6 +64,20 @@ public sealed class Epic2LoginTests(SqlFixture sql)
     }
 
     [Fact]
+    public async Task Sign_out_ends_the_live_session()
+    {
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient();
+        var cookie = await SignUp(client, $"out-{Guid.NewGuid():N}@counter.test");
+
+        using var signedOut = await Send(client, HttpMethod.Delete, "/api/sessions", cookie);
+        Assert.Equal(HttpStatusCode.NoContent, signedOut.StatusCode);
+
+        using var after = await Send(client, HttpMethod.Get, "/api/session", cookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+    }
+
+    [Fact]
     public async Task A_new_login_replaces_the_previous_session()
     {
         await using var factory = new TransfersApiFactory(sql);

@@ -82,8 +82,28 @@ public static class AccountEndpoints
         return Results.Ok(new { email = account.Email, isOwner = account.IsOwner });
     }
 
-    private static IResult SignOut(IOptions<LoginSessionOptions> sessionOptions, HttpResponse response)
+    private static async Task<IResult> SignOut(
+        HttpContext http,
+        IMerchantStore store,
+        IOptions<LoginSessionOptions> sessionOptions,
+        TimeProvider clock,
+        HttpResponse response,
+        CancellationToken cancellationToken)
     {
+        var accountId = Guid.Parse(http.User.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+        var account = await store.FindAccountAsync(accountId, cancellationToken);
+        if (account is null)
+            return Results.Unauthorized();
+
+        if (account.LiveSessionId is { } sessionId)
+        {
+            var session = await store.FindSessionAsync(sessionId, cancellationToken);
+            if (session is not null)
+                session.ReplacedAt = clock.GetUtcNow();
+        }
+
+        account.LiveSessionId = null;
+        await store.SaveChangesAsync(cancellationToken);
         response.Cookies.Delete(sessionOptions.Value.CookieName, new CookieOptions
         {
             HttpOnly = true,

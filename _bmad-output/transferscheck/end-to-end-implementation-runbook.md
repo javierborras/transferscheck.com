@@ -126,6 +126,8 @@ Completed on 24 October 2026. Hangfire.AspNetCore/SqlServer 1.8.25, jobs `five-d
 
 ## Wave 4 — Stories 2.1, 2.3
 
+Completed on 24 October 2026. Adopted door copy, menu (Transacciones, Configurar, Pagos, Salir / Cerrar sesión), empty `#alias`, sign-out ends live session. Evidence: Epic2 login tests + `web/e2e/door.spec.ts` and updated smoke/onboarding.
+
 **Outcome.** The commerce door and one live session. Signed-in header and menu use the adopted words. Login and signup show the wordmark and no menu.
 
 **Precondition.** Wave 3 is green.

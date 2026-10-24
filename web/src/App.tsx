@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, Route, Routes, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "./api";
 
 type Session = { accountId: string; tenantId: string; email: string; isOwner: boolean };
@@ -29,35 +29,184 @@ type Transfer = {
 type LoginRow = { id: string; email: string; isOwner: boolean; pushApproved: boolean; revoked: boolean };
 
 let firstOpen: Promise<void> | null = null;
-const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" });
+const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+const clock = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
 const when = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 function beep() {
   const context = new AudioContext();
   const tone = context.createOscillator();
   const gain = context.createGain();
-  tone.frequency.value = 880;
+  tone.type = "sine";
+  tone.frequency.value = 1000;
   gain.gain.value = 0.08;
   tone.connect(gain);
   gain.connect(context.destination);
   tone.start();
-  tone.stop(context.currentTime + 0.15);
+  tone.stop(context.currentTime + 0.2);
   tone.onended = () => void context.close();
 }
 
+function Mark() {
+  return (
+    <svg className="mark" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+      <rect width="120" height="120" rx="28" fill="#009EE3" />
+      <circle cx="60" cy="60" r="44" stroke="#FFFFFF" strokeOpacity="0.25" strokeWidth="4" strokeDasharray="4 4" />
+      <path d="M38 60C38 47.8497 47.8497 38 60 38C69.317 38 77.2952 43.7841 80.5 52" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      <path d="M82 46V53H75" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M82 60C82 72.1503 72.1503 82 60 82C50.683 82 42.7048 76.2159 39.5 68" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
+      <path d="M38 74V67H45" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="60" cy="60" r="20" fill="#FFFFFF" />
+      <path d="M52 60.5L57.5 66L68.5 54" stroke="#00A650" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Wordmark() {
+  return (
+    <span className="wordmark">
+      <Mark />
+      <span className="name">TransfersCheck</span>
+    </span>
+  );
+}
+
+function AppHeader({ onSalir, back }: { onSalir: () => Promise<void>; back: boolean }) {
+  const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [open]);
+
+  const here = (path: string) => (location.pathname === path ? "page" : undefined);
+
+  return (
+    <header className="app-header">
+      <Link className="wordmark" to="/">
+        <Mark />
+        <span className="name">TransfersCheck</span>
+      </Link>
+      <span id="alias" className="alias-slot" aria-label="Alias" />
+      <div className="header-actions">
+        {back ? (
+          <Link className="volver" to="/">
+            Volver
+          </Link>
+        ) : null}
+        <button
+          className="menu-button"
+          type="button"
+          aria-expanded={open}
+          aria-controls="app-menu"
+          onClick={() => setOpen((value) => !value)}
+        >
+          Menú
+        </button>
+      </div>
+      {open ? (
+        <>
+          <button className="menu-backdrop" type="button" aria-label="Cerrar menú" onClick={() => setOpen(false)} />
+          <nav id="app-menu" className="app-menu" aria-label="Menú">
+            <Link to="/" aria-current={here("/")}>
+              Transacciones
+            </Link>
+            <Link to="/usuarios" aria-current={here("/usuarios")}>
+              Configurar
+            </Link>
+            <Link to="/pagar" aria-current={here("/pagar")}>
+              Pagos
+            </Link>
+            <button className="salir" type="button" onClick={() => void onSalir()}>
+              Salir
+            </button>
+            <button className="cerrar-sesion" type="button" onClick={() => void onSalir()}>
+              Cerrar sesión
+            </button>
+          </nav>
+        </>
+      ) : null}
+    </header>
+  );
+}
+
+function Dock({ children }: { children: ReactNode }) {
+  return <div className="dock">{children}</div>;
+}
+
+function Shell({
+  onSalir,
+  back,
+  counter,
+  children
+}: {
+  onSalir: () => Promise<void>;
+  back?: boolean;
+  counter?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={counter ? "shell counter" : "shell page"}>
+      <AppHeader onSalir={onSalir} back={back ?? false} />
+      {children}
+    </div>
+  );
+}
+
 export function App() {
+  const navigate = useNavigate();
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+
+  useEffect(() => {
+    let gone = false;
+    api("/api/session").then(async (response) => {
+      if (gone) return;
+      setSession(response.ok ? await response.json() : null);
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  async function salir() {
+    const response = await api("/api/sessions", { method: "DELETE" });
+    if (!response.ok) return;
+    setSession(null);
+    navigate("/");
+  }
+
+  if (session === undefined) {
+    return (
+      <main className="gate">
+        <Wordmark />
+      </main>
+    );
+  }
+
   return (
     <Routes>
-      <Route path="/cuenta" element={<CreateAccount />} />
-      <Route path="/pagar" element={<Pay />} />
-      <Route path="*" element={<Home />} />
+      <Route path="/cuenta" element={<CreateAccount onSignedIn={setSession} />} />
+      <Route path="/pagar" element={session ? <Pay onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="/conectar" element={session ? <ChecklistPage onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="*" element={session ? <Transfers onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
     </Routes>
   );
 }
 
-function CreateAccount() {
+function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,31 +219,52 @@ function CreateAccount() {
       setError("No se pudo crear la cuenta.");
       return;
     }
+    const current = await api("/api/session");
+    if (!current.ok) {
+      setError("No se pudo crear la cuenta.");
+      return;
+    }
+    onSignedIn(await current.json());
     navigate("/");
   }
 
   return (
-    <main>
+    <main className="gate">
+      <Wordmark />
       <h1>Creá tu cuenta</h1>
       <form onSubmit={submit}>
         <label>
-          Correo
-          <input name="email" type="email" autoComplete="username" required />
+          Dirección de email *
+          <input name="email" type="email" autoComplete="username" inputMode="email" required />
         </label>
         <label>
-          Contraseña
-          <input name="password" type="password" autoComplete="new-password" minLength={8} required />
+          Contraseña *
+          <input
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
         </label>
+        <button
+          className="password-toggle"
+          type="button"
+          onClick={() => setShowPassword((value) => !value)}
+        >
+          {showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+        </button>
         {error ? <p className="error">{error}</p> : null}
-        <button type="submit">Creá tu cuenta</button>
+        <button type="submit">Crear cuenta</button>
       </form>
     </main>
   );
 }
 
-function Enter() {
+function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,60 +277,80 @@ function Enter() {
       setError("El correo o la contraseña no sirven.");
       return;
     }
+    const current = await api("/api/session");
+    if (!current.ok) {
+      setError("El correo o la contraseña no sirven.");
+      return;
+    }
+    onSignedIn(await current.json());
     navigate("/");
   }
 
   return (
-    <main>
-      <h1>TransfersCheck</h1>
+    <main className="gate">
+      <Wordmark />
+      <h1>Hola de nuevo</h1>
+      <p className="gate-lead">Inicia sesión en tu cuenta de TransfersCheck</p>
       <form onSubmit={submit}>
         <label>
-          Correo
-          <input name="email" type="email" autoComplete="username" required />
+          Dirección de email *
+          <input name="email" type="email" autoComplete="username" inputMode="email" required />
         </label>
         <label>
-          Contraseña
-          <input name="password" type="password" autoComplete="current-password" required />
+          Contraseña *
+          <input
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            required
+          />
         </label>
+        <button
+          className="password-toggle"
+          type="button"
+          onClick={() => setShowPassword((value) => !value)}
+        >
+          {showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+        </button>
         {error ? <p className="error">{error}</p> : null}
-        <button type="submit">Entrá</button>
+        <button type="submit">Iniciar sesión</button>
       </form>
-      <p>
+      <p className="switch">
         <Link to="/cuenta">Creá tu cuenta</Link>
       </p>
     </main>
   );
 }
 
-function Home() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
+function helpLines(help: string) {
+  const lines = help.split(/(?<=\.)\s+(?=\d+\.)/).map((line) => line.trim()).filter(Boolean);
+  return lines.length > 1 ? lines : [help];
+}
+
+function ChecklistPage({ onSalir }: { onSalir: () => Promise<void> }) {
   const [checklist, setChecklist] = useState<Checklist | null>(null);
 
   useEffect(() => {
     let gone = false;
-    api("/api/session").then(async (response) => {
-      if (gone) return;
-      if (!response.ok) {
-        setSession(null);
-        return;
-      }
-      setSession(await response.json());
-      const list = await api("/api/checklist");
-      if (!gone && list.ok) setChecklist(await list.json());
+    api("/api/checklist").then(async (response) => {
+      if (!gone && response.ok) setChecklist(await response.json());
     });
     return () => {
       gone = true;
     };
   }, []);
 
-  if (session === undefined || (session && !checklist)) return <main>TransfersCheck</main>;
-  if (!session) return <Enter />;
-  if (!checklist!.connectDone) return <ChecklistView checklist={checklist!} />;
-  return <Transfers session={session} checklist={checklist!} />;
+  return (
+    <Shell onSalir={onSalir} back>
+      {checklist ? <ChecklistView checklist={checklist} /> : <main />}
+    </Shell>
+  );
 }
 
 function ChecklistView({ checklist }: { checklist: Checklist }) {
   const [error, setError] = useState("");
+  const connectNow = checklist.accountDone && !checklist.connectDone;
+  const showAction = !checklist.accountDone || connectNow;
 
   async function connect() {
     const response = await api("/api/connections/mercadopago", { method: "POST" });
@@ -172,25 +362,58 @@ function ChecklistView({ checklist }: { checklist: Checklist }) {
     window.location.assign(body.authorizationUrl);
   }
 
+  const body = (
+    <>
+      <ol className="help">
+        {helpLines(checklist.help).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ol>
+      {checklist.videoUrl ? <iframe className="video" title="Mercado Pago" src={checklist.videoUrl} /> : null}
+      {error ? <p className="error" role="alert">{error}</p> : null}
+    </>
+  );
+
   return (
-    <main>
-      <h1>{checklist.accountDone ? checklist.connectTitle : checklist.accountTitle}</h1>
-      <p className="help">{checklist.help}</p>
-      {checklist.videoUrl ? <iframe title="Mercado Pago" src={checklist.videoUrl} /> : null}
-      {error ? <p className="error">{error}</p> : null}
-      <button type="button" onClick={connect}>{checklist.button}</button>
-    </main>
+    <>
+      <main>
+        <ol className="steps">
+          <li className={checklist.accountDone ? "done" : "current"} data-step="1">
+            <div className="step-body">
+              {checklist.accountDone ? checklist.accountTitle : <h1>{checklist.accountTitle}</h1>}
+              {checklist.accountDone ? null : body}
+            </div>
+          </li>
+          <li className={connectNow ? "current" : checklist.connectDone ? "done" : "later"} data-step="2">
+            <div className="step-body">
+              {connectNow ? <h1>{checklist.connectTitle}</h1> : checklist.connectTitle}
+              {connectNow ? body : null}
+            </div>
+          </li>
+          <li className={checklist.alertsDone ? "done" : "later"} data-step="3">
+            <div className="step-body">{checklist.alertsTitle}</div>
+          </li>
+        </ol>
+      </main>
+      {showAction ? (
+        <Dock>
+          <button type="button" onClick={connect}>{checklist.button}</button>
+        </Dock>
+      ) : null}
+    </>
   );
 }
 
-function Transfers({ session, checklist }: { session: Session; checklist: Checklist }) {
+function Transfers({ onSalir }: { onSalir: () => Promise<void> }) {
   const [params] = useSearchParams();
   const [items, setItems] = useState<Transfer[]>([]);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<Transfer | null>(null);
   const [wait, setWait] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [alertsDone, setAlertsDone] = useState(checklist.alertsDone);
-  const [trial, setTrial] = useState(checklist.trialRunning);
+  const [cooldown, setCooldown] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [alertsDone, setAlertsDone] = useState<boolean | null>(null);
+  const [trial, setTrial] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [pollSeconds, setPollSeconds] = useState(300);
   const [cooldownSeconds, setCooldownSeconds] = useState(60);
   const seen = useRef<Map<string, string> | null>(null);
@@ -213,6 +436,11 @@ function Transfers({ session, checklist }: { session: Session; checklist: Checkl
       setAlertsDone(state.alertsDone);
       setTrial(state.trialRunning);
     }
+    const billing = await api("/api/billing");
+    if (billing.ok) {
+      const { accessUntil } = await billing.json();
+      setExpired(Boolean(accessUntil) && new Date(accessUntil).getTime() < Date.now());
+    }
   }
 
   function announceArrivals(next: Transfer[]) {
@@ -222,7 +450,7 @@ function Transfers({ session, checklist }: { session: Session; checklist: Checkl
     const arrived = next.find((item) => item.status === "approved" && previous.get(item.id) !== "approved");
     if (!arrived) return;
     beep();
-    setNotice(`${arrived.statusLabel} · ${arrived.payerName} · ${money.format(arrived.amount)}`);
+    setNotice(arrived);
   }
 
   useEffect(() => {
@@ -240,13 +468,22 @@ function Transfers({ session, checklist }: { session: Session; checklist: Checkl
     };
   }, [first, pollSeconds]);
 
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const tick = window.setTimeout(() => setCooldown((value) => value - 1), 1000);
+    return () => window.clearTimeout(tick);
+  }, [cooldown]);
+
   async function refresh() {
-    setBusy(true);
+    if (cooldown > 0 || loading) return;
+    setLoading(true);
     setWait("");
     const response = await api("/api/transfers/refresh", { method: "POST" });
-    if (response.status === 429) setWait("Esperá un momento.");
+    if (response.status === 429) setWait("Mercado Pago está demorado. Aguardá unos instantes para volver a consultar.");
+    else if (response.status === 409) setExpired(true);
     else await load(true);
-    window.setTimeout(() => setBusy(false), cooldownSeconds * 1000);
+    setLoading(false);
+    setCooldown(cooldownSeconds);
   }
 
   async function enableAlerts() {
@@ -264,39 +501,87 @@ function Transfers({ session, checklist }: { session: Session; checklist: Checkl
     if (saved.ok) setAlertsDone(true);
   }
 
+  const cooling = cooldown > 0;
+
   return (
-    <main>
-      <h1>TransfersCheck</h1>
-      {trial ? <p>La prueba está en curso.</p> : null}
-      {notice ? <p className="notice" role="status">{notice}</p> : null}
-      {!alertsDone ? (
-        <section>
-          <h2>Activá los avisos</h2>
-          <p>En el iPhone, agregá la app a la pantalla de inicio.</p>
-          <button type="button" onClick={enableAlerts}>Activá los avisos</button>
-        </section>
-      ) : null}
-      <ol>
-        {items.map((item) => (
-          <li key={item.id}>
-            <div>{item.payerName}</div>
-            <div className="amount">{money.format(item.amount)}</div>
-            <div>{when.format(new Date(item.occurredAt))}</div>
-            <div>{item.statusLabel}</div>
-          </li>
-        ))}
-      </ol>
-      {wait ? <p>{wait}</p> : null}
-      <p><Link to="/pagar">Pagar</Link></p>
-      {session.isOwner ? <OwnerLogins /> : null}
-      <button className="refresh" type="button" onClick={refresh} disabled={busy}>Actualizar</button>
-    </main>
+    <Shell onSalir={onSalir} counter>
+      <main className="board">
+        <div className="board-scroll">
+          {expired ? (
+            <p className="banner expired" role="status">
+              <span>Sincronización pausada. Para seguir recibiendo avisos, extendé tu acceso.</span>
+              <Link to="/pagar">Extender acceso</Link>
+            </p>
+          ) : trial ? (
+            <p className="banner trial">La prueba está en curso.</p>
+          ) : null}
+          {notice ? (
+            <p className="notice" role="status">
+              <strong>¡Entró un pago!</strong>
+              <span>{notice.payerName} te transfirió {money.format(notice.amount)}</span>
+            </p>
+          ) : null}
+          {alertsDone === false ? (
+            <section className="alerts">
+              <h2>Activá los avisos</h2>
+              <p>En el iPhone, agregá la app a la pantalla de inicio.</p>
+              <button type="button" onClick={enableAlerts}>Activar avisos</button>
+            </section>
+          ) : null}
+          <ol className="transfers">
+            {items.map((item) => {
+              const tone = item.status === "approved" || item.status === "pending" || item.status === "rejected" ? item.status : "other";
+              const badge = item.status === "approved" ? "Acreditado" : item.status === "pending" ? "Pendiente" : item.statusLabel;
+              const moment = new Date(item.occurredAt);
+              const detail =
+                item.status === "approved"
+                  ? `${item.statusLabel} ${clock.format(moment)}`
+                  : item.status === "pending"
+                    ? "En proceso de acreditación"
+                    : when.format(moment);
+              return (
+                <li key={item.id} className={first === item.id ? `row ${tone} focus` : `row ${tone}`}>
+                  <div className="payer">{item.payerName}</div>
+                  <div className="amount">{money.format(item.amount)}</div>
+                  <div className="when">{detail}</div>
+                  <div className="status">{badge}</div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        {wait ? <p className="wait" role="status">{wait}</p> : null}
+        <Dock>
+          <button
+            className={cooling ? "cooldown" : undefined}
+            type="button"
+            onClick={refresh}
+            aria-disabled={cooling || loading}
+            disabled={loading}
+          >
+            {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "Actualizar ahora"}
+          </button>
+        </Dock>
+      </main>
+    </Shell>
+  );
+}
+
+function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
+  return (
+    <Shell onSalir={onSalir} back>
+      <main>
+        <h1>Configurar usuarios</h1>
+        {session.isOwner ? <OwnerLogins /> : null}
+      </main>
+    </Shell>
   );
 }
 
 function OwnerLogins() {
   const [rows, setRows] = useState<LoginRow[]>([]);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   async function reload() {
     const response = await api("/api/logins");
@@ -329,43 +614,57 @@ function OwnerLogins() {
   }
 
   async function revoke(row: LoginRow) {
+    // Primer toque pide confirmar; el segundo revoca. Evita revocar por un toque errado.
+    if (confirming !== row.id) {
+      setConfirming(row.id);
+      return;
+    }
+    setConfirming(null);
     await api(`/api/logins/${row.id}`, { method: "DELETE" });
     await reload();
   }
 
   return (
-    <section>
+    <section className="logins">
       {rows.map((row) => (
-        <p key={row.id}>
-          {row.email}
-          {row.isOwner ? null : (
-            <>
-              <label>
-                <input type="checkbox" checked={row.pushApproved} onChange={(event) => void push(row, event.target.checked)} />
-                Avisos
-              </label>
-              <button type="button" onClick={() => void revoke(row)} disabled={row.revoked}>Revocar</button>
-            </>
+        <div className="login-row" key={row.id}>
+          <span className="email">{row.email}</span>
+          {row.revoked ? null : (
+            <label>
+              <input type="checkbox" checked={row.pushApproved} onChange={(event) => void push(row, event.target.checked)} />
+              Avisos
+            </label>
           )}
-        </p>
+          {row.isOwner ? null : (
+            <button
+              className={confirming === row.id ? "danger confirm" : "danger"}
+              type="button"
+              onClick={() => void revoke(row)}
+              onBlur={() => setConfirming((id) => (id === row.id ? null : id))}
+              disabled={row.revoked}
+            >
+              {confirming === row.id ? "Tocá de nuevo para revocar" : "Revocar"}
+            </button>
+          )}
+        </div>
       ))}
       <form onSubmit={add}>
         <label>
-          Correo
-          <input name="email" type="email" required />
+          Dirección de email *
+          <input name="email" type="email" inputMode="email" required />
         </label>
         <label>
-          Contraseña
+          Contraseña *
           <input name="password" type="password" minLength={8} required />
         </label>
-        {error ? <p className="error">{error}</p> : null}
+        {error ? <p className="error" role="alert">{error}</p> : null}
         <button type="submit">Agregar cuenta</button>
       </form>
     </section>
   );
 }
 
-function Pay() {
+function Pay({ onSalir }: { onSalir: () => Promise<void> }) {
   const [price, setPrice] = useState<{ amount: number; currency: string; paidPeriodDays: number } | null>(null);
 
   useEffect(() => {
@@ -381,12 +680,22 @@ function Pay() {
     window.location.assign(body.initPoint);
   }
 
-  if (!price) return <main>TransfersCheck</main>;
   return (
-    <main>
-      <h1>Pagar</h1>
-      <p className="amount">{price.currency} {price.amount} cada {price.paidPeriodDays} días</p>
-      <button type="button" onClick={pay}>Pagar</button>
-    </main>
+    <Shell onSalir={onSalir} back>
+      {!price ? <main /> : (
+        <>
+          <main className="pay">
+            <h1>Extendé el acceso</h1>
+            <p className="price">
+              <span className="amount">{money.format(price.amount)}</span>
+              <span className="period">cada {price.paidPeriodDays} días</span>
+            </p>
+          </main>
+          <Dock>
+            <button type="button" onClick={pay}>Pagar con Mercado Pago</button>
+          </Dock>
+        </>
+      )}
+    </Shell>
   );
 }
