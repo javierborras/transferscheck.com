@@ -25,7 +25,7 @@ Updated: 24 October 2026.
 | 19 | `2dd31aa` | Admin history, CSV, day/month/range totals |
 | 20 | `dae70aa` | Mi código + one free Pack Mes via referral-bonus job
 | 21 | `378958f` | LiveTransferArrived contract + SSE; no SignalR in UI
-| 22 | _(pending)_ | Consulta on-demand; warn 450 / wait 500
+| 22 | `8871285` | Consulta on-demand; warn 450 / wait 500
 
 ## Next
 
