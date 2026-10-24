@@ -23,7 +23,7 @@ Updated: 24 October 2026.
 | 17 | `31d1257` | Alias once; invite 1h + wa.me; commerce+user door |
 | 18 | `60cfa90` | Alert-point window + detail; hide admin menu |
 | 19 | `2dd31aa` | Admin history, CSV, day/month/range totals |
-| 20 | _(pending)_ | Mi código + one free Pack Mes via referral-bonus job
+| 20 | `dae70aa` | Mi código + one free Pack Mes via referral-bonus job
 
 ## Next
 
