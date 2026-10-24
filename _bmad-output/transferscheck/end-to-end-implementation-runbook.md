@@ -200,6 +200,8 @@ Completed on 24 October 2026. PKCE connect and one-merchant link kept; setup che
 
 ## Wave 7 — Stories 3.3, 3.4, 3.6
 
+Completed on 24 October 2026. Adopted connect words / badges / reconnect confirm; trial as status; alerts on checklist; OAuth returns to `/conectar`; empty video hides player. Evidence: Epic3 checklist tests + `web/e2e/checklist.spec.ts` / onboarding.
+
 **Outcome.** The checklist in the browser, the step stored on the server from real state, and the video only when `Onboarding:MercadoPagoVideoUrl` is set. That URL stays unset.
 
 **Precondition.** Wave 6 is green.

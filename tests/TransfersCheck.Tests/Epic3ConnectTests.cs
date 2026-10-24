@@ -50,10 +50,19 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         using var before = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
         var checklist = await before.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Creá tu cuenta", checklist.GetProperty("accountTitle").GetString());
+        Assert.Equal("Conectar Mercado Pago", checklist.GetProperty("connectTitle").GetString());
         Assert.Equal("Conectar Mercado Pago", checklist.GetProperty("button").GetString());
+        Assert.Equal("Re-conectar cuenta", checklist.GetProperty("reconnectButton").GetString());
+        Assert.Equal("No conectado", checklist.GetProperty("connectionBadge").GetString());
+        Assert.Equal(
+            "¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?",
+            checklist.GetProperty("reconnectConfirm").GetString());
         Assert.Equal(ConnectionEndpoints.Help, checklist.GetProperty("help").GetString());
+        Assert.Contains("1.", checklist.GetProperty("help").GetString(), StringComparison.Ordinal);
+        Assert.Contains("2.", checklist.GetProperty("help").GetString(), StringComparison.Ordinal);
         Assert.Equal("Activá los avisos", checklist.GetProperty("alertsTitle").GetString());
         Assert.Equal("La prueba está en curso.", checklist.GetProperty("trialLine").GetString());
+        Assert.False(checklist.TryGetProperty("payTitle", out _));
         Assert.True(checklist.GetProperty("accountDone").GetBoolean());
         Assert.False(checklist.GetProperty("connectDone").GetBoolean());
         Assert.False(checklist.GetProperty("trialRunning").GetBoolean());
@@ -62,11 +71,14 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
 
         using var done = await Connect(client, cookie);
         Assert.Equal(HttpStatusCode.Redirect, done.StatusCode);
+        Assert.Contains("/conectar", done.Headers.Location?.ToString() ?? "", StringComparison.Ordinal);
         using var after = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
         var ready = await after.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(ready.GetProperty("connectDone").GetBoolean());
         Assert.True(ready.GetProperty("listReachable").GetBoolean());
         Assert.True(ready.GetProperty("trialRunning").GetBoolean());
+        Assert.Equal("Conectado", ready.GetProperty("connectionBadge").GetString());
+        Assert.Equal("Re-conectar cuenta", ready.GetProperty("button").GetString());
         Assert.Equal("alerts", ready.GetProperty("currentStep").GetString());
 
         using var scope = factory.Services.CreateScope();
@@ -116,6 +128,44 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         var cookie = await SignUp(client);
         using var response = await Send(client, "/api/checklist", cookie, HttpMethod.Post);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Checklist_exposes_connect_words_trial_status_and_no_client_advance()
+    {
+        MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var cookie = await SignUp(client);
+
+        using var before = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
+        var open = await before.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Creá tu cuenta", open.GetProperty("accountTitle").GetString());
+        Assert.Equal("Conectar Mercado Pago", open.GetProperty("connectTitle").GetString());
+        Assert.Equal("Activá los avisos", open.GetProperty("alertsTitle").GetString());
+        Assert.Equal("La prueba está en curso.", open.GetProperty("trialLine").GetString());
+        Assert.Equal(ConnectionEndpoints.Help, open.GetProperty("help").GetString());
+        Assert.Equal("Conectar Mercado Pago", open.GetProperty("button").GetString());
+        Assert.Equal("Re-conectar cuenta", open.GetProperty("reconnectButton").GetString());
+        Assert.Equal("¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?", open.GetProperty("reconnectConfirm").GetString());
+        Assert.Equal("No conectado", open.GetProperty("connectionBadge").GetString());
+        Assert.Equal("", open.GetProperty("videoUrl").GetString());
+        Assert.DoesNotContain("Pagar", open.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("chatbot", open.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        using var advance = await Send(client, "/api/checklist", cookie, HttpMethod.Post);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, advance.StatusCode);
+
+        using var connected = await Connect(client, cookie);
+        Assert.Equal(HttpStatusCode.Redirect, connected.StatusCode);
+        using var after = await Send(client, "/api/checklist", cookie, HttpMethod.Get);
+        var ready = await after.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Conectado", ready.GetProperty("connectionBadge").GetString());
+        Assert.True(ready.GetProperty("connectDone").GetBoolean());
+        Assert.True(ready.GetProperty("listReachable").GetBoolean());
+        Assert.True(ready.GetProperty("trialRunning").GetBoolean());
+        Assert.Equal("", ready.GetProperty("videoUrl").GetString());
     }
 
     [Fact]

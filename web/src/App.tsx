@@ -11,6 +11,9 @@ type Checklist = {
   trialLine: string;
   help: string;
   button: string;
+  reconnectButton: string;
+  reconnectConfirm: string;
+  connectionBadge: string;
   accountDone: boolean;
   connectDone: boolean;
   alertsDone: boolean;
@@ -330,29 +333,30 @@ function helpLines(help: string) {
 function ChecklistPage({ onSalir }: { onSalir: () => Promise<void> }) {
   const [checklist, setChecklist] = useState<Checklist | null>(null);
 
+  async function reload() {
+    const response = await api("/api/checklist");
+    if (response.ok) setChecklist(await response.json());
+  }
+
   useEffect(() => {
-    let gone = false;
-    api("/api/checklist").then(async (response) => {
-      if (!gone && response.ok) setChecklist(await response.json());
-    });
-    return () => {
-      gone = true;
-    };
+    void reload();
   }, []);
 
   return (
     <Shell onSalir={onSalir} back>
-      {checklist ? <ChecklistView checklist={checklist} /> : <main />}
+      {checklist ? <ChecklistView checklist={checklist} onReload={reload} /> : <main />}
     </Shell>
   );
 }
 
-function ChecklistView({ checklist }: { checklist: Checklist }) {
+function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload: () => Promise<void> }) {
+  const navigate = useNavigate();
   const [error, setError] = useState("");
   const connectNow = checklist.accountDone && !checklist.connectDone;
-  const showAction = !checklist.accountDone || connectNow;
+  const alertsNow = checklist.connectDone && !checklist.alertsDone;
 
   async function connect() {
+    if (checklist.connectDone && !window.confirm(checklist.reconnectConfirm)) return;
     const response = await api("/api/connections/mercadopago", { method: "POST" });
     if (!response.ok) {
       setError("No se pudo empezar la conexión.");
@@ -362,7 +366,25 @@ function ChecklistView({ checklist }: { checklist: Checklist }) {
     window.location.assign(body.authorizationUrl);
   }
 
-  const body = (
+  async function enableAlerts() {
+    if ("Notification" in window && Notification.permission === "default") {
+      await Promise.race([
+        Notification.requestPermission(),
+        new Promise((resolve) => setTimeout(resolve, 1500))
+      ]);
+    }
+    const config = await api("/api/push/config");
+    const keys = config.ok ? await config.json() : {};
+    const token = keys.apiKey ? "" : `mock-${crypto.randomUUID()}`;
+    if (!token) return;
+    const saved = await api("/api/push/tokens", { method: "POST", body: JSON.stringify({ token }) });
+    if (saved.ok) {
+      await onReload();
+      navigate("/");
+    }
+  }
+
+  const connectBody = (
     <>
       <ol className="help">
         {helpLines(checklist.help).map((line) => (
@@ -377,27 +399,53 @@ function ChecklistView({ checklist }: { checklist: Checklist }) {
   return (
     <>
       <main>
+        <p className="connection-badge" data-connected={checklist.connectDone ? "yes" : "no"} role="status">
+          {checklist.connectionBadge}
+        </p>
         <ol className="steps">
           <li className={checklist.accountDone ? "done" : "current"} data-step="1">
             <div className="step-body">
               {checklist.accountDone ? checklist.accountTitle : <h1>{checklist.accountTitle}</h1>}
-              {checklist.accountDone ? null : body}
             </div>
           </li>
           <li className={connectNow ? "current" : checklist.connectDone ? "done" : "later"} data-step="2">
             <div className="step-body">
               {connectNow ? <h1>{checklist.connectTitle}</h1> : checklist.connectTitle}
-              {connectNow ? body : null}
+              {connectNow || checklist.connectDone ? connectBody : null}
             </div>
           </li>
-          <li className={checklist.alertsDone ? "done" : "later"} data-step="3">
-            <div className="step-body">{checklist.alertsTitle}</div>
+          <li className={alertsNow ? "current" : checklist.alertsDone ? "done" : "later"} data-step="3">
+            <div className="step-body">
+              {alertsNow ? <h1>{checklist.alertsTitle}</h1> : checklist.alertsTitle}
+              <p className="ios-hint">{checklist.iosHint}</p>
+            </div>
+          </li>
+          <li className={checklist.trialRunning ? "done" : "later"} data-step="4" data-status="trial">
+            <div className="step-body" role="status">
+              {checklist.trialLine}
+            </div>
           </li>
         </ol>
       </main>
-      {showAction ? (
+      {connectNow ? (
         <Dock>
-          <button type="button" onClick={connect}>{checklist.button}</button>
+          <button type="button" onClick={() => void connect()}>
+            {checklist.button}
+          </button>
+        </Dock>
+      ) : null}
+      {checklist.connectDone && !alertsNow ? (
+        <Dock>
+          <button type="button" onClick={() => void connect()}>
+            {checklist.reconnectButton}
+          </button>
+        </Dock>
+      ) : null}
+      {alertsNow ? (
+        <Dock>
+          <button type="button" onClick={() => void enableAlerts()}>
+            Activar avisos
+          </button>
         </Dock>
       ) : null}
     </>
