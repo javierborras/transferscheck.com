@@ -1,10 +1,16 @@
 using System.Text;
+using Hangfire;
+using Hangfire.Common;
+using Hangfire.Dashboard;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TransfersCheck.Api.Accounts;
+using TransfersCheck.Api.Auth;
 using TransfersCheck.Api.Billing;
 using TransfersCheck.Api.Connections;
+using TransfersCheck.Api.Jobs;
 using TransfersCheck.Api.Push;
 using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
@@ -35,6 +41,17 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddTransfersCheckInfrastructure(builder.Configuration);
+
+var connectionString = builder.Configuration.GetConnectionString("TransfersCheck") ?? "";
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+    {
+        PrepareSchemaIfNecessary = true
+    }));
+builder.Services.AddHangfireServer();
 
 var signingKey = builder.Configuration["Session:SigningKey"] ?? "";
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
@@ -79,10 +96,14 @@ if (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
-    var connection = builder.Configuration.GetConnectionString("TransfersCheck");
-    if (!string.IsNullOrWhiteSpace(connection))
+    if (!string.IsNullOrWhiteSpace(connectionString))
         db.Database.EnsureCreated();
 }
+
+// Cron.Never registers identity without a product schedule (ADR-011).
+var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
+recurringJobs.AddOrUpdate("five-day-notice", Job.FromExpression(() => FiveDayNoticeJob.Execute()), Cron.Never());
+recurringJobs.AddOrUpdate("referral-bonus", Job.FromExpression(() => ReferralBonusJob.Execute()), Cron.Never());
 
 app.UseCors("ui");
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
@@ -95,6 +116,14 @@ app.UseSwaggerUI(options =>
 {
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "TransfersCheck");
 });
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = [new AuthenticatedDashboardFilter()]
+    });
+}
 
 AccountEndpoints.Map(app);
 ConnectionEndpoints.Map(app);

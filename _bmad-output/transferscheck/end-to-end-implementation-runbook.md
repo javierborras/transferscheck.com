@@ -101,6 +101,8 @@ Compile realignment in this wave, with no new commercial rule: `src/TransfersChe
 
 ## Wave 3 — Story 1.6
 
+Completed on 24 October 2026. Hangfire.AspNetCore/SqlServer 1.8.25, jobs `five-day-notice` and `referral-bonus` registered with empty bodies via `IRecurringJobManager` + `Cron.Never()` (identity only, no product schedule), dashboard Development-only at `/hangfire`, poll remains `TransferPollWorker`. Evidence: `Hangfire_registers_only_the_five_day_notice_and_referral_bonus_jobs`.
+
 **Outcome.** Hangfire.AspNetCore 1.8.25 and Hangfire.SqlServer 1.8.25 are referenced, the five-day notice job and the referral-bonus job are registered with empty bodies, the dashboard is only in Development at `/hangfire`, and the poll stays `TransferPollWorker`.
 
 **Precondition.** Wave 2 is green.

@@ -1,11 +1,15 @@
 using System.Reflection;
+using Hangfire;
+using Hangfire.Storage;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
 
@@ -136,6 +140,34 @@ public sealed class Epic1PlatformTests
         var json = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"openapi\"", json, StringComparison.Ordinal);
         Assert.Equal("http://localhost:5183", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+    }
+
+    [Fact]
+    public async Task Hangfire_registers_only_the_five_day_notice_and_referral_bonus_jobs()
+    {
+        var csproj = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "TransfersCheck.Api.csproj"));
+        Assert.Contains("""PackageReference Include="Hangfire.AspNetCore" Version="1.8.25" """, csproj, StringComparison.Ordinal);
+        Assert.Contains("""PackageReference Include="Hangfire.SqlServer" Version="1.8.25" """, csproj, StringComparison.Ordinal);
+
+        var program = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Api", "Program.cs"));
+        Assert.Contains("MapHangfireDashboard(\"/hangfire\"", program, StringComparison.Ordinal);
+        Assert.Contains("IsDevelopment()", program, StringComparison.Ordinal);
+
+        await using var factory = new TransfersApiFactory(_sql);
+        var storage = factory.Services.GetRequiredService<JobStorage>();
+        var recurring = storage.GetConnection().GetRecurringJobs();
+        Assert.Equal(2, recurring.Count);
+        Assert.Contains(recurring, job => job.Id == "five-day-notice");
+        Assert.Contains(recurring, job => job.Id == "referral-bonus");
+        Assert.DoesNotContain(recurring, job =>
+            job.Id.Contains("poll", StringComparison.OrdinalIgnoreCase) ||
+            (job.Job?.ToString().Contains("TransferPollWorker", StringComparison.Ordinal) ?? false));
+
+        Assert.Contains(factory.Services.GetServices<IHostedService>(), service => service is TransferPollWorker);
+
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = true });
+        using var dashboard = await client.GetAsync("/hangfire");
+        Assert.True(dashboard.IsSuccessStatusCode, $"Expected /hangfire in Development, got {(int)dashboard.StatusCode}");
     }
 
     private static Transfer TransferFor(Guid tenantId, string externalId) => new()
