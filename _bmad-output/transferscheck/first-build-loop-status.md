@@ -21,7 +21,7 @@ Updated: 24 October 2026.
 | 14–15 | `4bd68c2` | FCM arrived push + Habilitar Notificaciones (no mechanism name) |
 | 16 | `2b51f9d` | Email code 6 digits / 1h; door Código field |
 | 17 | `31d1257` | Alias once; invite 1h + wa.me; commerce+user door |
-| 18 | _(pending)_ | Alert-point window + detail; hide admin menu |
+| 18 | `60cfa90` | Alert-point window + detail; hide admin menu |
 
 ## Next
 
