@@ -29,6 +29,7 @@ builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection(CorsOpt
 builder.Services.Configure<DataProtectionPathOptions>(builder.Configuration.GetSection(DataProtectionPathOptions.Section));
 builder.Services.Configure<FirebaseOptions>(builder.Configuration.GetSection(FirebaseOptions.Section));
 builder.Services.Configure<UiOptions>(builder.Configuration.GetSection(UiOptions.Section));
+builder.Services.Configure<Auth0Options>(builder.Configuration.GetSection(Auth0Options.Section));
 
 var uiOrigin = builder.Configuration[$"{CorsOptions.Section}:UiOrigin"] ?? "";
 builder.Services.AddCors(options =>
@@ -94,6 +95,14 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+// ADR-018: a tenant with a missing client id, secret or redirect would lock every commerce admin out (the local door closes). Fail at startup instead.
+var auth0Options = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Auth0Options>>().Value;
+if (auth0Options.Enabled
+    && (string.IsNullOrWhiteSpace(auth0Options.ClientId)
+        || string.IsNullOrWhiteSpace(auth0Options.ClientSecret)
+        || string.IsNullOrWhiteSpace(auth0Options.RedirectUri)))
+    throw new InvalidOperationException("Auth0:Authority is set, so Auth0:ClientId, Auth0:ClientSecret and Auth0:RedirectUri are required.");
+
 if (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
@@ -128,6 +137,7 @@ if (app.Environment.IsDevelopment())
 }
 
 AccountEndpoints.Map(app);
+Auth0Endpoints.Map(app);
 DevPlanEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
 BillingEndpoints.Map(app);

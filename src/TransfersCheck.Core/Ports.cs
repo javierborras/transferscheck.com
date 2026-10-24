@@ -117,3 +117,12 @@ public interface ICheckout
     Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken);
     Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
 }
+
+/// <summary>Who Auth0 says the commerce admin is. Only a verified email may open a session.</summary>
+public sealed record IdentityClaims(string Subject, string Email, bool EmailVerified);
+
+public interface IIdentityProvider
+{
+    string BuildAuthorizationUrl(string state, string codeChallenge, string nonce, bool signUp, string? loginHint);
+    Task<IdentityClaims> ExchangeAsync(string code, string codeVerifier, string nonce, CancellationToken cancellationToken);
+}

@@ -1,13 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { signUpWithAuth0 } from "./helpers";
 
 const apiOrigin = "http://localhost:5080";
 
 async function signUp(page: import("@playwright/test").Page, email: string) {
-  await page.goto("/cuenta");
-  await page.getByLabel("Dirección de email *").fill(email);
-  await page.getByLabel("Contraseña *").fill("password1");
-  await page.getByRole("button", { name: "Crear cuenta" }).click();
-  await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
+  await signUpWithAuth0(page, email);
 }
 
 async function openConfigurar(page: import("@playwright/test").Page) {

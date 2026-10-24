@@ -87,3 +87,17 @@ public sealed class UiOptions
     public const string Section = "Ui";
     public string Origin { get; set; } = "";
 }
+
+public sealed class Auth0Options
+{
+    public const string Section = "Auth0";
+    /// <summary>Tenant base URL, for example https://your-tenant.auth0.com. Empty keeps the local door (development without a tenant).</summary>
+    public string Authority { get; set; } = "";
+    public string ClientId { get; set; } = "";
+    /// <summary>Stays in user-secrets or environment (ADR-018). Never committed.</summary>
+    public string ClientSecret { get; set; } = "";
+    public string RedirectUri { get; set; } = "";
+    public TimeSpan AttemptLifetime { get; set; } = TimeSpan.FromMinutes(10);
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(Authority);
+}

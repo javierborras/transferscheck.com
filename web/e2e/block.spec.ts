@@ -1,15 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { setPlanCode } from "./helpers";
+import { setPlanCode, signUpWithAuth0 } from "./helpers";
 
 const apiOrigin = "http://localhost:5080";
 
 test("web blocks on the access date until pay", async ({ page }) => {
   const email = `e2e-block-${Date.now()}@counter.test`;
-  await page.goto("/cuenta");
-  await page.getByLabel("Dirección de email *").fill(email);
-  await page.getByLabel("Contraseña *").fill("password1");
-  await page.getByRole("button", { name: "Crear cuenta" }).click();
-  await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
+  await signUpWithAuth0(page, email);
   await setPlanCode(page, "pack_mes");
   await page.goto("/conectar");
   await page.getByRole("button", { name: "Conectar Mercado Pago" }).click();

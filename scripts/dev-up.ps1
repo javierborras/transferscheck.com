@@ -239,18 +239,29 @@ function Write-DotNetLauncher([string]$Name, [string]$Project, [string]$Url) {
     $log = Join-Path $LogDir "$Name.log"
     $cmd = Join-Path $LogDir "$Name.cmd"
     $exe = $script:DotNetExe
-    Write-AsciiFile -Path $cmd -Lines @(
+    $auth0 = @()
+    if ($Name -eq "api") {
+        # Commerce door is Auth0 (ADR-018); locally the mock server plays the tenant.
+        $auth0 = @(
+            "set `"Auth0__Authority=$MockUrl/auth0`"",
+            "set `"Auth0__ClientId=mock-auth0-client`"",
+            "set `"Auth0__ClientSecret=mock-auth0-secret`"",
+            "set `"Auth0__RedirectUri=$ApiUrl/api/auth0/callback`""
+        )
+    }
+    Write-AsciiFile -Path $cmd -Lines (@(
         "@echo off",
         "setlocal",
         "set `"DOTNET_ROOT=$script:DotNetRoot`"",
         "set `"DOTNET_MULTILEVEL_LOOKUP=0`"",
         "set `"PATH=%DOTNET_ROOT%;%PATH%`"",
         "set `"ASPNETCORE_ENVIRONMENT=Development`"",
-        "set `"ASPNETCORE_URLS=$Url`"",
+        "set `"ASPNETCORE_URLS=$Url`""
+    ) + $auth0 + @(
         "cd /d `"$Repo`"",
         "> `"$log`" echo iniciando-$Name",
         "`"$exe`" run --no-build --no-launch-profile --project `"$Project`" >> `"$log`" 2>&1"
-    )
+    ))
     return $cmd
 }
 

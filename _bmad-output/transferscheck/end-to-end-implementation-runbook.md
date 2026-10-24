@@ -128,6 +128,8 @@ Completed on 24 October 2026. Hangfire.AspNetCore/SqlServer 1.8.25, jobs `five-d
 
 Completed on 24 October 2026 under the then-local door (no Auth0). **Course correction 24 Oct 2026 (ADR-018):** this wave must be realigned so commerce signup/login identify with Auth0 Universal Login (SSO or Database email/password), then the API still issues the local session cookie. Evidence from the first close: Epic2 login tests + `web/e2e/door.spec.ts` and updated smoke/onboarding — those asserts that forbade Auth0/Google are obsolete.
 
+**Code realign status (24 Oct 2026).** Wave 4 is realigned in code: `/api/auth0/login` and `/api/auth0/callback` bridge Auth0 to the local session cookie; the Auth0 test double is `tools/TransfersCheck.MockServer/Auth0Mock.cs`; unit tests are in `Epic2LoginTests` and `web/e2e/door.spec.ts`. Wave 16 (story 7.1) is still to do. Plan: `_bmad-output/initiative-transferscheck-auth0-realign/`.
+
 **Outcome.** The commerce door (Auth0) and one live session. Signed-in header and menu use the adopted words. Login and signup show the wordmark and no menu.
 
 **Precondition.** Wave 3 is green.

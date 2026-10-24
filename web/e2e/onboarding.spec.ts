@@ -1,15 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { setPlanCode } from "./helpers";
+import { setPlanCode, createAccountWithAuth0 } from "./helpers";
 
 test("signup, checklist, connect against the mock, see the ten, enable avisos", async ({ page, context }) => {
   await context.grantPermissions(["notifications"]);
   const email = `e2e-${Date.now()}@counter.test`;
   await page.goto("/");
   await page.getByRole("link", { name: "Creá tu cuenta" }).click();
-  await page.getByLabel("Dirección de email *").fill(email);
-  await page.getByLabel("Contraseña *").fill("password1");
-  await page.getByRole("button", { name: "Crear cuenta" }).click();
-  await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
+  await createAccountWithAuth0(page, email);
   await setPlanCode(page, "pack_mes");
   await page.goto("/conectar");
   await expect(page.getByText("1. Tenés que administrar esa cuenta de Mercado Pago.")).toBeVisible();

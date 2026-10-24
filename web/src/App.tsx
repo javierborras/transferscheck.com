@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api } from "./api";
+import { api, apiUrl } from "./api";
 import { liveTransferMessageType, type LiveTransferArrived } from "./liveTransferContract";
 
 type Session = { accountId: string; tenantId: string; email: string; isOwner: boolean };
@@ -247,8 +247,47 @@ export function App() {
   );
 }
 
+// Commerce identity is Auth0 Universal Login when the API has a tenant (ADR-018).
+function useAuth0Enabled() {
+  const [enabled, setEnabled] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    let gone = false;
+    api("/api/auth0/config").then(
+      async (response) => {
+        if (!gone) setEnabled(response.ok ? (await response.json()).enabled === true : false);
+      },
+      () => {
+        if (!gone) setEnabled(false);
+      }
+    );
+    return () => {
+      gone = true;
+    };
+  }, []);
+  return enabled;
+}
+
+function startAuth0(signUp: boolean) {
+  window.location.assign(apiUrl(`/api/auth0/login${signUp ? "?signup=true" : ""}`));
+}
+
+function auth0Message(code: string | null) {
+  switch (code) {
+    case null:
+      return "";
+    case "email_unverified":
+      return "Verificá tu email y volvé a intentar.";
+    case "not_allowed":
+      return "Esa cuenta no puede entrar como admin.";
+    case "invalid_state":
+      return "El inicio de sesión venció. Probá de nuevo.";
+    default:
+      return "No se pudo iniciar sesión con Auth0.";
+  }
+}
 function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const navigate = useNavigate();
+  const auth0 = useAuth0Enabled();
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -270,6 +309,30 @@ function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void 
     }
     onSignedIn(await current.json());
     navigate("/");
+  }
+
+  if (auth0 === undefined) {
+    return (
+      <main className="gate">
+        <Wordmark />
+      </main>
+    );
+  }
+
+  if (auth0) {
+    return (
+      <main className="gate">
+        <Wordmark />
+        <h1>Creá tu cuenta</h1>
+        <p className="gate-lead">Registrate con tu email o con tu cuenta de Google.</p>
+        <button type="button" onClick={() => startAuth0(true)}>
+          Crear cuenta con Auth0
+        </button>
+        <p className="switch">
+          <Link to="/">Ya tengo cuenta</Link>
+        </p>
+      </main>
+    );
   }
 
   return (
@@ -307,6 +370,8 @@ function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void 
 
 function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const navigate = useNavigate();
+  const auth0 = useAuth0Enabled();
+  const [params] = useSearchParams();
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [needsCode, setNeedsCode] = useState(false);
@@ -348,11 +413,30 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
     navigate("/");
   }
 
+  if (auth0 === undefined) {
+    return (
+      <main className="gate">
+        <Wordmark />
+      </main>
+    );
+  }
+
+  const adminAuth0 = auth0 && !alertPoint;
+  const auth0Error = auth0Message(params.get("auth0_error"));
+
   return (
     <main className="gate">
       <Wordmark />
       <h1>Hola de nuevo</h1>
       <p className="gate-lead">Inicia sesión en tu cuenta de TransfersCheck</p>
+      {adminAuth0 ? (
+        <>
+          {auth0Error ? <p className="error">{auth0Error}</p> : null}
+          <button type="button" onClick={() => startAuth0(false)}>
+            Iniciar sesión con Auth0
+          </button>
+        </>
+      ) : (
       <form onSubmit={submit}>
         {alertPoint ? (
           <>
@@ -396,6 +480,7 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
         {error ? <p className="error">{error}</p> : null}
         <button type="submit">Iniciar sesión</button>
       </form>
+      )}
       <p className="switch">
         <button
           type="button"

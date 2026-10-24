@@ -237,6 +237,8 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public int? PageSize { get; init; }
     public string? ServiceAccountPath { get; init; }
     public RecordingMailSender Mail { get; init; } = new();
+    /// <summary>Turns the commerce Auth0 door on against the mock tenant (ADR-018).</summary>
+    public bool Auth0 { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -259,6 +261,13 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Checkout:ReturnUrl", "http://localhost:5183/");
         builder.UseSetting("Firebase:MessagingUrl", "http://127.0.0.1:5099/v1/projects/mock/messages:send");
         builder.UseSetting("Firebase:ProjectId", "mock");
+        if (Auth0)
+        {
+            builder.UseSetting("Auth0:Authority", "http://127.0.0.1:5099/auth0");
+            builder.UseSetting("Auth0:ClientId", TransfersCheck.MockServer.Auth0Mock.ClientId);
+            builder.UseSetting("Auth0:ClientSecret", TransfersCheck.MockServer.Auth0Mock.ClientSecret);
+            builder.UseSetting("Auth0:RedirectUri", "http://localhost/api/auth0/callback");
+        }
         builder.UseSetting("Firebase:Scope", "https://www.googleapis.com/auth/firebase.messaging");
         if (ServiceAccountPath is not null)
             builder.UseSetting("Firebase:ServiceAccountPath", ServiceAccountPath);

@@ -1,15 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { setPlanCode } from "./helpers";
+import { setPlanCode, signUpWithAuth0 } from "./helpers";
 
 const apiOrigin = "http://localhost:5080";
 
 test("pay screen shows Pack Evento and Pack Mes from the plan table", async ({ page }) => {
   const email = `e2e-plans-${Date.now()}@counter.test`;
-  await page.goto("/cuenta");
-  await page.getByLabel("Dirección de email *").fill(email);
-  await page.getByLabel("Contraseña *").fill("password1");
-  await page.getByRole("button", { name: "Crear cuenta" }).click();
-  await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
+  await signUpWithAuth0(page, email);
   await page.goto("/pagar");
   await expect(page.getByRole("heading", { name: "Extendé el acceso" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Email", { exact: true })).toBeVisible();
@@ -26,11 +22,7 @@ test("pay screen shows Pack Evento and Pack Mes from the plan table", async ({ p
 
 test("browser return from pay does not move access; checkout returns a payment link", async ({ page }) => {
   const email = `e2e-return-${Date.now()}@counter.test`;
-  await page.goto("/cuenta");
-  await page.getByLabel("Dirección de email *").fill(email);
-  await page.getByLabel("Contraseña *").fill("password1");
-  await page.getByRole("button", { name: "Crear cuenta" }).click();
-  await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
+  await signUpWithAuth0(page, email);
   await setPlanCode(page, "pack_mes");
   await page.goto("/conectar");
   await page.getByRole("button", { name: "Conectar Mercado Pago" }).click();

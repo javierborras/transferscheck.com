@@ -40,6 +40,8 @@ public static class DependencyInjection
         services.AddScoped<TransferSync>();
         services.AddHttpClient<MercadoPagoAuthorizer>();
         services.AddScoped<IMerchantAuthorizer>(sp => sp.GetRequiredService<MercadoPagoAuthorizer>());
+        services.AddHttpClient<Auth0IdentityProvider>();
+        services.AddScoped<IIdentityProvider>(sp => sp.GetRequiredService<Auth0IdentityProvider>());
         services.AddSingleton<IEntitlement, Entitlement>();
         services.AddHttpClient<FirebasePushSender>();
         services.AddScoped<IPushSender>(sp => sp.GetRequiredService<FirebasePushSender>());

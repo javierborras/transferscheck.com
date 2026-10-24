@@ -148,6 +148,128 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         Assert.False(await storeAfter.HasPushDeviceAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Auth0_sign_up_sets_a_cross_site_cookie_and_ignores_a_client_tenant()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+        using var client = factory.CreateClient();
+        var email = $"Owner-{Guid.NewGuid():N}@counter.test";
+
+        // Another tenant already exists; the client names it, and the session must still be the new account's own.
+        var other = await TestAuth.SignInWithAuth0(factory, $"other-{Guid.NewGuid():N}@counter.test", signUp: true);
+        using var otherSession = await Send(client, HttpMethod.Get, "/api/session", other.SessionCookie!);
+        var supplied = (await otherSession.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tenantId").GetGuid();
+        var run = await TestAuth.SignInWithAuth0(factory, email, signUp: true, suppliedTenant: supplied);
+
+        Assert.Equal(HttpStatusCode.Redirect, run.Callback.StatusCode);
+        Assert.Equal("http://localhost:5183/", run.Location);
+        var setCookie = run.Callback.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("tc_session=", StringComparison.Ordinal));
+        Assert.Contains("HttpOnly", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Secure", setCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SameSite=None", setCookie, StringComparison.OrdinalIgnoreCase);
+
+        using var session = await Send(client, HttpMethod.Get, "/api/session", run.SessionCookie!);
+        Assert.Equal(HttpStatusCode.OK, session.StatusCode);
+        var body = await session.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(email.ToLowerInvariant(), body.GetProperty("email").GetString());
+        Assert.True(body.GetProperty("isOwner").GetBoolean());
+        Assert.NotEqual(supplied, body.GetProperty("tenantId").GetGuid());
+        Assert.NotEqual(Guid.Empty, body.GetProperty("tenantId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Auth0_sign_in_replaces_the_previous_session_and_sign_out_ends_it()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+        using var client = factory.CreateClient();
+        var email = $"one-{Guid.NewGuid():N}@counter.test";
+
+        var first = await TestAuth.SignInWithAuth0(factory, email, signUp: true);
+        var second = await TestAuth.SignInWithAuth0(factory, email);
+
+        using var oldSession = await Send(client, HttpMethod.Get, "/api/session", first.SessionCookie!);
+        using var newSession = await Send(client, HttpMethod.Get, "/api/session", second.SessionCookie!);
+        Assert.Equal(HttpStatusCode.Unauthorized, oldSession.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, newSession.StatusCode);
+        var firstTenant = (await (await Send(client, HttpMethod.Get, "/api/session", second.SessionCookie!)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tenantId").GetGuid();
+        Assert.NotEqual(Guid.Empty, firstTenant);
+
+        using var signedOut = await Send(client, HttpMethod.Delete, "/api/sessions", second.SessionCookie!);
+        Assert.Equal(HttpStatusCode.NoContent, signedOut.StatusCode);
+        using var after = await Send(client, HttpMethod.Get, "/api/session", second.SessionCookie!);
+        Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+    }
+
+    [Fact]
+    public async Task Auth0_refuses_an_unverified_email_a_bad_state_and_a_missing_state_cookie()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+
+        var unverified = await TestAuth.SignInWithAuth0(factory, $"unverified.{Guid.NewGuid():N}@counter.test", signUp: true);
+        Assert.Null(unverified.SessionCookie);
+        Assert.EndsWith("/?auth0_error=email_unverified", unverified.Location);
+
+        var badState = await TestAuth.SignInWithAuth0(
+            factory, $"state-{Guid.NewGuid():N}@counter.test", signUp: true,
+            tamperCallback: path => System.Text.RegularExpressions.Regex.Replace(path, "state=[^&]+", "state=forged"));
+        Assert.Null(badState.SessionCookie);
+        Assert.EndsWith("/?auth0_error=invalid_state", badState.Location);
+
+        var noCookie = await TestAuth.SignInWithAuth0(factory, $"nocookie-{Guid.NewGuid():N}@counter.test", signUp: true, sendStateCookie: false);
+        Assert.Null(noCookie.SessionCookie);
+        Assert.EndsWith("/?auth0_error=invalid_state", noCookie.Location);
+
+        var badCode = await TestAuth.SignInWithAuth0(
+            factory, $"code-{Guid.NewGuid():N}@counter.test", signUp: true,
+            tamperCallback: path => System.Text.RegularExpressions.Regex.Replace(path, "code=[^&]+", "code=forged"));
+        Assert.Null(badCode.SessionCookie);
+        Assert.EndsWith("/?auth0_error=exchange_failed", badCode.Location);
+    }
+
+    [Fact]
+    public async Task Auth0_closes_the_local_owner_door_but_not_the_punto_de_alerta_door()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+        using var client = factory.CreateClient();
+
+        using var config = await client.GetAsync("/api/auth0/config");
+        Assert.True((await config.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("enabled").GetBoolean());
+        using var signUp = await client.PostAsJsonAsync("/api/accounts", new { email = $"local-{Guid.NewGuid():N}@counter.test", password = "password1" });
+        Assert.Equal(HttpStatusCode.Gone, signUp.StatusCode);
+        using var signIn = await client.PostAsJsonAsync("/api/sessions", new { email = "someone@counter.test", password = "password1" });
+        Assert.Equal(HttpStatusCode.Gone, signIn.StatusCode);
+
+        var owner = await TestAuth.SignInWithAuth0(factory, $"owner-{Guid.NewGuid():N}@counter.test", signUp: true);
+        await SetPlanCode(factory, owner.SessionCookie!, PlanCodes.PackMes);
+        var alias = $"a0{Guid.NewGuid():N}"[..10];
+        using (var confirmed = await Send(client, HttpMethod.Post, "/api/alias", owner.SessionCookie!, new { alias }))
+            confirmed.EnsureSuccessStatusCode();
+        using var created = await Send(client, HttpMethod.Post, "/api/logins", owner.SessionCookie!, new { name = "caja1" });
+        var token = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString()!;
+        using var claimed = await client.PostAsJsonAsync($"/api/invites/{token}", new { password = "password1" });
+        claimed.EnsureSuccessStatusCode();
+
+        using var alertPoint = await client.PostAsJsonAsync("/api/sessions", new { commerce = alias, user = "caja1", password = "password1" });
+        Assert.Equal(HttpStatusCode.OK, alertPoint.StatusCode);
+
+        var asAuth0 = await TestAuth.SignInWithAuth0(factory, $"caja1#{alias}@punto.local");
+        Assert.Null(asAuth0.SessionCookie);
+        Assert.EndsWith("/?auth0_error=not_allowed", asAuth0.Location);
+    }
+
+    [Fact]
+    public async Task Auth0_stays_off_without_an_authority_and_the_local_door_keeps_working()
+    {
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        using var config = await client.GetAsync("/api/auth0/config");
+        Assert.False((await config.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("enabled").GetBoolean());
+        using var login = await client.GetAsync("/api/auth0/login");
+        Assert.Equal(HttpStatusCode.NotFound, login.StatusCode);
+        Assert.NotEmpty(await SignUp(client, $"local-{Guid.NewGuid():N}@counter.test"));
+    }
+
     private static async Task<string> SignUp(HttpClient client, string email)
     {
         using var response = await client.PostAsJsonAsync("/api/accounts", new { email, password = "password1" });

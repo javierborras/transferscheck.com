@@ -31,6 +31,7 @@ public static class MockState
         Payments.Clear();
         SentPushes.Clear();
         CheckoutTenants.Clear();
+        Auth0Mock.Reset();
         RateLimit = "";
         UserId = 1001;
         RefreshCount = 0;
@@ -75,6 +76,7 @@ public static class MockEndpoints
 {
     public static void Map(WebApplication app)
     {
+        Auth0Mock.Map(app);
         app.MapGet("/authorization", (HttpRequest request) =>
         {
             var query = request.Query;

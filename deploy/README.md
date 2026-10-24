@@ -73,6 +73,8 @@ Suggested Actions publish shape (not checked in yet):
 ## Auth and deploy notes
 
 - Commerce identity uses Auth0 (ADR-018). Auth0 domain / client id / client secret are typed configuration outside the repo (user-secrets or environment). Do not commit them.
+- Settings: `Auth0:Authority` (`https://<tenant>.auth0.com`), `Auth0:ClientId`, `Auth0:ClientSecret`, `Auth0:RedirectUri` (`<api origin>/api/auth0/callback`, also an Allowed Callback URL in the tenant). The API refuses to start when `Authority` is set and the other three are not. With `Authority` empty (local dev without a tenant) the old local door stays until wave 16.
+- Tenant: Universal Login with the Database connection and the Google social connection; the API validates the RS256 id_token and opens a session only for a verified email.
 - Owner microsite login does not use Auth0 (ADR-014). Punto de Alerta uses usuario/clave, not Auth0 SSO (ADR-013).
 - Mercado Pago OAuth is collection-account linking, not login SSO.
 

@@ -35,11 +35,16 @@ public static class AccountEndpoints
         Credentials body,
         IMerchantStore store,
         IOptions<LoginSessionOptions> sessionOptions,
+        IOptions<Auth0Options> auth0,
         ITenantContext tenantContext,
         TimeProvider clock,
         HttpResponse response,
         CancellationToken cancellationToken)
     {
+        // ADR-018: commerce identity is Auth0 whenever a tenant is configured.
+        if (auth0.Value.Enabled)
+            return Results.Json(new { error = "use_auth0" }, statusCode: StatusCodes.Status410Gone);
+
         if (!ValidSignUp(body))
             return Results.BadRequest(new { error = "invalid_account" });
 
@@ -77,6 +82,7 @@ public static class AccountEndpoints
         ICommerceAliasStore aliases,
         IMailSender mail,
         IOptions<LoginSessionOptions> sessionOptions,
+        IOptions<Auth0Options> auth0,
         ITenantContext tenantContext,
         TimeProvider clock,
         HttpResponse response,
@@ -101,6 +107,10 @@ public static class AccountEndpoints
             await Issue(store, tenantContext, sessionOptions.Value, clock, response, account, cancellationToken);
             return Results.Ok(new { email = account.Email, isOwner = false, displayName = AlertPointIdentity.Display(userName, alias) });
         }
+
+        // Punto de Alerta (above) stays usuario/clave. The commerce admin door is Auth0 (ADR-018).
+        if (auth0.Value.Enabled)
+            return Results.Json(new { error = "use_auth0" }, statusCode: StatusCodes.Status410Gone);
 
         if (string.IsNullOrWhiteSpace(body.Email))
             return Results.Unauthorized();
@@ -385,7 +395,7 @@ public static class AccountEndpoints
         return Results.NoContent();
     }
 
-    private static async Task Issue(
+    internal static async Task Issue(
         IMerchantStore store,
         ITenantContext tenantContext,
         LoginSessionOptions options,

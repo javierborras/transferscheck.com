@@ -1,12 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { signUpWithAuth0 } from "./helpers";
 
 test("checklist shows adopted connect words, numbered help, no video player, no pay step", async ({ page }) => {
   const email = `e2e-check-${Date.now()}@counter.test`;
-  await page.goto("/cuenta");
-  await page.getByLabel("Dirección de email *").fill(email);
-  await page.getByLabel("Contraseña *").fill("password1");
-  await page.getByRole("button", { name: "Crear cuenta" }).click();
-  await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
+  await signUpWithAuth0(page, email);
   await page.goto("/conectar");
 
   await expect(page.getByText("Creá tu cuenta")).toBeVisible();
