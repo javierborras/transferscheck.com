@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -49,14 +50,20 @@ public sealed class Epic1PlatformTests
         var commercial = scope.ServiceProvider.GetRequiredService<IOptions<CommercialOptions>>().Value;
         var sync = scope.ServiceProvider.GetRequiredService<IOptions<SyncOptions>>().Value;
         var onboarding = scope.ServiceProvider.GetRequiredService<IOptions<OnboardingOptions>>().Value;
-        Assert.Equal(14, commercial.TrialDays);
-        Assert.Equal(5999, commercial.PriceAmount);
+        var session = scope.ServiceProvider.GetRequiredService<IOptions<LoginSessionOptions>>().Value;
+        Assert.Equal(500, commercial.WeeklyQueryCap);
+        Assert.Equal(50, commercial.WeeklyQueryWarningGap);
         Assert.Equal("ARS", commercial.Currency);
         Assert.Equal(30, commercial.PaidPeriodDays);
         Assert.Equal(10, sync.PageSize);
+        Assert.Equal(10, sync.AlertPointRecordCount);
         Assert.Equal(TimeSpan.FromMinutes(5), sync.PollInterval);
         Assert.Equal(TimeSpan.FromSeconds(60), sync.ButtonCooldown);
         Assert.Equal("", onboarding.MercadoPagoVideoUrl);
+        Assert.Equal(TimeSpan.FromHours(1), session.EmailCodeLifetime);
+        Assert.Equal(TimeSpan.FromHours(1), session.InviteLinkLifetime);
+        Assert.Null(typeof(CommercialOptions).GetProperty("TrialDays", BindingFlags.Instance | BindingFlags.Public));
+        Assert.Null(typeof(CommercialOptions).GetProperty("PriceAmount", BindingFlags.Instance | BindingFlags.Public));
     }
 
     [Fact]

@@ -2,7 +2,7 @@
 
 Locked 21 October 2026. Source: human decision 21 Oct 2026.
 
-This file is the film script and the internal checklist for the one platform Mercado Pago application. It is for the person who deploys transferscheck. It is not shown to cashiers. Do not put this recording in `Onboarding:MercadoPagoVideoUrl`.
+This file is the film script and the internal checklist for the one platform Mercado Pago application. It is for the person who deploys transferscheck. It is not shown to a Punto de Alerta. Do not put this recording in `Onboarding:MercadoPagoVideoUrl`.
 
 The merchant video is the four lines in `brief.md`: manage that account, tap Connect, sign in and accept, return here. Film that separately if you want a player on the connect step. This script is the other film: the one-time operator setup.
 
@@ -30,7 +30,7 @@ Say the step number, do only the clicks named below, and read labels from the sc
 
 ### 1. Open the developer panel
 
-On camera: Mercado Pago Developers, signed in as the platform account. Not a cashier account and not a merchant account you are about to connect.
+On camera: Mercado Pago Developers, signed in as the platform account. Not a Punto de Alerta account and not a commerce account you are about to connect.
 
 Do:
 

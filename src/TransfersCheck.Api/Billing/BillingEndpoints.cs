@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Core;
@@ -22,13 +23,16 @@ public static class BillingEndpoints
         HttpContext http,
         IMerchantStore store,
         IOptions<CommercialOptions> commercial,
+        IConfiguration configuration,
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
+        // Wave 9 replaces this with the plan row.
+        var priceAmount = configuration.GetValue("Commercial:PriceAmount", 5999);
         return Results.Ok(new
         {
-            amount = commercial.Value.PriceAmount,
+            amount = priceAmount,
             currency = commercial.Value.Currency,
             paidPeriodDays = commercial.Value.PaidPeriodDays,
             accessUntil = merchant?.AccessUntil
@@ -39,15 +43,18 @@ public static class BillingEndpoints
         HttpContext http,
         ICheckout checkout,
         IOptions<CommercialOptions> commercial,
+        IConfiguration configuration,
         CancellationToken cancellationToken)
     {
         if (http.User.FindFirst("owner")?.Value != "1")
             return Results.Json(new { error = "owner_only" }, statusCode: StatusCodes.Status403Forbidden);
 
         var account = (LoginAccount)http.Items["account"]!;
+        // Wave 9 replaces this with the plan row.
+        var priceAmount = configuration.GetValue("Commercial:PriceAmount", 5999);
         var initPoint = await checkout.CreatePreferenceAsync(
             account.TenantId,
-            commercial.Value.PriceAmount,
+            priceAmount,
             commercial.Value.Currency,
             "TransfersCheck",
             cancellationToken);

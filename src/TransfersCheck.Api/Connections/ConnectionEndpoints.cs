@@ -52,7 +52,6 @@ public static class ConnectionEndpoints
         ITokenProtector protector,
         IMerchantAuthorizer authorizer,
         IEntitlement entitlement,
-        IOptions<CommercialOptions> commercial,
         IOptions<UiOptions> ui,
         TimeProvider clock,
         CancellationToken cancellationToken)
@@ -110,7 +109,9 @@ public static class ConnectionEndpoints
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
         if (merchant is not null && merchant.TrialEndsAt is null)
         {
-            var trialEnd = entitlement.StartTrial(now, commercial.Value.TrialDays);
+            // Wave 9 replaces this with the 21-day link rule.
+            const int trialDays = 14;
+            var trialEnd = entitlement.StartTrial(now, trialDays);
             merchant.ConnectedAt = now;
             merchant.TrialEndsAt = trialEnd;
             merchant.AccessUntil = trialEnd;

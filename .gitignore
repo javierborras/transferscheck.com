@@ -437,6 +437,7 @@ _bmad/render/
 
 # TransfersCheck secrets and local keys
 appsettings.*.local.json
+deploy/local/
 **/dataprotection-keys/
 **/*service-account*.json
 **/*firebase-adminsdk*.json
