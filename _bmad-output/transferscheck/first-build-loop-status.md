@@ -22,10 +22,11 @@ Updated: 24 October 2026.
 | 16 | `2b51f9d` | Email code 6 digits / 1h; door Código field |
 | 17 | `31d1257` | Alias once; invite 1h + wa.me; commerce+user door |
 | 18 | `60cfa90` | Alert-point window + detail; hide admin menu |
+| 19 | _(pending)_ | Admin history, CSV, day/month/range totals |
 
 ## Next
 
-Wave 19 — admin history, CSV, totals.
+Wave 20 — referral code Mi código.
 
 ## Verify
 

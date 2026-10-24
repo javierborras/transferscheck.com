@@ -131,6 +131,7 @@ DevPlanEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
 BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);
+HistoryEndpoints.Map(app);
 PushEndpoints.Map(app);
 
 app.Run();

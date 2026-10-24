@@ -24,6 +24,7 @@ test("signed-in menu lists adopted entries and Cerrar sesión ends the session",
 
   await page.getByRole("button", { name: "Menú" }).click();
   await expect(page.getByRole("link", { name: "Transacciones" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Historial" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Configurar" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Pagos" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Salir" })).toBeVisible();

@@ -177,10 +177,57 @@ public sealed class Epic7AliasTests(SqlFixture sql)
         using var forbiddenLogins = await Send(client, HttpMethod.Get, "/api/logins", punto);
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenLogins.StatusCode);
 
+        using var historyDenied = await Send(client, HttpMethod.Get, "/api/history", punto);
+        Assert.Equal(HttpStatusCode.Forbidden, historyDenied.StatusCode);
+
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
-        Assert.DoesNotContain("Historial de Transacciones", app, StringComparison.Ordinal);
         Assert.Contains("isOwner", app, StringComparison.Ordinal);
         Assert.Contains("/api/transfers/", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_history_csv_and_totals_refuse_alert_point_and_skip_medio_search()
+    {
+        MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var owner = await SignUp(client, $"hist-{Guid.NewGuid():N}@counter.test");
+        await SetPlanCode(factory, owner, PlanCodes.PackMes);
+        using var connect = await Send(client, HttpMethod.Post, "/api/connections/mercadopago", owner);
+        var authorizationUrl = (await connect.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("authorizationUrl").GetString()!;
+        using var browser = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+        using var merchantLogin = await browser.GetAsync(authorizationUrl);
+        var query = merchantLogin.Headers.Location!.Query.TrimStart('?').Split('&')
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(pair => pair[0], pair => Uri.UnescapeDataString(pair[1]));
+        using var callback = await Send(client, HttpMethod.Get, $"/api/connections/mercadopago/callback?code={query["code"]}&state={query["state"]}", owner);
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
+        using var refresh = await Send(client, HttpMethod.Post, "/api/transfers/refresh", owner);
+        Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
+
+        using var history = await Send(client, HttpMethod.Get, "/api/history", owner);
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        var body = await history.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Historial de Transacciones", body.GetProperty("title").GetString());
+        var columns = body.GetProperty("columns").EnumerateArray().Select(c => c.GetString()).ToArray();
+        Assert.Equal(new[] { "Fecha", "Pagador", "Monto", "Estado" }, columns);
+        Assert.DoesNotContain("Medio", columns);
+        Assert.True(body.GetProperty("items").GetArrayLength() > 10 || body.GetProperty("items").GetArrayLength() >= 1);
+        Assert.True(body.GetProperty("totals").TryGetProperty("byDay", out _));
+        Assert.True(body.GetProperty("totals").TryGetProperty("byMonth", out _));
+        Assert.True(body.GetProperty("totals").TryGetProperty("byRange", out _));
+
+        using var csv = await Send(client, HttpMethod.Get, "/api/history/csv", owner);
+        Assert.Equal(HttpStatusCode.OK, csv.StatusCode);
+        var text = await csv.Content.ReadAsStringAsync();
+        Assert.StartsWith("Fecha,Pagador,Monto,Estado", text, StringComparison.Ordinal);
+
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        Assert.Contains("Historial de Transacciones", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("Medio", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("type=\"search\"", app, StringComparison.Ordinal);
+        Assert.Contains("/api/history", app, StringComparison.Ordinal);
     }
 
     private static async Task<string> SignUp(HttpClient client, string email)

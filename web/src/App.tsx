@@ -154,6 +154,9 @@ function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; b
             </Link>
             {isOwner ? (
               <>
+                <Link to="/historial" aria-current={here("/historial")}>
+                  Historial
+                </Link>
                 <Link to="/usuarios" aria-current={here("/usuarios")}>
                   Configurar
                 </Link>
@@ -237,6 +240,7 @@ export function App() {
       <Route path="/pagar" element={session ? <Pay session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/conectar" element={session ? <ChecklistPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="/historial" element={session?.isOwner ? <HistoryPage session={session} onSalir={salir} /> : session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="*" element={session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
     </Routes>
   );
@@ -774,6 +778,97 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
             ) : null}
           </>
         )}
+      </main>
+    </Shell>
+  );
+}
+
+function HistoryPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
+  const [items, setItems] = useState<Transfer[]>([]);
+  const [totals, setTotals] = useState<{ byDay: number; byMonth: number; byRange: number } | null>(null);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  async function load() {
+    const query = new URLSearchParams();
+    if (from) query.set("from", new Date(from).toISOString());
+    if (to) query.set("to", new Date(to).toISOString());
+    const suffix = query.toString() ? `?${query}` : "";
+    const response = await api(`/api/history${suffix}`);
+    if (!response.ok) return;
+    const body = await response.json();
+    setItems(body.items);
+    setTotals(body.totals);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  return (
+    <Shell onSalir={onSalir} back isOwner={session.isOwner}>
+      <main className="history">
+        <h1>Historial de Transacciones</h1>
+        <form
+          className="history-range"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void load();
+          }}
+        >
+          <label>
+            Desde
+            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          </label>
+          <label>
+            Hasta
+            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          </label>
+          <button type="submit">Consultar</button>
+          <button
+            type="button"
+            onClick={() => {
+              void (async () => {
+                const query = new URLSearchParams();
+                if (from) query.set("from", new Date(from).toISOString());
+                if (to) query.set("to", new Date(to).toISOString());
+                const suffix = query.toString() ? `?${query}` : "";
+                const response = await api(`/api/history/csv${suffix}`);
+                if (!response.ok) return;
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "historial.csv";
+                link.click();
+                URL.revokeObjectURL(url);
+              })();
+            }}
+          >
+            CSV
+          </button>
+        </form>
+        {totals ? (
+          <p className="history-totals">
+            Día {money.format(totals.byDay)} · Mes {money.format(totals.byMonth)} · Rango {money.format(totals.byRange)}
+          </p>
+        ) : null}
+        <div className="transfer-columns" role="row">
+          <span>Fecha</span>
+          <span>Pagador</span>
+          <span>Monto</span>
+          <span>Estado</span>
+        </div>
+        <ol className="transfers">
+          {items.map((item) => (
+            <li key={item.id} className="row">
+              <div className="when">{when.format(new Date(item.occurredAt))}</div>
+              <div className="payer">{item.payerName || "Desconocido"}</div>
+              <div className="amount">{money.format(item.amount)}</div>
+              <div className="status">{item.statusLabel}</div>
+            </li>
+          ))}
+        </ol>
       </main>
     </Shell>
   );

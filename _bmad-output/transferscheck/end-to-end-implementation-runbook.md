@@ -497,6 +497,8 @@ Completed on 24 October 2026. `AlertPointWindow` takes N from `AlertPointRecordC
 
 ## Wave 19 — Story 7.6
 
+Completed on 24 October 2026. Admin history/CSV/totals via `ITransferHistoryStore`; alert point refused. Evidence: `Admin_history_csv_and_totals_*`.
+
 **Outcome.** The commerce admin gets that tenant's history, a CSV, and the totals by day, by month, and by a date range.
 
 **Precondition.** Wave 18 is green.
@@ -645,3 +647,4 @@ Do not implement these. Do not open `later-research.md` to design them. A senten
 - The accumulable recharge of 500 queries. It is not a story.
 - A production pipeline, a host, a queue, or a cloud topology.
 - Auth0, Google sign-in, coupons, cashback, preapproval, an `AppConfiguration` bag, a generic repository, MediatR, and MonsterASP screens.
+
