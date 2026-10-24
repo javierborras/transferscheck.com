@@ -1,0 +1,4 @@
+{
+  "messageType": "LiveTransferArrived",
+  "fields": ["id", "payerName", "amount", "occurredAt", "status", "statusLabel"]
+}

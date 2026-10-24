@@ -9,7 +9,7 @@ public sealed record IncomingTransfer(
     string Status,
     string TypeCode);
 
-public sealed record TransferChange(Guid TransferId, string ExternalId, string PayerName, decimal Amount, string Status, bool NewlyArrived);
+public sealed record TransferChange(Guid TransferId, string ExternalId, string PayerName, decimal Amount, DateTimeOffset OccurredAt, string Status, bool NewlyArrived);
 
 public sealed class RateLimitedException : Exception
 {

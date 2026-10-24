@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<IAlertInviteStore, EfAlertInviteStore>();
         services.AddScoped<ITransferHistoryStore, EfTransferHistoryStore>();
         services.AddScoped<IReferralStore, EfReferralStore>();
+        services.AddSingleton<ILiveListPublisher, InMemoryLiveListPublisher>();
         services.AddSingleton<IMailSender, NullMailSender>();
         services.AddScoped<ITenantPlanCode, TenantPlanCode>();
         services.AddSingleton<LoginAccountCap>();

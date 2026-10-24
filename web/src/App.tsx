@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "./api";
+import { liveTransferMessageType, type LiveTransferArrived } from "./liveTransferContract";
 
 type Session = { accountId: string; tenantId: string; email: string; isOwner: boolean };
 type Checklist = {
@@ -649,9 +650,29 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
     const timer = window.setInterval(() => {
       if (!gone) void load(true);
     }, pollSeconds * 1000);
+    const origin = import.meta.env.VITE_API_ORIGIN ?? "http://localhost:5080";
+    const source = new EventSource(`${origin}/api/transfers/live`, { withCredentials: true });
+    source.addEventListener(liveTransferMessageType, (event) => {
+      if (gone) return;
+      const message = JSON.parse((event as MessageEvent).data) as LiveTransferArrived;
+      if (message.messageType !== liveTransferMessageType) return;
+      setItems((current) => {
+        if (current.some((item) => item.id === message.id)) return current;
+        const row: Transfer = {
+          id: message.id,
+          payerName: message.payerName,
+          amount: message.amount,
+          occurredAt: message.occurredAt,
+          status: message.status,
+          statusLabel: message.statusLabel
+        };
+        return [row, ...current].slice(0, current.length || 10);
+      });
+    });
     return () => {
       gone = true;
       window.clearInterval(timer);
+      source.close();
     };
   }, [first, pollSeconds, session.isOwner]);
 

@@ -109,8 +109,7 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
                     TypeCode = item.TypeCode
                 };
                 db.Transfers.Add(row);
-                if (StatusWords.MakesSound(item.Status))
-                    changes.Add(new TransferChange(row.Id, row.ExternalId, row.PayerName, row.Amount, row.Status, true));
+                changes.Add(new TransferChange(row.Id, row.ExternalId, row.PayerName, row.Amount, row.OccurredAt, row.Status, StatusWords.MakesSound(item.Status)));
             }
             else
             {
@@ -122,7 +121,7 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
                 row.Status = item.Status;
                 row.TypeCode = item.TypeCode;
                 if (becameArrived)
-                    changes.Add(new TransferChange(row.Id, row.ExternalId, row.PayerName, row.Amount, row.Status, true));
+                    changes.Add(new TransferChange(row.Id, row.ExternalId, row.PayerName, row.Amount, row.OccurredAt, row.Status, true));
             }
         }
 

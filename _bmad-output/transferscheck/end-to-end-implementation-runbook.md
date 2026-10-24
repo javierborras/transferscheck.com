@@ -545,6 +545,8 @@ Completed on 24 October 2026. `IReferralStore` + filled `ReferralBonusJob`; Mi c
 
 ## Wave 21 — Story 9.1
 
+Completed on 24 October 2026. Shared `LiveTransferArrived` contract + SSE live path; poll and push stay; no SignalR in UI. Evidence: `Shared_live_transfer_contract_*`.
+
 **Micro-step, before any production code.** Edit ADR-010 now, and not before. In `_bmad-output/transferscheck/adrs.md`, ADR-010 Decision, after "This record names no hub method.", add this sentence and no others:
 
 > API and web/ share a message contract a test can fail first.
@@ -649,5 +651,6 @@ Do not implement these. Do not open `later-research.md` to design them. A senten
 - The accumulable recharge of 500 queries. It is not a story.
 - A production pipeline, a host, a queue, or a cloud topology.
 - Auth0, Google sign-in, coupons, cashback, preapproval, an `AppConfiguration` bag, a generic repository, MediatR, and MonsterASP screens.
+
 
 

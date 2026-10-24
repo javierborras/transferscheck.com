@@ -24,10 +24,12 @@ Updated: 24 October 2026.
 | 18 | `60cfa90` | Alert-point window + detail; hide admin menu |
 | 19 | `2dd31aa` | Admin history, CSV, day/month/range totals |
 | 20 | `dae70aa` | Mi código + one free Pack Mes via referral-bonus job
+| 21 | _(pending)_ | LiveTransferArrived contract + SSE; no SignalR in UI
 
 ## Next
 
-Wave 21 — live list contract.
+Wave 22 — weekly consulta quota policy.
+
 
 
 ## Verify
@@ -40,4 +42,5 @@ cd web; npm run e2e
 ## Open decisions (do not invent)
 
 None for waves 16–22: human locked email-code length, live-list contract (no SignalR in UI), and consulta = on-demand transfer refresh/query (24 Oct 2026).
+
 

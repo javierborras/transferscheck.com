@@ -12,7 +12,34 @@ public static class TransferEndpoints
         var group = app.MapGroup("/api").AddEndpointFilter<LiveSessionFilter>();
         group.MapGet("/transfers", List);
         group.MapGet("/transfers/{id:guid}", Detail);
+        group.MapGet("/transfers/live", Live);
         group.MapPost("/transfers/refresh", Refresh);
+    }
+
+    private static async Task Live(
+        HttpContext http,
+        ILiveListPublisher liveList,
+        CancellationToken cancellationToken)
+    {
+        var account = (LoginAccount)http.Items["account"]!;
+        http.Response.Headers.ContentType = "text/event-stream";
+        http.Response.Headers.CacheControl = "no-cache";
+        await http.Response.Body.FlushAsync(cancellationToken);
+        await foreach (var message in liveList.SubscribeAsync(account.TenantId, cancellationToken))
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                messageType = LiveTransferArrived.MessageType,
+                id = message.Id,
+                payerName = message.PayerName,
+                amount = message.Amount,
+                occurredAt = message.OccurredAt,
+                status = message.Status,
+                statusLabel = message.StatusLabel
+            });
+            await http.Response.WriteAsync($"event: {LiveTransferArrived.MessageType}\ndata: {json}\n\n", cancellationToken);
+            await http.Response.Body.FlushAsync(cancellationToken);
+        }
     }
 
     private static async Task<IResult> List(
