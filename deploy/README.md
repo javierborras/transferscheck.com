@@ -160,3 +160,15 @@ Owner habilitado en producción mediante correo y contraseña privados; `OwnerOp
 SMTP requiere `Mail:FromAddress` (no `Mail:From`). Sigue pendiente de configuración y prueba de entrega. Checkout requiere el token cobrador: el secreto OAuth de Mercado Pago no lo reemplaza. Se corrigió el indicador del panel que confundía ambos; esta corrección de código requiere publicación. Firebase continúa opcional y sin configurar.
 
 Verificación: 85 pruebas .NET existentes, prueba adicional del indicador Checkout, 28 E2E locales, 5 E2E productivas y 3 pruebas del service worker aprobadas; build frontend aprobado con el origen HTTPS productivo. No se realizaron cobros ni se enviaron correos. Se retiró la contraseña FTP incrustada del helper; debe suministrarse externamente.
+
+### Continuación de configuración operativa — 25/10/2026
+
+Token cobrador productivo guardado desde Owner en el almacén cifrado de SQL. Checkout Pro abrió Pack Mes por ARS 5.999; no se pagó ni se acreditó acceso. El administrador utiliza actualmente la misma cuenta Mercado Pago para SaaS y comercio: pago real y acreditación quedan pendientes de otra cuenta compradora.
+
+SMTP publicado con Host=site56119.siteasp.net, Port=25, UseSsl=false y FromAddress=postmaster@transferscheck.com, sin credenciales según relay local del hosting. Owner reconoce Mail configurado. Entrega no comprobada: el puerto no pudo validarse desde esta PC externa. MX apunta a mail1113.mailasp.net, SPF incluye spf.mailasp.net y DMARC está en p=none.
+
+Publicados los tres assemblies Release de develop 3b6492b, incluida la corrección del indicador de token cobrador. Se conservaron configuración, claves Data Protection y respaldos privados de DLLs y JSON.
+
+Firebase existente: transferscheck-f2e77, app web registrada y VAPID existente; Cloud Messaging V1 habilitado, plan Spark. Configuración privada preparada pero no publicada hasta disponer del JSON de cuenta de servicio. Consola abierta para que el administrador genere la credencial.
+
+Webhooks de Mercado Pago: URL productiva preparada para /api/billing/webhook y evento de pagos seleccionado, sin guardar. Pendiente intervención del administrador para generar la firma; después cargar Checkout:NotificationSigningKey y probar la validación. Hasta entonces sigue el mecanismo de URL firmada por preferencia y conciliación autenticada de ADR-022. No dar por probado el ciclo de cobro completo.
