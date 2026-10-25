@@ -2,10 +2,11 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Core;
+using TransfersCheck.Infrastructure;
 
 namespace TransfersCheck.Api.Owner;
 
-/// <summary>Owner microsite door and services panel (stories 12.1 / 12.3). Not Auth0 (ADR-014).</summary>
+/// <summary>Owner microsite door, plan editor, and services panel (stories 12.1 / 12.2 / 12.3). Not Auth0 (ADR-014).</summary>
 public static class OwnerEndpoints
 {
     public const string CookieName = "tc_owner";
@@ -13,6 +14,16 @@ public static class OwnerEndpoints
 
     public sealed record OwnerCredentials(string? Email, string? Password);
     public sealed record OwnerSecretBody(string? Secret, DateTimeOffset? ExpiresAt);
+    public sealed record OwnerPlanBody(
+        string? Code,
+        string? DisplayName,
+        int? Amount,
+        string? Currency,
+        int? DurationDays,
+        int? DurationHours,
+        string? FaceCopy,
+        bool? EnableCopilotHelp,
+        bool? Active);
 
     public static void Map(WebApplication app)
     {
@@ -22,6 +33,10 @@ public static class OwnerEndpoints
         group.MapGet("/session", Current).AddEndpointFilter(RequireOwner);
         group.MapGet("/services", ListServices).AddEndpointFilter(RequireOwner);
         group.MapPut("/services/{card}", ReplaceSecret).AddEndpointFilter(RequireOwner);
+        group.MapGet("/plans", ListPlans).AddEndpointFilter(RequireOwner);
+        group.MapPut("/plans/{code}", UpsertPlan).AddEndpointFilter(RequireOwner);
+        group.MapPost("/plans", AddPlan).AddEndpointFilter(RequireOwner);
+        group.MapPost("/help/refresh", RefreshHelp).AddEndpointFilter(RequireOwner);
     }
 
     private static async ValueTask<object?> RequireOwner(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -116,6 +131,107 @@ public static class OwnerEndpoints
             expiresAt = status.ExpiresAt
         });
     }
+
+    private static async Task<IResult> ListPlans(IPlanCatalog plans, CancellationToken cancellationToken)
+    {
+        var rows = await plans.ListAllAsync(cancellationToken);
+        return Results.Ok(rows.Select(PlanDto));
+    }
+
+    private static async Task<IResult> UpsertPlan(
+        string code,
+        OwnerPlanBody body,
+        IPlanCatalog plans,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(code) || code.Length > 32)
+            return Results.BadRequest(new { error = "code_required" });
+        var existing = await plans.FindByCodeAsync(code, cancellationToken);
+        if (existing is null)
+            return Results.NotFound();
+        var plan = Apply(existing, body);
+        plan.Code = existing.Code;
+        await plans.UpsertAsync(plan, cancellationToken);
+        return Results.Ok(PlanDto(await plans.FindByCodeAsync(plan.Code, cancellationToken) ?? plan));
+    }
+
+    private static async Task<IResult> AddPlan(
+        OwnerPlanBody body,
+        IPlanCatalog plans,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(body.Code))
+            return Results.BadRequest(new { error = "code_required" });
+        var code = body.Code.Trim();
+        if (code.Length > 32)
+            return Results.BadRequest(new { error = "code_too_long" });
+        if (await plans.FindByCodeAsync(code, cancellationToken) is not null)
+            return Results.Conflict(new { error = "code_exists" });
+        if (string.IsNullOrWhiteSpace(body.DisplayName) || body.Amount is null)
+            return Results.BadRequest(new { error = "display_and_amount_required" });
+
+        var plan = Apply(new Plan { Code = code, Currency = "ARS", Active = true }, body);
+        await plans.UpsertAsync(plan, cancellationToken);
+        return Results.Ok(PlanDto(plan));
+    }
+
+    private static async Task<IResult> RefreshHelp(
+        IHelpCorpus corpus,
+        Microsoft.Extensions.Options.IOptions<HelpCopilotOptions> options,
+        IWebHostEnvironment env,
+        CancellationToken cancellationToken)
+    {
+        var configured = options.Value.CorpusPath;
+        var folder = string.IsNullOrWhiteSpace(configured)
+            ? Path.GetFullPath(Path.Combine(env.ContentRootPath, "..", "..", "web", "help"))
+            : Path.IsPathRooted(configured)
+                ? configured
+                : Path.GetFullPath(Path.Combine(env.ContentRootPath, configured));
+
+        var previous = await corpus.GetPublishedVersionAsync(cancellationToken);
+        var drafts = HelpCorpusFiles.ReadFolder(folder);
+        if (drafts.Count == 0)
+            return Results.Ok(new { published = false, version = previous, error = "empty_or_missing_folder", folder });
+
+        var result = await corpus.PublishAsync(drafts, cancellationToken);
+        // ADR-016: a failed refresh leaves production up and keeps the previous index.
+        return Results.Ok(new
+        {
+            published = result.Published,
+            version = result.Published ? result.Version : previous,
+            previousVersion = previous,
+            error = result.Error,
+            folder
+        });
+    }
+
+    private static Plan Apply(Plan baseline, OwnerPlanBody body)
+        => new()
+        {
+            Code = baseline.Code,
+            DisplayName = string.IsNullOrWhiteSpace(body.DisplayName) ? baseline.DisplayName : body.DisplayName.Trim(),
+            Amount = body.Amount ?? baseline.Amount,
+            Currency = string.IsNullOrWhiteSpace(body.Currency) ? baseline.Currency : body.Currency.Trim().ToUpperInvariant(),
+            DurationDays = body.DurationDays ?? baseline.DurationDays,
+            DurationHours = body.DurationHours ?? baseline.DurationHours,
+            FaceCopy = body.FaceCopy ?? baseline.FaceCopy,
+            EnableCopilotHelp = body.EnableCopilotHelp ?? baseline.EnableCopilotHelp,
+            Active = body.Active ?? baseline.Active
+        };
+
+    private static object PlanDto(Plan plan)
+        => new
+        {
+            code = plan.Code,
+            displayName = plan.DisplayName,
+            amount = plan.Amount,
+            currency = plan.Currency,
+            durationDays = plan.DurationDays,
+            durationHours = plan.DurationHours,
+            faceCopy = plan.FaceCopy,
+            enableCopilotHelp = plan.EnableCopilotHelp,
+            active = plan.Active
+        };
 
     private static string Issue(string email, DateTimeOffset expires, string signingKey)
     {

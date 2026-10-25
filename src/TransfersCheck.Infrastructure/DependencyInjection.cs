@@ -34,6 +34,13 @@ public static class DependencyInjection
         services.AddScoped<IConsultaCounter, EfConsultaCounter>();
         services.AddScoped<IOwnerSecretStore, EfOwnerSecretStore>();
         services.AddScoped<ICheckoutAccessToken, CheckoutAccessTokenSource>();
+        services.Configure<HelpCopilotOptions>(configuration.GetSection(HelpCopilotOptions.Section));
+        services.AddScoped<IHelpCorpus, EfHelpCorpus>();
+        services.AddHttpClient<HttpJevEvaluator>();
+        services.AddScoped<IJevEvaluator>(sp => sp.GetRequiredService<HttpJevEvaluator>());
+        services.AddHttpClient<HttpHelpSummarizer>();
+        services.AddScoped<IHelpSummarizer>(sp => sp.GetRequiredService<HttpHelpSummarizer>());
+        services.AddScoped<IHelpCopilot, HelpCopilotService>();
         services.Configure<MailOptions>(configuration.GetSection(MailOptions.Section));
         var mailHost = configuration[$"{MailOptions.Section}:Host"] ?? "";
         var mailFrom = configuration[$"{MailOptions.Section}:FromAddress"] ?? "";

@@ -27,9 +27,45 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<ReferralGrant> ReferralGrants => Set<ReferralGrant>();
     public DbSet<ConsultaEvent> ConsultaEvents => Set<ConsultaEvent>();
     public DbSet<OwnerSecretRow> OwnerSecrets => Set<OwnerSecretRow>();
+    public DbSet<HelpArticle> HelpArticles => Set<HelpArticle>();
+    public DbSet<HelpCorpusState> HelpCorpusStates => Set<HelpCorpusState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<HelpArticle>(entity =>
+        {
+            entity.HasKey(a => new { a.Id, a.CorpusVersion });
+            entity.Property(a => a.Id).HasMaxLength(64);
+            entity.Property(a => a.Title).HasMaxLength(128);
+            entity.Property(a => a.Summary).HasMaxLength(512);
+            entity.Property(a => a.Body).HasMaxLength(8000);
+            entity.Property(a => a.PublicPath).HasMaxLength(128);
+            entity.Property(a => a.Keywords).HasMaxLength(256);
+            entity.HasData(
+                SeedArticle("conectar", "Conectar Mercado Pago",
+                    "Vinculá la cuenta de cobro desde el checklist de Configurar. El video de onboarding no es el corpus de ayuda.",
+                    "Abrí Configurar, tocá Conectar Mercado Pago y autorizá la cuenta. Tras el link arranca el plan o la prueba. La ayuda vive en estas páginas; el video solo acompaña el primer recorrido.",
+                    "conectar oauth mercadopago checklist", 1),
+                SeedArticle("punto-alerta", "Punto de Alerta",
+                    "El Punto de Alerta ve las últimas filas y puede abrir el detalle. No administra cuentas ni el historial completo.",
+                    "El admin crea un nombre y comparte un link de una hora. Esa persona entra con usuario y clave, ve las últimas transferencias y puede abrir el detalle de una fila cuando Mercado Pago no muestra el pagador.",
+                    "punto alerta invite usuario clave", 1),
+                SeedArticle("pagar", "Pagar el Pack Mes",
+                    "En Pagos elegís el Pack Mes y seguís el link de Mercado Pago hacia la cuenta del dueño del producto.",
+                    "El Pack Mes dura 30 días y habilita hasta cinco cuentas. El Pack Evento dura 24 horas. Los precios los edita el dueño en el microsite; la pantalla de Pagos del comercio solo muestra los planes activos.",
+                    "pagar pack mes evento precio", 1),
+                SeedArticle("transferencias", "Transferencias en vivo",
+                    "La lista se actualiza sola cada cinco minutos; el botón de consulta tiene un enfriamiento de un minuto.",
+                    "En mostrador ves Fecha, Pagador, Monto y Estado. Un pagador vacío se muestra como Desconocido. Las consultas on-demand cuentan para el tope semanal del plan.",
+                    "transferencias lista refresco consulta cuota", 1));
+        });
+
+        modelBuilder.Entity<HelpCorpusState>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.HasData(new HelpCorpusState { Id = 1, PublishedVersion = 1, PublishedAt = new DateTimeOffset(2026, 10, 24, 0, 0, 0, TimeSpan.Zero) });
+        });
+
         modelBuilder.Entity<OwnerSecretRow>(entity =>
         {
             entity.HasKey(s => s.Card);
@@ -187,4 +223,17 @@ public sealed class TransfersCheckDb : DbContext
             entity.HasQueryFilter(p => _tenant.TenantId != Guid.Empty && p.TenantId == _tenant.TenantId);
         });
     }
+
+    private static HelpArticle SeedArticle(string id, string title, string summary, string body, string keywords, int version)
+        => new()
+        {
+            Id = id,
+            Title = title,
+            Summary = summary,
+            Body = body,
+            PublicPath = $"/ayuda/{id}",
+            Keywords = keywords,
+            CorpusVersion = version,
+            Active = true
+        };
 }

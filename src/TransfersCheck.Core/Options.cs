@@ -139,3 +139,30 @@ public sealed class OwnerOptions
 
     public bool Enabled => !string.IsNullOrWhiteSpace(Email) && !string.IsNullOrWhiteSpace(Password);
 }
+
+/// <summary>
+/// Help copilot adapters (ADR-017). Keys stay empty in the repo — set via user-secrets or environment.
+/// Provider names and model thresholds remain unset product choices; placeholders only.
+/// </summary>
+public sealed class HelpCopilotOptions
+{
+    public const string Section = "HelpCopilot";
+    public string JevBaseUrl { get; set; } = "https://api.typesafe.ai/v1/systemone";
+    public string JevApiKey { get; set; } = "";
+    public string JevModel { get; set; } = "";
+    public string GenerativeProvider { get; set; } = "";
+    public string GenerativeApiKey { get; set; } = "";
+    public string GenerativeModel { get; set; } = "";
+    public string GenerativeBaseUrl { get; set; } = "";
+    public string FallbackProvider { get; set; } = "";
+    public string FallbackApiKey { get; set; } = "";
+    public string FallbackModel { get; set; } = "";
+    public string FallbackBaseUrl { get; set; } = "";
+    public int MaxQuestionLength { get; set; } = 500;
+    public string HelpCenterPath { get; set; } = "/ayuda";
+    /// <summary>Folder of markdown help pages relative to the content root, or an absolute path (ADR-016).</summary>
+    public string CorpusPath { get; set; } = "";
+
+    public bool JevConfigured => !string.IsNullOrWhiteSpace(JevApiKey);
+    public bool GenerativeConfigured => !string.IsNullOrWhiteSpace(GenerativeApiKey) && !string.IsNullOrWhiteSpace(GenerativeBaseUrl);
+}

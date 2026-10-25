@@ -11,6 +11,7 @@ using TransfersCheck.Api.Auth;
 using TransfersCheck.Api.Billing;
 using TransfersCheck.Api.Connections;
 using TransfersCheck.Api.Jobs;
+using TransfersCheck.Api.Help;
 using TransfersCheck.Api.Owner;
 using TransfersCheck.Api.Push;
 using TransfersCheck.Api.Transfers;
@@ -33,6 +34,7 @@ builder.Services.Configure<UiOptions>(builder.Configuration.GetSection(UiOptions
 builder.Services.Configure<Auth0Options>(builder.Configuration.GetSection(Auth0Options.Section));
 builder.Services.Configure<HangfireJobsOptions>(builder.Configuration.GetSection(HangfireJobsOptions.Section));
 builder.Services.Configure<OwnerOptions>(builder.Configuration.GetSection(OwnerOptions.Section));
+builder.Services.Configure<HelpCopilotOptions>(builder.Configuration.GetSection(HelpCopilotOptions.Section));
 
 var uiOrigin = builder.Configuration[$"{CorsOptions.Section}:UiOrigin"] ?? "";
 builder.Services.AddCors(options =>
@@ -148,6 +150,7 @@ AccountEndpoints.Map(app);
 Auth0Endpoints.Map(app);
 DevPlanEndpoints.Map(app);
 OwnerEndpoints.Map(app);
+HelpEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
 BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);
