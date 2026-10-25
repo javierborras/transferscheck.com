@@ -11,6 +11,7 @@ using TransfersCheck.Api.Auth;
 using TransfersCheck.Api.Billing;
 using TransfersCheck.Api.Connections;
 using TransfersCheck.Api.Jobs;
+using TransfersCheck.Api.Owner;
 using TransfersCheck.Api.Push;
 using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
@@ -30,6 +31,8 @@ builder.Services.Configure<DataProtectionPathOptions>(builder.Configuration.GetS
 builder.Services.Configure<FirebaseOptions>(builder.Configuration.GetSection(FirebaseOptions.Section));
 builder.Services.Configure<UiOptions>(builder.Configuration.GetSection(UiOptions.Section));
 builder.Services.Configure<Auth0Options>(builder.Configuration.GetSection(Auth0Options.Section));
+builder.Services.Configure<HangfireJobsOptions>(builder.Configuration.GetSection(HangfireJobsOptions.Section));
+builder.Services.Configure<OwnerOptions>(builder.Configuration.GetSection(OwnerOptions.Section));
 
 var uiOrigin = builder.Configuration[$"{CorsOptions.Section}:UiOrigin"] ?? "";
 builder.Services.AddCors(options =>
@@ -115,10 +118,11 @@ if (!string.IsNullOrWhiteSpace(connectionString)
     await SchemaBootstrap.EnsureAsync(db, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaBootstrap"));
 }
 
-// Cron.Never registers identity without a product schedule (ADR-011).
+// Product schedules from HangfireJobs (defaults: daily noon UTC / every six hours). ADR-011 names the jobs; cron is typed config.
+var hangfireJobs = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<HangfireJobsOptions>>().Value;
 var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
-recurringJobs.AddOrUpdate<FiveDayNoticeJob>("five-day-notice", job => job.Execute(), Cron.Never());
-recurringJobs.AddOrUpdate<ReferralBonusJob>("referral-bonus", job => job.Execute(), Cron.Never());
+recurringJobs.AddOrUpdate<FiveDayNoticeJob>("five-day-notice", job => job.Execute(), hangfireJobs.FiveDayNoticeCron);
+recurringJobs.AddOrUpdate<ReferralBonusJob>("referral-bonus", job => job.Execute(), hangfireJobs.ReferralBonusCron);
 
 app.UseCors("ui");
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
@@ -143,6 +147,7 @@ if (app.Environment.IsDevelopment())
 AccountEndpoints.Map(app);
 Auth0Endpoints.Map(app);
 DevPlanEndpoints.Map(app);
+OwnerEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
 BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);

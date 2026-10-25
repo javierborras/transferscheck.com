@@ -104,7 +104,9 @@ public static class Auth0Endpoints
 
         try
         {
-            var account = await store.FindAccountByEmailAsync(claims.Email, cancellationToken);
+            // Prefer Auth0 sub so a verified subject keeps the same account even if email changes later.
+            var account = await store.FindAccountByAuth0SubjectAsync(claims.Subject, cancellationToken)
+                ?? await store.FindAccountByEmailAsync(claims.Email, cancellationToken);
             if (account is null)
             {
                 var merchant = new Merchant
@@ -119,6 +121,7 @@ public static class Auth0Endpoints
                     Id = Guid.NewGuid(),
                     TenantId = merchant.Id,
                     Email = claims.Email,
+                    Auth0Subject = claims.Subject,
                     // No local password: Auth0 owns the credential, so the local door cannot be used for this account.
                     PasswordHash = PasswordHasher.Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
                     IsOwner = true,
@@ -129,6 +132,16 @@ public static class Auth0Endpoints
             else if (!account.IsOwner || account.Revoked)
             {
                 return Fail("not_allowed");
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(account.Auth0Subject))
+                    account.Auth0Subject = claims.Subject;
+                else if (!string.Equals(account.Auth0Subject, claims.Subject, StringComparison.Ordinal))
+                    return Fail("not_allowed");
+                if (!string.Equals(account.Email, claims.Email, StringComparison.OrdinalIgnoreCase))
+                    account.Email = claims.Email;
+                await store.SaveChangesAsync(cancellationToken);
             }
 
             await AccountEndpoints.Issue(store, tenantContext, sessionOptions.Value, clock, http.Response, account, cancellationToken);

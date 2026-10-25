@@ -46,6 +46,8 @@ public sealed class LoginAccount : ITenantOwned
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
     public string Email { get; set; } = "";
+    /// <summary>Auth0 <c>sub</c> for a commerce admin who signed in through Universal Login. Null for local-door and Punto de Alerta accounts.</summary>
+    public string? Auth0Subject { get; set; }
     /// <summary>Local user name for a Punto de Alerta (shown as usuario#alias). Empty for the admin.</summary>
     public string UserName { get; set; } = "";
     public string PasswordHash { get; set; } = "";

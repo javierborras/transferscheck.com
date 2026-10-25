@@ -41,6 +41,16 @@ public sealed class Auth0IdentityProvider(HttpClient http, IOptions<Auth0Options
         return Root + "/authorize?" + string.Join("&", parts);
     }
 
+    public string BuildLogoutUrl(string returnTo)
+    {
+        var parts = new List<string>
+        {
+            "client_id=" + Uri.EscapeDataString(_options.ClientId),
+            "returnTo=" + Uri.EscapeDataString(returnTo)
+        };
+        return Root + "/v2/logout?" + string.Join("&", parts);
+    }
+
     public async Task<IdentityClaims> ExchangeAsync(string code, string codeVerifier, string nonce, CancellationToken cancellationToken)
     {
         var form = new Dictionary<string, string>

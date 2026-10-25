@@ -32,7 +32,15 @@ public static class DependencyInjection
         services.AddScoped<IReferralStore, EfReferralStore>();
         services.AddSingleton<ILiveListPublisher, InMemoryLiveListPublisher>();
         services.AddScoped<IConsultaCounter, EfConsultaCounter>();
-        services.AddSingleton<IMailSender, NullMailSender>();
+        services.AddScoped<IOwnerSecretStore, EfOwnerSecretStore>();
+        services.AddScoped<ICheckoutAccessToken, CheckoutAccessTokenSource>();
+        services.Configure<MailOptions>(configuration.GetSection(MailOptions.Section));
+        var mailHost = configuration[$"{MailOptions.Section}:Host"] ?? "";
+        var mailFrom = configuration[$"{MailOptions.Section}:FromAddress"] ?? "";
+        if (!string.IsNullOrWhiteSpace(mailHost) && !string.IsNullOrWhiteSpace(mailFrom))
+            services.AddSingleton<IMailSender, SmtpMailSender>();
+        else
+            services.AddSingleton<IMailSender, NullMailSender>();
         services.AddScoped<ITenantPlanCode, TenantPlanCode>();
         services.AddSingleton<LoginAccountCap>();
         services.AddHttpClient<MercadoPagoTransferSource>();

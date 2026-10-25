@@ -153,6 +153,9 @@ public static class AccountEndpoints
         HttpContext http,
         IMerchantStore store,
         IOptions<LoginSessionOptions> sessionOptions,
+        IOptions<Auth0Options> auth0,
+        IOptions<UiOptions> ui,
+        IIdentityProvider identity,
         TimeProvider clock,
         HttpResponse response,
         CancellationToken cancellationToken)
@@ -178,6 +181,18 @@ public static class AccountEndpoints
             SameSite = SameSiteMode.None,
             Path = "/"
         });
+
+        // Commerce admins who arrived through Auth0 must also end the Universal Login SSO session (shared counters).
+        if (auth0.Value.Enabled && account.IsOwner && !string.IsNullOrEmpty(account.Auth0Subject))
+        {
+            var returnTo = !string.IsNullOrWhiteSpace(auth0.Value.LogoutReturnUri)
+                ? auth0.Value.LogoutReturnUri.TrimEnd('/')
+                : (ui.Value.Origin ?? "").TrimEnd('/');
+            if (string.IsNullOrEmpty(returnTo))
+                returnTo = "/";
+            return Results.Ok(new { federatedLogoutUrl = identity.BuildLogoutUrl(returnTo) });
+        }
+
         return Results.NoContent();
     }
 

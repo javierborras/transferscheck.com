@@ -26,9 +26,18 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<AlertInvite> AlertInvites => Set<AlertInvite>();
     public DbSet<ReferralGrant> ReferralGrants => Set<ReferralGrant>();
     public DbSet<ConsultaEvent> ConsultaEvents => Set<ConsultaEvent>();
+    public DbSet<OwnerSecretRow> OwnerSecrets => Set<OwnerSecretRow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<OwnerSecretRow>(entity =>
+        {
+            entity.HasKey(s => s.Card);
+            entity.Property(s => s.Card).HasMaxLength(64);
+            entity.Property(s => s.ValueProtected).HasMaxLength(4000);
+            entity.Property(s => s.LastFour).HasMaxLength(4);
+        });
+
         modelBuilder.Entity<ReferralGrant>(entity =>
         {
             entity.HasKey(g => g.Id);
@@ -109,9 +118,11 @@ public sealed class TransfersCheckDb : DbContext
         {
             entity.HasKey(a => a.Id);
             entity.Property(a => a.Email).HasMaxLength(256);
+            entity.Property(a => a.Auth0Subject).HasMaxLength(128);
             entity.Property(a => a.UserName).HasMaxLength(32);
             entity.Property(a => a.PasswordHash).HasMaxLength(500);
             entity.HasIndex(a => a.Email).IsUnique();
+            entity.HasIndex(a => a.Auth0Subject).IsUnique().HasFilter("[Auth0Subject] IS NOT NULL");
             entity.HasQueryFilter(a => _tenant.TenantId != Guid.Empty && a.TenantId == _tenant.TenantId);
         });
 

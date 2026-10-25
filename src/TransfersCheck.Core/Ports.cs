@@ -70,6 +70,7 @@ public interface IMerchantStore
     Task SaveChangesAsync(CancellationToken cancellationToken);
 
     Task<LoginAccount?> FindAccountByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<LoginAccount?> FindAccountByAuth0SubjectAsync(string subject, CancellationToken cancellationToken);
     Task<LoginAccount?> FindAccountAsync(Guid accountId, CancellationToken cancellationToken);
     Task<IReadOnlyList<LoginAccount>> ListAccountsAsync(CancellationToken cancellationToken);
     Task<int> CountAccountsAsync(CancellationToken cancellationToken);
@@ -118,11 +119,45 @@ public interface ICheckout
     Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
 }
 
+/// <summary>Named service cards on the owner microsite (ADR-012). WhatsApp has no secret.</summary>
+public static class OwnerServiceCards
+{
+    public const string MercadoPagoPlatform = "mercadopago_platform";
+    public const string Mail = "mail";
+    public const string BrowserPush = "browser_push";
+    public const string WhatsApp = "whatsapp";
+
+    public static readonly IReadOnlyList<string> All =
+    [
+        MercadoPagoPlatform,
+        Mail,
+        BrowserPush,
+        WhatsApp
+    ];
+}
+
+public sealed record OwnerSecretStatus(string Card, bool IsSet, string? LastFour, DateTimeOffset? ExpiresAt);
+
+public interface IOwnerSecretStore
+{
+    Task<IReadOnlyList<OwnerSecretStatus>> ListAsync(CancellationToken cancellationToken);
+    Task<string?> GetPlainAsync(string card, CancellationToken cancellationToken);
+    Task SetAsync(string card, string plainSecret, DateTimeOffset? expiresAt, CancellationToken cancellationToken);
+}
+
+/// <summary>Checkout Pro token: owner panel override, then <c>Checkout:AccessToken</c> config.</summary>
+public interface ICheckoutAccessToken
+{
+    Task<string> GetAsync(CancellationToken cancellationToken);
+}
+
 /// <summary>Who Auth0 says the commerce admin is. Only a verified email may open a session.</summary>
 public sealed record IdentityClaims(string Subject, string Email, bool EmailVerified);
 
 public interface IIdentityProvider
 {
     string BuildAuthorizationUrl(string state, string codeChallenge, string nonce, bool signUp, string? loginHint);
+    /// <summary>Auth0 federated logout URL so Cerrar sesión also ends the Universal Login SSO session.</summary>
+    string BuildLogoutUrl(string returnTo);
     Task<IdentityClaims> ExchangeAsync(string code, string codeVerifier, string nonce, CancellationToken cancellationToken);
 }

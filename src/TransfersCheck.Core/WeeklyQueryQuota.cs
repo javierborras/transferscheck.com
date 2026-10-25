@@ -8,8 +8,9 @@ public enum QuotaLevel
 }
 
 /// <summary>
-/// Weekly consulta policy: a consulta is an on-demand transfer refresh/query.
+/// Weekly consulta policy: a consulta is an on-demand transfer refresh/query (poll ticks do not increment).
 /// Warn at 450 used (gap 50 before wall 500), wait at 500, seven days from the Mercado Pago link.
+/// At Wait, on-demand refresh, the poll sync, and alerts all pause until the next period (story 10.1).
 /// </summary>
 public static class WeeklyQueryQuota
 {

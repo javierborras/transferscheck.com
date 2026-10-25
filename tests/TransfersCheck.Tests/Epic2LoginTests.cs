@@ -195,9 +195,33 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         Assert.NotEqual(Guid.Empty, firstTenant);
 
         using var signedOut = await Send(client, HttpMethod.Delete, "/api/sessions", second.SessionCookie!);
-        Assert.Equal(HttpStatusCode.NoContent, signedOut.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, signedOut.StatusCode);
+        var logout = await signedOut.Content.ReadFromJsonAsync<JsonElement>();
+        var federated = logout.GetProperty("federatedLogoutUrl").GetString();
+        Assert.Contains("/v2/logout?", federated, StringComparison.Ordinal);
+        Assert.Contains("returnTo=", federated, StringComparison.Ordinal);
         using var after = await Send(client, HttpMethod.Get, "/api/session", second.SessionCookie!);
         Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
+    }
+
+    [Fact]
+    public async Task Auth0_callback_stores_the_subject_and_reuses_it_on_the_next_sign_in()
+    {
+        await using var factory = new TransfersApiFactory(sql) { Auth0 = true };
+        var email = $"sub-{Guid.NewGuid():N}@counter.test";
+        var first = await TestAuth.SignInWithAuth0(factory, email, signUp: true);
+        Assert.NotNull(first.SessionCookie);
+
+        using var scope = factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+        var account = await store.FindAccountByEmailAsync(email, CancellationToken.None);
+        Assert.False(string.IsNullOrEmpty(account!.Auth0Subject));
+
+        using var client = factory.CreateClient();
+        var again = await TestAuth.SignInWithAuth0(factory, email);
+        Assert.NotNull(again.SessionCookie);
+        using var againSession = await Send(client, HttpMethod.Get, "/api/session", again.SessionCookie!);
+        Assert.Equal(account.Id, (await againSession.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accountId").GetGuid());
     }
 
     [Fact]
@@ -325,9 +349,11 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         }
 
         // Signing out twice with the same cookie is refused the second time, never a 500.
+        // Auth0 commerce admins get 200 + federatedLogoutUrl so the browser can end Universal Login SSO.
         using var out1 = await Send(client, HttpMethod.Delete, "/api/sessions", run.SessionCookie!);
         using var out2 = await Send(client, HttpMethod.Delete, "/api/sessions", run.SessionCookie!);
-        Assert.Equal(HttpStatusCode.NoContent, out1.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, out1.StatusCode);
+        Assert.Contains("/v2/logout?", (await out1.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("federatedLogoutUrl").GetString(), StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.Unauthorized, out2.StatusCode);
     }
 

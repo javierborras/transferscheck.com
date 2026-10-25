@@ -223,6 +223,13 @@ export function App() {
     const response = await api("/api/sessions", { method: "DELETE" });
     if (!response.ok) return;
     setSession(null);
+    if (response.status !== 204) {
+      const body = (await response.json().catch(() => null)) as { federatedLogoutUrl?: string } | null;
+      if (body?.federatedLogoutUrl) {
+        window.location.assign(body.federatedLogoutUrl);
+        return;
+      }
+    }
     navigate("/");
   }
 
@@ -238,6 +245,7 @@ export function App() {
     <Routes>
       <Route path="/cuenta" element={<CreateAccount onSignedIn={setSession} />} />
       <Route path="/invitar/:token" element={<ClaimInvite onSignedIn={setSession} />} />
+      <Route path="/owner" element={<OwnerSite />} />
       <Route path="/pagar" element={session ? <Pay session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/conectar" element={session ? <ChecklistPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
@@ -1294,5 +1302,158 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
         </>
       )}
     </Shell>
+  );
+}
+
+type OwnerCard = { card: string; isSet: boolean; lastFour: string | null; expiresAt: string | null };
+
+const ownerCardLabels: Record<string, string> = {
+  mercadopago_platform: "Mercado Pago (plataforma)",
+  mail: "Mail",
+  browser_push: "Notificaciones web",
+  whatsapp: "WhatsApp"
+};
+
+function OwnerSite() {
+  const [email, setEmail] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [cards, setCards] = useState<OwnerCard[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  async function loadServices() {
+    const response = await api("/api/owner/services");
+    if (!response.ok) {
+      setEmail(null);
+      return;
+    }
+    setCards(await response.json());
+  }
+
+  useEffect(() => {
+    let gone = false;
+    api("/api/owner/session").then(async (response) => {
+      if (gone) return;
+      if (!response.ok) {
+        setEmail(null);
+        return;
+      }
+      const body = (await response.json()) as { email: string };
+      setEmail(body.email);
+      await loadServices();
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  async function signIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const response = await api("/api/owner/sessions", {
+      method: "POST",
+      body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
+    });
+    if (!response.ok) {
+      setError("El correo o la contraseña no sirven.");
+      return;
+    }
+    const body = (await response.json()) as { email: string };
+    setEmail(body.email);
+    setError("");
+    await loadServices();
+  }
+
+  async function signOut() {
+    await api("/api/owner/sessions", { method: "DELETE" });
+    setEmail(null);
+    setCards([]);
+  }
+
+  async function replaceSecret(card: string) {
+    const secret = drafts[card]?.trim() ?? "";
+    if (!secret) {
+      setError("Pegá el secreto de nuevo para reemplazarlo.");
+      return;
+    }
+    const response = await api(`/api/owner/services/${card}`, {
+      method: "PUT",
+      body: JSON.stringify({ secret })
+    });
+    if (!response.ok) {
+      setError("No se pudo guardar el secreto.");
+      return;
+    }
+    setDrafts((value) => ({ ...value, [card]: "" }));
+    setError("");
+    await loadServices();
+  }
+
+  if (!email) {
+    return (
+      <main className="gate">
+        <Wordmark />
+        <h1>Owner</h1>
+        <p className="gate-lead">Acceso del producto. No es la puerta del comercio.</p>
+        <form onSubmit={signIn}>
+          <label>
+            Dirección de email *
+            <input name="email" type="email" autoComplete="username" required />
+          </label>
+          <label>
+            Contraseña *
+            <input name="password" type="password" autoComplete="current-password" required />
+          </label>
+          {error ? <p className="error">{error}</p> : null}
+          <button type="submit">Entrar</button>
+        </form>
+      </main>
+    );
+  }
+
+  return (
+    <main className="shell page">
+      <header className="app-header">
+        <Wordmark />
+        <span className="alias-slot">{email}</span>
+        <button className="salir" type="button" onClick={() => void signOut()}>
+          Salir
+        </button>
+      </header>
+      <h1>Panel de servicios</h1>
+      <p className="gate-lead">Cada tarjeta es un servicio que el producto ya usa. El valor completo no se muestra.</p>
+      {error ? <p className="error">{error}</p> : null}
+      <ul className="plans">
+        {cards.map((card) => (
+          <li key={card.card} className="plan">
+            <strong>{ownerCardLabels[card.card] ?? card.card}</strong>
+            <span>
+              {card.isSet
+                ? card.lastFour
+                  ? `Configurado · ···${card.lastFour}`
+                  : "Configurado"
+                : "Sin configurar"}
+            </span>
+            {card.card !== "whatsapp" ? (
+              <>
+                <label>
+                  Reemplazar secreto
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={drafts[card.card] ?? ""}
+                    onChange={(event) => setDrafts((value) => ({ ...value, [card.card]: event.target.value }))}
+                  />
+                </label>
+                <button type="button" onClick={() => void replaceSecret(card.card)}>
+                  Guardar
+                </button>
+              </>
+            ) : (
+              <span className="face">Solo wa.me · sin clave</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </main>
   );
 }

@@ -8,7 +8,8 @@ public enum SyncStatus
     Ok,
     Waiting,
     NotEntitled,
-    NotConnected
+    NotConnected,
+    QuotaWait
 }
 
 public sealed class TransferSync(
@@ -20,7 +21,9 @@ public sealed class TransferSync(
     ITokenProtector protector,
     IPushSender push,
     ILiveListPublisher liveList,
+    IConsultaCounter consultas,
     IOptions<SyncOptions> syncOptions,
+    IOptions<CommercialOptions> commercial,
     TimeProvider clock)
 {
     public async Task<SyncStatus> Run(Guid tenantId, bool manual, CancellationToken cancellationToken)
@@ -37,6 +40,15 @@ public sealed class TransferSync(
             return SyncStatus.Waiting;
         if (manual && merchant.RefreshNotBefore is { } next && next > now)
             return SyncStatus.Waiting;
+
+        // Story 10.1: at the weekly wall, queries and alerts wait — poll must not sync or push either.
+        if (merchant.ConnectedAt is { } link)
+        {
+            var (periodStart, periodEnd) = WeeklyQueryQuota.Period(link, now);
+            var used = await consultas.CountAsync(tenantId, periodStart, periodEnd, cancellationToken);
+            if (WeeklyQueryQuota.Evaluate(used, commercial.Value.WeeklyQueryCap, commercial.Value.WeeklyQueryWarningGap) is QuotaLevel.Wait)
+                return SyncStatus.QuotaWait;
+        }
 
         var connection = await store.FindConnectionAsync(cancellationToken);
         if (connection is null)

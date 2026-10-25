@@ -49,7 +49,7 @@ public sealed class SchemaBootstrapTests
 
         // Recreate what an older build left behind: no PasswordSet/UserName, no later tables, no alias index.
         await Run("ALTER TABLE LoginAccounts DROP COLUMN UserName, PasswordSet");
-        await Run("DROP TABLE ConsultaEvents; DROP TABLE Plans; DROP TABLE AlertInvites; DROP TABLE EmailSignInChallenges; DROP TABLE ReferralGrants");
+        await Run("DROP TABLE ConsultaEvents; DROP TABLE Plans; DROP TABLE AlertInvites; DROP TABLE EmailSignInChallenges; DROP TABLE ReferralGrants; DROP TABLE OwnerSecrets");
         await Run("DROP INDEX IX_Merchants_Alias ON Merchants");
         var legacy = Guid.NewGuid();
         await Run($"INSERT INTO LoginAccounts (Id, TenantId, Email, PasswordHash, IsOwner, Revoked, PushApproved) VALUES ('{legacy}', '{legacy}', 'legacy@old.test', 'hash', 1, 0, 0)");
@@ -94,7 +94,7 @@ public sealed class SchemaBootstrapTests
             // An empty database whose only table is not ours.
             await db.Database.EnsureCreatedAsync();
         }
-        await Run("DROP TABLE ConsultaEvents; DROP TABLE Plans; DROP TABLE AlertInvites; DROP TABLE EmailSignInChallenges; DROP TABLE ReferralGrants;"
+        await Run("DROP TABLE ConsultaEvents; DROP TABLE Plans; DROP TABLE AlertInvites; DROP TABLE EmailSignInChallenges; DROP TABLE ReferralGrants; DROP TABLE OwnerSecrets;"
             + " DROP TABLE ProcessedPayments; DROP TABLE PushDevices; DROP TABLE Transfers; DROP TABLE TransferTypes; DROP TABLE Connections;"
             + " DROP TABLE OAuthAttempts; DROP TABLE LoginSessions; DROP TABLE LoginAccounts; DROP TABLE Merchants");
         await Run("CREATE TABLE ForeignThing (Id int NOT NULL)");
