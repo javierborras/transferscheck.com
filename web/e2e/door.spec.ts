@@ -2,11 +2,11 @@ import { expect, test } from "@playwright/test";
 import { signInWithAuth0, signUpWithAuth0 } from "./helpers";
 
 test("login door is Auth0 Universal Login and shows no menu", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByText("TransfersCheck").first()).toBeVisible();
+  await page.goto("/ingresar");
+  await expect(page.getByRole("img", { name: /transferscheck.com/ }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Hola de nuevo" })).toBeVisible();
-  await expect(page.getByText("Inicia sesión en tu cuenta de TransfersCheck")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Iniciar sesión con Auth0" })).toBeVisible();
+  await expect(page.getByText("Ingresá a tu cuenta de transferscheck.com")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ingresar a mi cuenta" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Creá tu cuenta" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Menú" })).toHaveCount(0);
   // Mercado Pago OAuth is not this door.
@@ -25,13 +25,13 @@ test("signup door is Auth0 and signed-in menu lists adopted entries; Cerrar sesi
   await signUpWithAuth0(page, email);
 
   await page.getByRole("button", { name: "Menú" }).click();
-  await expect(page.getByRole("link", { name: "Transacciones" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Historial" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Configurar" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Pagos" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Mostrador en vivo" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Historial y Excel" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Cajeros / Puntos de Alerta" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Mi Plan" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Salir" })).toBeVisible();
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
-  await expect(page.getByRole("heading", { name: "Hola de nuevo" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: /Que tu mostrador/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Menú" })).toHaveCount(0);
 
   // Second sign-in through Auth0 for the same admin opens a fresh session (no Código field).
@@ -41,7 +41,7 @@ test("signup door is Auth0 and signed-in menu lists adopted entries; Cerrar sesi
 
 test("Auth0 refuses an unverified email and says so on the login screen", async ({ page }) => {
   await page.goto("/cuenta");
-  await page.getByRole("button", { name: "Crear cuenta con Auth0" }).click();
+  await page.getByRole("button", { name: "Crear mi cuenta" }).click();
   await page.getByLabel("Email").fill(`unverified.e2e-${Date.now()}@counter.test`);
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("Verificá tu email y volvé a intentar.")).toBeVisible({ timeout: 20_000 });

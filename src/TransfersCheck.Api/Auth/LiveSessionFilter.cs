@@ -26,6 +26,11 @@ public sealed class LiveSessionFilter(IMerchantStore store, ITenantContext tenan
             || session.ExpiresAt <= now)
             return Results.Unauthorized();
 
+        if (!account.IsOwner)
+        {
+            var merchant = await store.FindMerchantAsync(account.TenantId, context.HttpContext.RequestAborted);
+            if (merchant?.PlanCode == PlanCodes.PackEvento) return Results.StatusCode(403);
+        }
         context.HttpContext.Items["account"] = account;
         return await next(context);
     }

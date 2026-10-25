@@ -12,6 +12,42 @@ namespace TransfersCheck.Tests;
 [Collection("sql")]
 public sealed class Epic5BillingTests(SqlFixture sql)
 {
+    [Theory]
+    [InlineData(PlanCodes.PackEvento, 24)]
+    [InlineData(PlanCodes.PackMes, 720)]
+    public async Task Checkout_binds_the_selected_plan_and_rejects_a_wrong_amount(string planCode, int hours)
+    {
+        MockState.Reset();
+        var clock = new MutableClock();
+        await using var factory = new TransfersApiFactory(sql) { Clock = clock };
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var cookie = await SignUp(client);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/billing/checkout");
+        request.Headers.TryAddWithoutValidation("Cookie", cookie);
+        request.Content = JsonContent.Create(new { planCode });
+        using var response = await client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        using var preference = JsonDocument.Parse(MockState.LastCheckoutBody);
+        var reference = preference.RootElement.GetProperty("external_reference").GetString()!;
+        var amount = preference.RootElement.GetProperty("items")[0].GetProperty("unit_price").GetDecimal();
+        var payment = $"plan-{Guid.NewGuid():N}";
+        MockState.CheckoutTenants[payment] = reference;
+        MockState.CheckoutAmounts[payment] = amount - 1;
+        using var wrong = await client.SendAsync(Webhook(client, payment));
+        Assert.False((await wrong.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
+        Assert.Null(await AccessUntil(client, cookie));
+        MockState.CheckoutAmounts[payment] = amount;
+        using var applied = await client.SendAsync(Webhook(client, payment));
+        applied.EnsureSuccessStatusCode();
+        Assert.True((await applied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
+        Assert.Equal(clock.Now.AddHours(hours), await AccessUntil(client, cookie));
+        using var replay = await client.SendAsync(Webhook(client, payment));
+        Assert.False((await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
+        Assert.Equal(clock.Now.AddHours(hours), await AccessUntil(client, cookie));
+        using var billing = await Send(client, "/api/billing", cookie, HttpMethod.Get);
+        Assert.Equal(planCode, (await billing.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("planCode").GetString());
+    }
+
     [Fact]
     public async Task The_pay_screen_reads_pack_evento_and_pack_mes_from_the_plan_table()
     {

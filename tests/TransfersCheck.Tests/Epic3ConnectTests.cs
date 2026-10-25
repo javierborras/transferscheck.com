@@ -56,7 +56,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         Assert.Equal("Re-conectar cuenta", checklist.GetProperty("reconnectButton").GetString());
         Assert.Equal("No conectado", checklist.GetProperty("connectionBadge").GetString());
         Assert.Equal(
-            "¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?",
+            "¿Querés volver a conectar tu cuenta de Mercado Pago?",
             checklist.GetProperty("reconnectConfirm").GetString());
         Assert.Equal(ConnectionEndpoints.Help, checklist.GetProperty("help").GetString());
         Assert.Contains("1.", checklist.GetProperty("help").GetString(), StringComparison.Ordinal);
@@ -153,7 +153,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         Assert.Equal(ConnectionEndpoints.Help, open.GetProperty("help").GetString());
         Assert.Equal("Conectar Mercado Pago", open.GetProperty("button").GetString());
         Assert.Equal("Re-conectar cuenta", open.GetProperty("reconnectButton").GetString());
-        Assert.Equal("¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?", open.GetProperty("reconnectConfirm").GetString());
+        Assert.Equal("¿Querés volver a conectar tu cuenta de Mercado Pago?", open.GetProperty("reconnectConfirm").GetString());
         Assert.Equal("No conectado", open.GetProperty("connectionBadge").GetString());
         Assert.Equal("", open.GetProperty("videoUrl").GetString());
         Assert.DoesNotContain("Pagar", open.ToString(), StringComparison.OrdinalIgnoreCase);

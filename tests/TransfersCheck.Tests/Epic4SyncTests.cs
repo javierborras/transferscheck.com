@@ -73,7 +73,7 @@ public sealed class Epic4SyncTests(SqlFixture sql)
 
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
         Assert.DoesNotContain("Sincronizar", app, StringComparison.Ordinal);
-        Assert.Contains("Actualizar ahora", app, StringComparison.Ordinal);
+        Assert.Contains("🔄 Revisar si entró un pago ahora", app, StringComparison.Ordinal);
         Assert.Contains("Fecha", app, StringComparison.Ordinal);
         Assert.Contains("Pagador", app, StringComparison.Ordinal);
         Assert.Contains("Monto", app, StringComparison.Ordinal);

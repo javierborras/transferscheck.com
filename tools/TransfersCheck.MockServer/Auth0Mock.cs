@@ -31,6 +31,7 @@ public static class Auth0Mock
 
     public static void Map(WebApplication app)
     {
+        app.MapGet("/auth0/v2/logout", (string returnTo) => Results.Redirect(returnTo));
         app.MapGet("/auth0/authorize", Authorize);
         app.MapPost("/auth0/oauth/token", Token);
         app.MapGet("/auth0/.well-known/jwks.json", Jwks);

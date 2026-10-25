@@ -115,9 +115,12 @@ public interface IPushSender
 public interface ICheckout
 {
     /// <summary>Creates a prepaid Mercado Pago payment link (not preapproval). Owner AccessToken may be empty until story 12.3.</summary>
-    Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken);
-    Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
+    Task<string> CreatePaymentLinkAsync(string reference, int amount, string currency, string title, CancellationToken cancellationToken);
+    Task<ApprovedCheckoutPayment?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
 }
+
+public sealed record ApprovedCheckoutPayment(string Reference, decimal Amount, string Currency);
+public sealed record CheckoutOrder(Guid TenantId, string PlanCode, int Amount, string Currency, int? DurationDays, int? DurationHours);
 
 /// <summary>Named service cards on the owner microsite (ADR-012). WhatsApp has no secret.</summary>
 public static class OwnerServiceCards

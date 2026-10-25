@@ -173,7 +173,21 @@ public sealed class Epic7AliasTests(SqlFixture sql)
         Assert.True(detailBody.TryGetProperty("statusLabel", out _));
 
         using var forbiddenRefresh = await Send(client, HttpMethod.Post, "/api/transfers/refresh", punto);
-        Assert.Equal(HttpStatusCode.Forbidden, forbiddenRefresh.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, forbiddenRefresh.StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            using var session = await Send(client, HttpMethod.Get, "/api/session", owner);
+            tenant.TenantId = (await session.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tenantId").GetGuid();
+            var store = scope.ServiceProvider.GetRequiredService<IMerchantStore>();
+            var merchant = await store.FindMerchantAsync(tenant.TenantId, CancellationToken.None);
+            merchant!.RefreshNotBefore = null;
+            await store.SaveChangesAsync(CancellationToken.None);
+        }
+        using var cashierRefresh = await Send(client, HttpMethod.Post, "/api/transfers/refresh", punto);
+        Assert.Equal(HttpStatusCode.OK, cashierRefresh.StatusCode);
+        using var usage = await Send(client, HttpMethod.Get, "/api/billing", owner);
+        Assert.Equal(2, (await usage.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("consultasUsed").GetInt32());
         using var forbiddenLogins = await Send(client, HttpMethod.Get, "/api/logins", punto);
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenLogins.StatusCode);
 
@@ -224,7 +238,7 @@ public sealed class Epic7AliasTests(SqlFixture sql)
         Assert.StartsWith("Fecha,Pagador,Monto,Estado", text, StringComparison.Ordinal);
 
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
-        Assert.Contains("Historial de Transacciones", app, StringComparison.Ordinal);
+        Assert.Contains("Historial Completo de Transferencias", app, StringComparison.Ordinal);
         Assert.DoesNotContain("Medio", app, StringComparison.Ordinal);
         Assert.DoesNotContain("type=\"search\"", app, StringComparison.Ordinal);
         Assert.Contains("/api/history", app, StringComparison.Ordinal);

@@ -108,6 +108,11 @@ public sealed class TransferSync(
         if (entitlement.AllowsSyncAndPush(merchant.AccessUntil, now))
         {
             var devices = await store.ListApprovedPushDevicesAsync(cancellationToken);
+            if (merchant.PlanCode == PlanCodes.PackEvento)
+            {
+                var owners = (await store.ListAccountsAsync(cancellationToken)).Where(account => account.IsOwner).Select(account => account.Id).ToHashSet();
+                devices = devices.Where(device => owners.Contains(device.AccountId)).ToArray();
+            }
             foreach (var change in changes.Where(change => change.NewlyArrived))
             {
                 foreach (var device in devices)

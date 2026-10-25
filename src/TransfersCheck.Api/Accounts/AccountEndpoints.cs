@@ -57,7 +57,8 @@ public static class AccountEndpoints
         {
             Id = Guid.NewGuid(),
             CreatedAt = now,
-            ChecklistStep = ChecklistRules.Step(true, false, false)
+            PlanCode = PlanCodes.PackMes,
+                    ChecklistStep = ChecklistRules.Step(true, false, false)
         };
         await store.AddMerchantAsync(merchant, cancellationToken);
 

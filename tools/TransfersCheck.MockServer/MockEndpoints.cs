@@ -22,6 +22,7 @@ public static class MockState
     public static string LastCheckoutBody = "";
     public static string LastPushAuthorization = "";
     public static readonly ConcurrentDictionary<string, string> CheckoutTenants = new();
+    public static readonly ConcurrentDictionary<string, decimal> CheckoutAmounts = new();
 
     public static void Reset()
     {
@@ -31,6 +32,7 @@ public static class MockState
         Payments.Clear();
         SentPushes.Clear();
         CheckoutTenants.Clear();
+        CheckoutAmounts.Clear();
         Auth0Mock.Reset();
         RateLimit = "";
         UserId = 1001;
@@ -166,7 +168,7 @@ public static class MockEndpoints
             if (id.StartsWith("unpaid", StringComparison.Ordinal))
                 return Results.Json(new { id, status = "pending", external_reference = "" });
             var tenant = MockState.CheckoutTenants.TryGetValue(id, out var value) ? value : "";
-            return Results.Json(new { id, status = "approved", external_reference = tenant });
+            return Results.Json(new { id, status = "approved", external_reference = tenant, transaction_amount = MockState.CheckoutAmounts.GetValueOrDefault(id, 5999), currency_id = "ARS" });
         });
 
         app.MapPost("/google/token", () => Results.Json(new { access_token = "ya29.mock", expires_in = 3600 }));

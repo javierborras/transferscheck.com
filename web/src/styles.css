@@ -1126,3 +1126,87 @@ li.rejected .amount {
     transform: none;
   }
 }
+/* Identidad comercial Andes UI */
+:root { --tc-radius-card: 12px; --tc-font-stack: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.brand-logo { display: block; width: min(100%, 300px); height: auto; flex-shrink: 0; }
+.app-header .logo-container { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+.app-header .logo-symbol { display: block; width: 48px; height: 48px; flex: 0 0 48px; }
+.app-header .logo-text-group { display: flex; flex-direction: column; }
+.app-header .logo-name { font-size: 1.1rem; line-height: 1.1; margin: 0; font-weight: 800; color: #0f172a; }
+.app-header .logo-name > span { color: var(--tc-brand-action); }
+.app-header .logo-name > .logo-dot { color: var(--tc-status-success); }
+.app-header .slogan { font-size: .75rem; line-height: 1.2; margin-top: 2px; white-space: nowrap; font-weight: 600; letter-spacing: normal; color: #475569; }
+.money { font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap; }
+.andes-card { background: #fff; border: 1px solid rgba(0,0,0,.06); border-radius: 12px; padding: 28px; box-shadow: 0 1px 3px #00000014; }
+a.button.secondary { background: #fff; color: var(--tc-brand-action); border: 2px solid var(--tc-brand-action); }
+.landing { width: 100%; color: #333; }
+.public-header { max-width: 1200px; margin: auto; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.public-header nav, .hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.public-header nav a { min-height: 48px; display: inline-flex; align-items: center; font-weight: 600; }
+.landing main { max-width: 1200px; width: 100%; margin: auto; padding: 36px 24px; }
+.landing section { margin-bottom: 64px; scroll-margin-top: 20px; }
+.landing h2 { font-size: 1.75rem; margin-bottom: 24px; }
+.hero { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; align-items: center; }
+.hero h1 { font-size: clamp(2rem, 3.5vw, 3rem); line-height: 1.12; margin-top: 20px; }
+.lead { font-size: 1.125rem; line-height: 1.65; }
+.trust { font-size: .875rem; color: #475569; line-height: 1.8; }
+.plan-badge { display: inline-block; font-size: .75rem; font-weight: 800; padding: 8px 12px; border-radius: 6px; background: #e6f5fc; color: #235dad; }
+.plan-badge.promo, .sound-banner { background: #ffe600; color: #333; }
+.preview { border: 2px solid #00a650; background: #e6f7ee; }
+.preview .money { display: block; font-size: clamp(2rem, 4vw, 3rem); margin: 20px 0; }
+.preview h2 { font-size: 1.25rem; margin: 20px 0 0; }
+.preview button { width: 100%; }
+.demo-label { font-size: .8rem; color: #475569; }
+.approved-badge { background: #00a650; color: white; border-radius: 20px; padding: 6px 12px; display: inline-block; font-weight: 700; }
+.audience-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.privacy-grid, .plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.commercial-plan { display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
+.commercial-plan.recommended { border: 2px solid #3483fa; }
+.commercial-plan h2 { margin: 18px 0 8px; }
+.commercial-plan ul { list-style: none; padding: 0; line-height: 1.7; }
+.commercial-plan li { margin: 12px 0; }
+.plan-price { border-block: 1px solid #e6e6e6; margin: 24px 0; padding: 20px 0; }
+.plan-price strong { display: block; font-size: 2.5rem; }
+.plan-price span { color: #737373; }
+.landing footer { padding: 32px; text-align: center; color: #475569; }
+.banner.warning { background: #ffe600; color: #333; }
+@media (max-width: 760px) { .hero, .audience-grid, .privacy-grid, .plan-grid { grid-template-columns: 1fr; } .public-header { flex-wrap: wrap; } .public-header nav { width: 100%; justify-content: space-between; } .hero-actions > * { width: 100%; text-align: center; } }
+.shell { max-width: 1120px; }
+.shell main { max-width: none; }
+.app-header { flex-wrap: wrap; }
+.role-indicator { font-size: .8rem; font-weight: 700; color: #475569; }
+.sound-banner { padding: 16px; border-radius: 12px; margin-bottom: 16px; }
+.sound-banner p { margin-top: 0; }
+.sound-banner button { width: 100%; }
+.sound-active { color: #00763a; font-size: .875rem; }
+.quota { color: #475569; font-size: .875rem; font-variant-numeric: tabular-nums; }
+.latest-label { grid-column: 1 / -1; color: #00763a; font-size: .8rem; font-weight: 800; }
+ol.transfers li.latest-transfer { border: 2px solid #00a650; background: #e6f7ee; padding: 24px; }
+ol.transfers li.latest-transfer .amount { font-size: clamp(2rem, 5vw, 2.5rem); }
+ol.transfers li.latest-transfer .payer { font-size: 1.25rem; }
+ol.transfers li.latest-transfer .status { background: #00a650; color: white; }
+.trial-info { background: #e6f7ee; border-radius: 12px; padding: 16px; }
+.trust-block { background: #f5f5f5; border-radius: 12px; padding: 16px; margin-bottom: 16px; font-weight: 400; }
+main.gate > .brand-logo { margin-bottom: 24px; }
+@media (max-width: 600px) { .header-actions { margin-left: auto; } .alias-slot { order: 3; } ol.transfers li.latest-transfer { padding: 16px; } }
+.admin-nav { display: flex; flex-wrap: wrap; padding: 12px 20px; gap: 8px 20px; border-bottom: 1px solid #e6e6e6; }
+.admin-nav a { display: inline-flex; align-items: center; min-height: 48px; font-weight: 600; color: #235dad; }
+.point-cap { background: #e6f5fc; border-radius: 12px; padding: 16px; font-weight: 700; }
+.pause-message { text-align: center; border-top: 4px solid #ffe600; margin-bottom: 24px; }
+.pause-icon { font-size: 2.5rem; }
+.pay .plan-grid { margin-top: 32px; }
+.pay .plan-grid h2 { font-size: 1.75rem; }
+.history-range { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 24px; }
+.history-range label { flex: 1; min-width: 160px; }
+.history-range button { flex: 1; }
+.row-open { grid-template-areas: "payer amount" "when status"; row-gap: 8px; column-gap: 12px; }
+@media (min-width: 720px) { .row-open { grid-template-areas: "when payer amount status"; } }
+ol.transfers li.latest-transfer { grid-template-columns: 1fr; grid-template-areas: none; }
+.latest-transfer .row-open { grid-template-columns: 1fr; grid-template-areas: "amount" "payer" "status" "when"; gap: 12px; }
+.latest-transfer .amount { text-align: left; }
+.latest-transfer .status { justify-self: start; }
+.payment-hint { font-size: .75rem; color: #737373; }
+@media (max-width: 480px) { .public-header .brand-logo { width: 260px; } .public-header nav { gap: 8px; } .public-header nav .button { font-size: .875rem; padding-inline: 12px; } .plan-price strong { font-size: 2.2rem; } }
+input[type="number"] { font-variant-numeric: tabular-nums; }
+.referral-code { display: flex; gap: 8px; flex-wrap: wrap; }
+.account-row { overflow-wrap: anywhere; }

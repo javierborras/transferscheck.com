@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
@@ -19,6 +20,7 @@ public static class TransferEndpoints
     private static async Task Live(
         HttpContext http,
         ILiveListPublisher liveList,
+        TransfersCheckDb db,
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
@@ -27,6 +29,9 @@ public static class TransferEndpoints
         await http.Response.Body.FlushAsync(cancellationToken);
         await foreach (var message in liveList.SubscribeAsync(account.TenantId, cancellationToken))
         {
+            if (!account.IsOwner && await db.Merchants.Where(merchant => merchant.Id == account.TenantId)
+                .Select(merchant => merchant.PlanCode).SingleOrDefaultAsync(cancellationToken) == PlanCodes.PackEvento)
+                break;
             var json = System.Text.Json.JsonSerializer.Serialize(new
             {
                 messageType = LiveTransferArrived.MessageType,
@@ -95,13 +100,15 @@ public static class TransferEndpoints
         IConsultaCounter consultas,
         IOptions<SyncOptions> options,
         IOptions<CommercialOptions> commercial,
+        TransfersCheckDb db,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
         var account = (LoginAccount)http.Items["account"]!;
-        if (!account.IsOwner)
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-
+        // One manual refresh per commerce at a time, including across API instances.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var resource = $"TransfersCheck.Refresh.{account.TenantId}";
+        await db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @r int; EXEC @r = sp_getapplock @Resource={resource}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=10000; IF @r < 0 THROW 51000, 'Refresh lock unavailable', 1;", cancellationToken);
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
         var now = clock.GetUtcNow();
         if (merchant?.ConnectedAt is { } link)
@@ -110,16 +117,30 @@ public static class TransferEndpoints
             var used = await consultas.CountAsync(account.TenantId, periodStart, periodEnd, cancellationToken);
             if (WeeklyQueryQuota.Evaluate(used, commercial.Value.WeeklyQueryCap, commercial.Value.WeeklyQueryWarningGap) is QuotaLevel.Wait)
                 return Results.Json(new { error = "quota_wait", used, cap = commercial.Value.WeeklyQueryCap }, statusCode: StatusCodes.Status429TooManyRequests);
-            await consultas.IncrementOnDemandAsync(account.TenantId, now, periodStart, cancellationToken);
         }
+
+        if (merchant?.RefreshNotBefore is { } next && next > now)
+            return Results.Json(new { error = "waiting", retryAfterSeconds = (int)Math.Ceiling((next - now).TotalSeconds) }, statusCode: 429);
 
         var status = await sync.Run(account.TenantId, manual: true, cancellationToken);
         if (status is SyncStatus.QuotaWait)
             return Results.Json(new { error = "quota_wait", cap = commercial.Value.WeeklyQueryCap }, statusCode: StatusCodes.Status429TooManyRequests);
         if (status is SyncStatus.Waiting)
+        {
+            await transaction.CommitAsync(cancellationToken);
             return Results.Json(new { error = "waiting" }, statusCode: StatusCodes.Status429TooManyRequests);
+        }
         if (status is SyncStatus.NotEntitled)
             return Results.Json(new { error = "not_entitled" }, statusCode: StatusCodes.Status409Conflict);
+
+        if (status is SyncStatus.NotConnected)
+            return Results.Conflict(new { error = "not_connected" });
+        if (merchant?.ConnectedAt is { } connected)
+        {
+            var (periodStart, _) = WeeklyQueryQuota.Period(connected, now);
+            await consultas.IncrementOnDemandAsync(account.TenantId, now, periodStart, cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
 
         var rows = await store.ListTransfersAsync(options.Value.PageSize, cancellationToken);
         return Results.Ok(new { count = rows.Count });

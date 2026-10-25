@@ -50,7 +50,7 @@ public sealed class MercadoPagoCheckout(
     IOptions<MercadoPagoOptions> mercadoPago,
     ICheckoutAccessToken accessToken) : ICheckout
 {
-    public async Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
+    public async Task<string> CreatePaymentLinkAsync(string reference, int amount, string currency, string title, CancellationToken cancellationToken)
     {
         var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{root}/checkout/preferences");
@@ -61,7 +61,7 @@ public sealed class MercadoPagoCheckout(
             {
                 new { title, quantity = 1, currency_id = currency, unit_price = amount }
             },
-            external_reference = tenantId.ToString(),
+            external_reference = reference,
             notification_url = checkout.Value.NotificationUrl,
             back_urls = new { success = checkout.Value.ReturnUrl }
         });
@@ -71,7 +71,7 @@ public sealed class MercadoPagoCheckout(
         return doc.RootElement.GetProperty("init_point").GetString() ?? "";
     }
 
-    public async Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken)
+    public async Task<ApprovedCheckoutPayment?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken)
     {
         var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{root}/v1/payments/{Uri.EscapeDataString(paymentId)}");
@@ -81,7 +81,10 @@ public sealed class MercadoPagoCheckout(
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         if (doc.RootElement.GetProperty("status").GetString() != "approved")
             return null;
-        return doc.RootElement.GetProperty("external_reference").GetString();
+        return new ApprovedCheckoutPayment(
+            doc.RootElement.GetProperty("external_reference").GetString() ?? "",
+            doc.RootElement.GetProperty("transaction_amount").GetDecimal(),
+            doc.RootElement.GetProperty("currency_id").GetString() ?? "");
     }
 }
 

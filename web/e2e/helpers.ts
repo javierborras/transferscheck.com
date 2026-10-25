@@ -1,4 +1,10 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Page, type BrowserContext } from "@playwright/test";
+
+// This headless Windows browser reports notifications denied even after grantPermissions.
+// Simulate consent for the mock-token happy path; production still checks the real permission.
+export async function allowMockNotifications(context: BrowserContext) {
+  await context.addInitScript(() => Object.defineProperty(Notification, "permission", { get: () => "granted" }));
+}
 
 const apiOrigin = "http://localhost:5080";
 
@@ -11,7 +17,7 @@ async function finishMockUniversalLogin(page: Page, email: string) {
 
 /** From the signup screen: Auth0 signup, then the app shows the signed-in menu. */
 export async function createAccountWithAuth0(page: Page, email: string) {
-  await page.getByRole("button", { name: "Crear cuenta con Auth0" }).click();
+  await page.getByRole("button", { name: "Crear mi cuenta" }).click();
   await finishMockUniversalLogin(page, email);
   await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
 }
@@ -23,8 +29,8 @@ export async function signUpWithAuth0(page: Page, email: string) {
 
 /** From the login screen: Auth0 sign-in for an existing commerce admin. */
 export async function signInWithAuth0(page: Page, email: string) {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Iniciar sesión con Auth0" }).click();
+  await page.goto("/ingresar");
+  await page.getByRole("button", { name: "Ingresar a mi cuenta" }).click();
   await finishMockUniversalLogin(page, email);
   await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
 }

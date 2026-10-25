@@ -113,6 +113,7 @@ public static class Auth0Endpoints
                 {
                     Id = Guid.NewGuid(),
                     CreatedAt = clock.GetUtcNow(),
+                    PlanCode = PlanCodes.PackMes,
                     ChecklistStep = ChecklistRules.Step(true, false, false)
                 };
                 await store.AddMerchantAsync(merchant, cancellationToken);

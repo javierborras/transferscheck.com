@@ -9,8 +9,8 @@ async function signUp(page: import("@playwright/test").Page, email: string) {
 
 async function openConfigurar(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Menú" }).click();
-  await page.getByRole("link", { name: "Configurar" }).click();
-  await expect(page.getByRole("heading", { name: "Configurar" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Cajeros / Puntos de Alerta" }).click();
+  await expect(page.getByRole("heading", { name: "Accesos de Mostrador (Puntos de Alerta)" })).toBeVisible();
 }
 
 async function apiJson(
@@ -45,13 +45,13 @@ async function confirmAlias(page: import("@playwright/test").Page, alias: string
 
 test("Configurar refuses a second account when the plan is Pack Evento (unset)", async ({ page }) => {
   await signUp(page, `e2e-evento-${Date.now()}@counter.test`);
+  await apiJson(page, "/api/dev/plan-code", "PUT", { planCode: "pack_evento" });
   await confirmAlias(page, `ev${Date.now()}`.slice(0, 12));
   await openConfigurar(page);
-  await page.getByLabel("Nombre *").fill("extra");
-  await page.getByRole("button", { name: "Crear invitación" }).click();
-  await expect(page.getByText("No se puede agregar otro Punto de Alerta en este plan.")).toBeVisible({
-    timeout: 10_000
-  });
+  await expect(page.getByRole("button", { name: "Crear invitación" })).toHaveCount(0);
+  await expect(page.getByText("Tu plan incluye solo el acceso de Admin.", { exact: false })).toBeVisible();
+  const result = await apiJson(page, "/api/logins", "POST", { name: "extra" });
+  expect(result.status).toBe(409);
 });
 
 test("Configurar on Pack Mes allows four Puntos de Alerta and refuses the fifth; revoke keeps the owner", async ({
@@ -73,12 +73,12 @@ test("Configurar on Pack Mes allows four Puntos de Alerta and refuses the fifth;
 
   await openConfigurar(page);
   await expect(page.getByText("Punto de Alerta")).toHaveCount(4);
-  await expect(page.getByText("Admin")).toBeVisible();
+  await expect(page.locator(".login-row .role").filter({ hasText: /^Admin$/ })).toBeVisible();
 
   await expect(page.getByRole("button", { name: "Revocar" })).toHaveCount(4);
   await page.getByRole("button", { name: "Revocar" }).first().click();
   await page.getByRole("button", { name: "Tocá de nuevo para revocar" }).click();
-  await expect(page.getByText("Admin")).toBeVisible();
+  await expect(page.locator(".login-row .role").filter({ hasText: /^Admin$/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Revocar", disabled: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Revocar", disabled: false })).toHaveCount(3);
 });

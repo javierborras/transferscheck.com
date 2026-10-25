@@ -8,7 +8,7 @@ test("five-day warning banner shows while access still works", async ({ page }) 
   await signUpWithAuth0(page, email);
   await setPlanCode(page, "pack_mes");
   await page.goto("/conectar");
-  await page.getByRole("button", { name: "Conectar Mercado Pago" }).click();
+  await page.getByRole("button", { name: "Conectar mi Mercado Pago" }).click();
   await expect(page.getByText("Conectado", { exact: true })).toBeVisible({ timeout: 20_000 });
 
   const accessUntil = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
@@ -31,5 +31,5 @@ test("five-day warning banner shows while access still works", async ({ page }) 
     timeout: 20_000
   });
   await expect(page.getByRole("link", { name: "Ir a Pagos" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Actualizar ahora" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "🔄 Revisar si entró un pago ahora" })).toBeVisible();
 });
