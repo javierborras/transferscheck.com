@@ -186,3 +186,9 @@ Registro push del navegador realizado y persistencia verificada tras recargar; c
 Se detectó HTTP 500 en refresh: CryptographicException por una clave antigua ausente en el keyring de la conexión Mercado Pago almacenada. No se encontró una copia local. Se renovó OAuth de la misma cuenta; refresh volvió a HTTP 200 y recuperó la transferencia real de ARS 133,20. Se respaldó privadamente el keyring productivo actual. El diagnóstico temporal stdout fue deshabilitado restaurando web.config original. No se atribuyó la pérdida de la clave a un despliegue sin evidencia.
 
 FCM validó el token del dispositivo aprobado mediante validate_only: HTTP 200. El usuario no observó una notificación para ARS 133,20; esa transferencia se recuperó durante la reconexión, por lo que no demuestra sonido ni entrega push en vivo. Mostrador con campanita activa; segunda transferencia solicitada para comprobar alerta nueva. No declarar entrega Windows aprobada con solo registro de token o dry-run FCM.
+
+### Alerta en vivo confirmada — 25/10/2026
+
+Segunda transferencia real de ARS 99,99 recibida automáticamente en el mostrador, marcada Acreditado y con aviso de llegada, sin recarga manual. El administrador confirmó que sonó la campanita. El problema previo de refresh quedó resuelto tras renovar OAuth de la misma cuenta.
+
+Para aislar la prueba del sistema operativo sin otra transferencia, se reenvió por FCM únicamente el aviso del cobro ya registrado de ARS 99,99, rotulado como prueba y sin generar pagos o modificar accesos. FCM aceptó el mensaje con HTTP 200. Recepción visible en Windows pendiente de confirmación del administrador; aceptación por FCM no equivale a entrega comprobada.
