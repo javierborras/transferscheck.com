@@ -23,6 +23,13 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
         return db.LoginAccounts.IgnoreQueryFilters().FirstOrDefaultAsync(a => a.Email == normalized, cancellationToken);
     }
 
+    public Task<LoginAccount?> FindAccountByAuth0SubjectAsync(string subject, CancellationToken cancellationToken)
+    {
+        var normalized = subject.Trim();
+        return db.LoginAccounts.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(a => a.Auth0Subject == normalized, cancellationToken);
+    }
+
     public Task<LoginAccount?> FindAccountAsync(Guid accountId, CancellationToken cancellationToken)
         => db.LoginAccounts.FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 

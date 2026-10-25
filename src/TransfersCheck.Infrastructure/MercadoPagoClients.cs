@@ -47,13 +47,14 @@ public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoP
 public sealed class MercadoPagoCheckout(
     HttpClient http,
     IOptions<CheckoutOptions> checkout,
-    IOptions<MercadoPagoOptions> mercadoPago) : ICheckout
+    IOptions<MercadoPagoOptions> mercadoPago,
+    ICheckoutAccessToken accessToken) : ICheckout
 {
     public async Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken)
     {
         var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{root}/checkout/preferences");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", checkout.Value.AccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await accessToken.GetAsync(cancellationToken));
         request.Content = JsonContent.Create(new
         {
             items = new[]
@@ -74,7 +75,7 @@ public sealed class MercadoPagoCheckout(
     {
         var root = mercadoPago.Value.ApiBaseUrl.TrimEnd('/');
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{root}/v1/payments/{Uri.EscapeDataString(paymentId)}");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", checkout.Value.AccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await accessToken.GetAsync(cancellationToken));
         using var response = await http.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));

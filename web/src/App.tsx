@@ -153,6 +153,9 @@ function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; b
             <Link to="/" aria-current={here("/")}>
               Transacciones
             </Link>
+            <Link to="/ayuda" aria-current={here("/ayuda")}>
+              Ayuda
+            </Link>
             {isOwner ? (
               <>
                 <Link to="/historial" aria-current={here("/historial")}>
@@ -223,6 +226,13 @@ export function App() {
     const response = await api("/api/sessions", { method: "DELETE" });
     if (!response.ok) return;
     setSession(null);
+    if (response.status !== 204) {
+      const body = (await response.json().catch(() => null)) as { federatedLogoutUrl?: string } | null;
+      if (body?.federatedLogoutUrl) {
+        window.location.assign(body.federatedLogoutUrl);
+        return;
+      }
+    }
     navigate("/");
   }
 
@@ -238,9 +248,11 @@ export function App() {
     <Routes>
       <Route path="/cuenta" element={<CreateAccount onSignedIn={setSession} />} />
       <Route path="/invitar/:token" element={<ClaimInvite onSignedIn={setSession} />} />
+      <Route path="/owner" element={<OwnerSite />} />
       <Route path="/pagar" element={session ? <Pay session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/conectar" element={session ? <ChecklistPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="/ayuda/:id?" element={session ? <HelpPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/historial" element={session?.isOwner ? <HistoryPage session={session} onSalir={salir} /> : session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="*" element={session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
     </Routes>
@@ -1294,5 +1306,466 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
         </>
       )}
     </Shell>
+  );
+}
+
+type OwnerCard = { card: string; isSet: boolean; lastFour: string | null; expiresAt: string | null };
+type OwnerPlan = {
+  code: string;
+  displayName: string;
+  amount: number;
+  currency: string;
+  durationDays?: number | null;
+  durationHours?: number | null;
+  faceCopy: string;
+  enableCopilotHelp: boolean;
+  active: boolean;
+};
+
+type HelpCatalog = {
+  enableCopilotHelp: boolean;
+  helpCenterPath: string;
+  menu: { id: string; label: string }[];
+  articles: { id: string; title: string; summary: string; path: string }[];
+};
+
+type HelpAsk = {
+  result: string;
+  explanation?: string | null;
+  title?: string | null;
+  link?: string | null;
+  clarification?: string | null;
+};
+
+const ownerCardLabels: Record<string, string> = {
+  mercadopago_platform: "Mercado Pago (plataforma)",
+  mail: "Mail",
+  browser_push: "Notificaciones web",
+  whatsapp: "WhatsApp"
+};
+
+function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
+  const { id } = useParams();
+  const [catalog, setCatalog] = useState<HelpCatalog | null>(null);
+  const [article, setArticle] = useState<{ title: string; body: string } | null>(null);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState<HelpAsk | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let gone = false;
+    api("/api/help").then(async (response) => {
+      if (gone || !response.ok) return;
+      setCatalog(await response.json());
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!id) {
+      setArticle(null);
+      return;
+    }
+    let gone = false;
+    api(`/api/help/${encodeURIComponent(id)}`).then(async (response) => {
+      if (gone || !response.ok) {
+        setArticle(null);
+        return;
+      }
+      const body = (await response.json()) as { title: string; body: string };
+      setArticle({ title: body.title, body: body.body });
+    });
+    return () => {
+      gone = true;
+    };
+  }, [id]);
+
+  async function ask(payload: { question?: string; optionId?: string }) {
+    setBusy(true);
+    setAnswer(null);
+    const response = await api("/api/help/ask", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    setBusy(false);
+    if (!response.ok) return;
+    setAnswer(await response.json());
+  }
+
+  return (
+    <Shell onSalir={onSalir} back isOwner={session.isOwner}>
+      <main className="help-page">
+        <h1>Ayuda</h1>
+        <p className="gate-lead">Orientación sobre el producto. No hay chatbot en Conectar.</p>
+        {article ? (
+          <article className="help-article">
+            <h2>{article.title}</h2>
+            <p>{article.body}</p>
+            <Link to="/ayuda">Volver al centro de ayuda</Link>
+          </article>
+        ) : null}
+        {!article && catalog ? (
+          <>
+            <section>
+              <h2>Opciones</h2>
+              <ul className="help-menu">
+                {catalog.menu.map((option) => (
+                  <li key={option.id}>
+                    <button type="button" disabled={busy} onClick={() => void ask({ optionId: option.id })}>
+                      {option.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            {catalog.enableCopilotHelp ? (
+              <section>
+                <h2>Preguntá</h2>
+                <label>
+                  Tu pregunta
+                  <input
+                    value={question}
+                    onChange={(event) => setQuestion(event.target.value)}
+                    maxLength={500}
+                    autoComplete="off"
+                  />
+                </label>
+                <button type="button" disabled={busy || !question.trim()} onClick={() => void ask({ question })}>
+                  Enviar
+                </button>
+              </section>
+            ) : (
+              <p className="gate-lead">Tu plan usa el menú de opciones. Una pregunta libre no está habilitada.</p>
+            )}
+            <section>
+              <h2>Artículos</h2>
+              <ul className="help-articles">
+                {catalog.articles.map((item) => (
+                  <li key={item.id}>
+                    <Link to={item.path}>{item.title}</Link>
+                    <span>{item.summary}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
+        ) : null}
+        {answer ? (
+          <section className="help-answer" aria-live="polite">
+            {answer.explanation ? <p>{answer.explanation}</p> : null}
+            {answer.clarification ? <p>{answer.clarification}</p> : null}
+            {answer.title && answer.link ? (
+              <p>
+                <Link to={answer.link}>{answer.title}</Link>
+              </p>
+            ) : answer.link ? (
+              <p>
+                <Link to={answer.link}>Centro de ayuda</Link>
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+      </main>
+    </Shell>
+  );
+}
+
+function OwnerSite() {
+  const [email, setEmail] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [cards, setCards] = useState<OwnerCard[]>([]);
+  const [plans, setPlans] = useState<OwnerPlan[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [planDrafts, setPlanDrafts] = useState<Record<string, OwnerPlan>>({});
+  const [newPlan, setNewPlan] = useState({ code: "", displayName: "", amount: "", faceCopy: "", enableCopilotHelp: false });
+
+  async function loadPanel() {
+    const [services, planRows] = await Promise.all([api("/api/owner/services"), api("/api/owner/plans")]);
+    if (!services.ok || !planRows.ok) {
+      setEmail(null);
+      return;
+    }
+    const nextPlans = (await planRows.json()) as OwnerPlan[];
+    setCards(await services.json());
+    setPlans(nextPlans);
+    setPlanDrafts(Object.fromEntries(nextPlans.map((plan) => [plan.code, { ...plan }])));
+  }
+
+  useEffect(() => {
+    let gone = false;
+    api("/api/owner/session").then(async (response) => {
+      if (gone) return;
+      if (!response.ok) {
+        setEmail(null);
+        return;
+      }
+      const body = (await response.json()) as { email: string };
+      setEmail(body.email);
+      await loadPanel();
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  async function signIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const response = await api("/api/owner/sessions", {
+      method: "POST",
+      body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
+    });
+    if (!response.ok) {
+      setError("El correo o la contraseña no sirven.");
+      return;
+    }
+    const body = (await response.json()) as { email: string };
+    setEmail(body.email);
+    setError("");
+    await loadPanel();
+  }
+
+  async function signOut() {
+    await api("/api/owner/sessions", { method: "DELETE" });
+    setEmail(null);
+    setCards([]);
+    setPlans([]);
+  }
+
+  async function replaceSecret(card: string) {
+    const secret = drafts[card]?.trim() ?? "";
+    if (!secret) {
+      setError("Pegá el secreto de nuevo para reemplazarlo.");
+      return;
+    }
+    const response = await api(`/api/owner/services/${card}`, {
+      method: "PUT",
+      body: JSON.stringify({ secret })
+    });
+    if (!response.ok) {
+      setError("No se pudo guardar el secreto.");
+      return;
+    }
+    setDrafts((value) => ({ ...value, [card]: "" }));
+    setError("");
+    await loadPanel();
+  }
+
+  async function savePlan(code: string) {
+    const draft = planDrafts[code];
+    if (!draft) return;
+    const response = await api(`/api/owner/plans/${encodeURIComponent(code)}`, {
+      method: "PUT",
+      body: JSON.stringify(draft)
+    });
+    if (!response.ok) {
+      setError("No se pudo guardar el plan.");
+      return;
+    }
+    setError("");
+    await loadPanel();
+  }
+
+  async function createPlan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const amount = Number(newPlan.amount);
+    if (!newPlan.code.trim() || !newPlan.displayName.trim() || !Number.isFinite(amount)) {
+      setError("Código, nombre e importe son obligatorios.");
+      return;
+    }
+    const response = await api("/api/owner/plans", {
+      method: "POST",
+      body: JSON.stringify({
+        code: newPlan.code.trim(),
+        displayName: newPlan.displayName.trim(),
+        amount,
+        faceCopy: newPlan.faceCopy,
+        enableCopilotHelp: newPlan.enableCopilotHelp,
+        active: true,
+        currency: "ARS"
+      })
+    });
+    if (!response.ok) {
+      setError("No se pudo crear el plan.");
+      return;
+    }
+    setNewPlan({ code: "", displayName: "", amount: "", faceCopy: "", enableCopilotHelp: false });
+    setError("");
+    await loadPanel();
+  }
+
+  if (!email) {
+    return (
+      <main className="gate">
+        <Wordmark />
+        <h1>Owner</h1>
+        <p className="gate-lead">Acceso del producto. No es la puerta del comercio.</p>
+        <form onSubmit={signIn}>
+          <label>
+            Dirección de email *
+            <input name="email" type="email" autoComplete="username" required />
+          </label>
+          <label>
+            Contraseña *
+            <input name="password" type="password" autoComplete="current-password" required />
+          </label>
+          {error ? <p className="error">{error}</p> : null}
+          <button type="submit">Entrar</button>
+        </form>
+      </main>
+    );
+  }
+
+  return (
+    <main className="shell page">
+      <header className="app-header">
+        <Wordmark />
+        <span className="alias-slot">{email}</span>
+        <button className="salir" type="button" onClick={() => void signOut()}>
+          Salir
+        </button>
+      </header>
+      {error ? <p className="error">{error}</p> : null}
+
+      <h1>Planes</h1>
+      <p className="gate-lead">Editá precios y alta de planes. La pantalla de Pagos del comercio solo lee los activos.</p>
+      <ul className="plans">
+        {plans.map((plan) => {
+          const draft = planDrafts[plan.code] ?? plan;
+          return (
+            <li key={plan.code} className="plan">
+              <strong>{plan.code}</strong>
+              <label>
+                Nombre
+                <input
+                  value={draft.displayName}
+                  onChange={(event) =>
+                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, displayName: event.target.value } }))
+                  }
+                />
+              </label>
+              <label>
+                Importe
+                <input
+                  type="number"
+                  value={draft.amount}
+                  onChange={(event) =>
+                    setPlanDrafts((value) => ({
+                      ...value,
+                      [plan.code]: { ...draft, amount: Number(event.target.value) }
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Texto de cara
+                <input
+                  value={draft.faceCopy}
+                  onChange={(event) =>
+                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, faceCopy: event.target.value } }))
+                  }
+                />
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={draft.enableCopilotHelp}
+                  onChange={(event) =>
+                    setPlanDrafts((value) => ({
+                      ...value,
+                      [plan.code]: { ...draft, enableCopilotHelp: event.target.checked }
+                    }))
+                  }
+                />
+                EnableCopilotHelp
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={draft.active}
+                  onChange={(event) =>
+                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, active: event.target.checked } }))
+                  }
+                />
+                Activo
+              </label>
+              <button type="button" onClick={() => void savePlan(plan.code)}>
+                Guardar plan
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <form className="owner-new-plan" onSubmit={createPlan}>
+        <h2>Nuevo plan</h2>
+        <label>
+          Código
+          <input value={newPlan.code} onChange={(event) => setNewPlan({ ...newPlan, code: event.target.value })} required />
+        </label>
+        <label>
+          Nombre
+          <input
+            value={newPlan.displayName}
+            onChange={(event) => setNewPlan({ ...newPlan, displayName: event.target.value })}
+            required
+          />
+        </label>
+        <label>
+          Importe
+          <input
+            type="number"
+            value={newPlan.amount}
+            onChange={(event) => setNewPlan({ ...newPlan, amount: event.target.value })}
+            required
+          />
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={newPlan.enableCopilotHelp}
+            onChange={(event) => setNewPlan({ ...newPlan, enableCopilotHelp: event.target.checked })}
+          />
+          EnableCopilotHelp
+        </label>
+        <button type="submit">Agregar plan</button>
+      </form>
+
+      <h1>Panel de servicios</h1>
+      <p className="gate-lead">Cada tarjeta es un servicio que el producto ya usa. El valor completo no se muestra.</p>
+      <ul className="plans">
+        {cards.map((card) => (
+          <li key={card.card} className="plan">
+            <strong>{ownerCardLabels[card.card] ?? card.card}</strong>
+            <span>
+              {card.isSet
+                ? card.lastFour
+                  ? `Configurado · ···${card.lastFour}`
+                  : "Configurado"
+                : "Sin configurar"}
+            </span>
+            {card.card !== "whatsapp" ? (
+              <>
+                <label>
+                  Reemplazar secreto
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={drafts[card.card] ?? ""}
+                    onChange={(event) => setDrafts((value) => ({ ...value, [card.card]: event.target.value }))}
+                  />
+                </label>
+                <button type="button" onClick={() => void replaceSecret(card.card)}>
+                  Guardar
+                </button>
+              </>
+            ) : (
+              <span className="face">Solo wa.me · sin clave</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </main>
   );
 }

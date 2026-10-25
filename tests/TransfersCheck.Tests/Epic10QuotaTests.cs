@@ -88,6 +88,12 @@ public sealed class Epic10QuotaTests(SqlFixture sql)
         Assert.Equal(HttpStatusCode.TooManyRequests, wait.StatusCode);
         Assert.Equal("quota_wait", (await wait.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
 
+        using var syncScope = factory.Services.CreateScope();
+        var tenantId = tenant.TenantId;
+        syncScope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId = tenantId;
+        var sync = syncScope.ServiceProvider.GetRequiredService<TransfersCheck.Infrastructure.TransferSync>();
+        Assert.Equal(TransfersCheck.Infrastructure.SyncStatus.QuotaWait, await sync.Run(tenantId, manual: false, CancellationToken.None));
+
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
         Assert.Contains("consultaWarn", app, StringComparison.Ordinal);
         Assert.Contains("consultas de esta semana", app, StringComparison.Ordinal);

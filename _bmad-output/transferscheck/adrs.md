@@ -229,9 +229,9 @@ Prepaid quantity packs (50, 100, 500, 1000+) are discarded. There is no credit l
 
 A third plan is a row the owner adds, not a new ADR. What "ayuda" includes is this flag and the two help modes, not an undefined benefit list. The weekly cap is 500 queries (ADR-007). Prepaid quantity packs stay discarded. The later 500-query recharge is not one of those packs and is not in scope.
 
-## ADR-010 — SignalR beside the poll and the browser notification
+## ADR-010 — Live list beside the poll and the browser notification (SSE)
 
-Source: human decision 22 Oct 2026 during the parking-lot review.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 24 Oct 2026: the shipped live channel is Server-Sent Events on `GET /api/transfers/live`, not a SignalR hub. The product intent (immediate appearance while the webapp is open) is unchanged; the title used “SignalR” as the parking-lot shorthand.
 
 ### Context
 
@@ -239,7 +239,7 @@ The last 10 transfers stay. The poll stays. The browser notification stays. Whil
 
 ### Decision
 
-While the webapp is open, a new transfer appears immediately. When the webapp is closed, the browser notification still fires. The poll still runs. This record names no hub method. API and web/ share a message contract a test can fail first.
+While the webapp is open, a new transfer appears immediately. When the webapp is closed, the browser notification still fires. The poll still runs. This record names no hub method. API and web/ share a message contract a test can fail first. The accepted transport is SSE (`text/event-stream`); rewriting to SignalR is not required for acceptance.
 
 ### Consequences
 

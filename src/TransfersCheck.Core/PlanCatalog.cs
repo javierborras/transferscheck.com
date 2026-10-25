@@ -16,7 +16,10 @@ public sealed class Plan
 public interface IPlanCatalog
 {
     Task<IReadOnlyList<Plan>> ListActiveAsync(CancellationToken cancellationToken);
+    /// <summary>Owner microsite: every plan row, including inactive (story 12.2).</summary>
+    Task<IReadOnlyList<Plan>> ListAllAsync(CancellationToken cancellationToken);
     Task<Plan?> FindByCodeAsync(string code, CancellationToken cancellationToken);
+    Task UpsertAsync(Plan plan, CancellationToken cancellationToken);
 }
 
 /// <summary>

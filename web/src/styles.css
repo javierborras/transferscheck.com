@@ -1049,6 +1049,69 @@ li.rejected .amount {
   color: var(--tc-text-secondary);
 }
 
+.help-page,
+.owner-new-plan {
+  display: grid;
+  gap: var(--tc-space-16);
+  padding: var(--tc-space-16);
+  padding-bottom: calc(var(--tc-dock-height) + var(--tc-space-24));
+}
+
+.help-menu,
+.help-articles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--tc-space-12);
+}
+
+.help-menu button {
+  width: 100%;
+  min-height: var(--tc-touch-min);
+  text-align: left;
+}
+
+.help-articles li {
+  display: grid;
+  gap: var(--tc-space-4);
+}
+
+.help-articles span,
+.help-answer {
+  color: var(--tc-text-secondary);
+}
+
+.help-article {
+  display: grid;
+  gap: var(--tc-space-12);
+}
+
+.shell.page .plans {
+  list-style: none;
+  margin: var(--tc-space-16) 0;
+  padding: 0 var(--tc-space-16);
+  display: grid;
+  gap: var(--tc-space-16);
+}
+
+.shell.page .plan,
+.owner-new-plan {
+  background: var(--tc-surface-card);
+  border: 1px solid var(--tc-border-subtle);
+  border-radius: var(--tc-radius-card);
+  padding: var(--tc-space-16);
+  display: grid;
+  gap: var(--tc-space-12);
+}
+
+.shell.page label.check {
+  display: flex;
+  align-items: center;
+  gap: var(--tc-space-8);
+  min-height: var(--tc-touch-min);
+}
+
 /* --------------------------------------------------------------------------
    Movimiento reducido
    -------------------------------------------------------------------------- */

@@ -157,13 +157,16 @@ public sealed class Epic1PlatformTests
         var storage = factory.Services.GetRequiredService<JobStorage>();
         var recurring = storage.GetConnection().GetRecurringJobs();
         Assert.Equal(2, recurring.Count);
-        Assert.Contains(recurring, job => job.Id == "five-day-notice");
-        Assert.Contains(recurring, job => job.Id == "referral-bonus");
+        var notice = Assert.Single(recurring, job => job.Id == "five-day-notice");
+        var bonus = Assert.Single(recurring, job => job.Id == "referral-bonus");
+        Assert.Equal("0 12 * * *", notice.Cron);
+        Assert.Equal("0 */6 * * *", bonus.Cron);
         Assert.DoesNotContain(recurring, job =>
             job.Id.Contains("poll", StringComparison.OrdinalIgnoreCase) ||
             (job.Job?.ToString().Contains("TransferPollWorker", StringComparison.Ordinal) ?? false));
 
         Assert.Contains(factory.Services.GetServices<IHostedService>(), service => service is TransferPollWorker);
+        Assert.DoesNotContain("Cron.Never", program, StringComparison.Ordinal);
 
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = true });
         using var dashboard = await client.GetAsync("/hangfire");
@@ -239,6 +242,8 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
     public RecordingMailSender Mail { get; init; } = new();
     /// <summary>Turns the commerce Auth0 door on against the mock tenant (ADR-018).</summary>
     public bool Auth0 { get; init; }
+    /// <summary>Turns the owner microsite door on from typed configuration (ADR-014).</summary>
+    public bool Owner { get; init; }
 
     public TransfersApiFactory(SqlFixture sql) => _sql = sql;
 
@@ -267,6 +272,11 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
             builder.UseSetting("Auth0:ClientId", TransfersCheck.MockServer.Auth0Mock.ClientId);
             builder.UseSetting("Auth0:ClientSecret", TransfersCheck.MockServer.Auth0Mock.ClientSecret);
             builder.UseSetting("Auth0:RedirectUri", "http://localhost/api/auth0/callback");
+        }
+        if (Owner)
+        {
+            builder.UseSetting("Owner:Email", "owner@transferscheck.test");
+            builder.UseSetting("Owner:Password", "owner-password-1");
         }
         builder.UseSetting("Firebase:Scope", "https://www.googleapis.com/auth/firebase.messaging");
         if (ServiceAccountPath is not null)

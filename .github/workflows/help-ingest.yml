@@ -1,0 +1,46 @@
+# ADR-016 — separate post-deploy help index refresh.
+# A failure here must not take production down or roll back the UI deploy.
+# Provider secrets are never committed; call the owner refresh endpoint with a runtime secret.
+name: Help corpus ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: "API origin that hosts POST /api/owner/help/refresh"
+        required: true
+        type: string
+      note:
+        description: "Optional note (ingest stays separate from UI deploy)"
+        required: false
+        type: string
+
+jobs:
+  refresh-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remind operators
+        run: |
+          echo "Help ingest is intentionally separate from UI deploy (ADR-016)."
+          echo "Target API: ${{ inputs.api_base }}"
+          echo "Set OWNER_EMAIL / OWNER_PASSWORD as repository secrets (never commit them)."
+          echo "Documented path: web/help/README.md"
+
+      - name: Sign in as owner and refresh corpus
+        env:
+          API_BASE: ${{ inputs.api_base }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OWNER_EMAIL}" ] || [ -z "${OWNER_PASSWORD}" ]; then
+            echo "OWNER_EMAIL / OWNER_PASSWORD secrets are not set. Scaffold only — skipping live call."
+            exit 0
+          fi
+          jar="$(mktemp)"
+          curl -fsS -c "$jar" -H "Content-Type: application/json" \
+            -d "{\"email\":\"${OWNER_EMAIL}\",\"password\":\"${OWNER_PASSWORD}\"}" \
+            "${API_BASE%/}/api/owner/sessions" >/dev/null
+          body="$(curl -fsS -b "$jar" -X POST "${API_BASE%/}/api/owner/help/refresh")"
+          echo "$body"
+          echo "$body" | grep -q '"published":true'

@@ -114,6 +114,8 @@ public static class TransferEndpoints
         }
 
         var status = await sync.Run(account.TenantId, manual: true, cancellationToken);
+        if (status is SyncStatus.QuotaWait)
+            return Results.Json(new { error = "quota_wait", cap = commercial.Value.WeeklyQueryCap }, statusCode: StatusCodes.Status429TooManyRequests);
         if (status is SyncStatus.Waiting)
             return Results.Json(new { error = "waiting" }, statusCode: StatusCodes.Status429TooManyRequests);
         if (status is SyncStatus.NotEntitled)
