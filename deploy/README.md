@@ -172,3 +172,11 @@ Publicados los tres assemblies Release de develop 3b6492b, incluida la correcci�
 Firebase existente: transferscheck-f2e77, app web registrada y VAPID existente; Cloud Messaging V1 habilitado, plan Spark. Configuración privada preparada pero no publicada hasta disponer del JSON de cuenta de servicio. Consola abierta para que el administrador genere la credencial.
 
 Webhooks de Mercado Pago: URL productiva preparada para /api/billing/webhook y evento de pagos seleccionado, sin guardar. Pendiente intervención del administrador para generar la firma; después cargar Checkout:NotificationSigningKey y probar la validación. Hasta entonces sigue el mecanismo de URL firmada por preferencia y conciliación autenticada de ADR-022. No dar por probado el ciclo de cobro completo.
+
+### Firebase y webhook oficial habilitados — 25/10/2026
+
+JSON de cuenta de servicio del proyecto transferscheck-f2e77 validado y publicado en App_Data/firebase-service-account.json; acceso HTTP público comprobado en 404. Configurados Firebase web/VAPID, endpoint FCM V1 y scope firebase.messaging. Cuenta de servicio autenticada correctamente contra Google OAuth. Owner reconoce las cuatro tarjetas configuradas; esto no garantiza entrega de correo ni de notificaciones.
+
+Firma oficial de Mercado Pago guardada en Checkout:NotificationSigningKey, con secretos fuera de Git. Simulador oficial de pagos a /api/billing/webhook: HTTP 200 OK. Pago ficticio 123456 devuelve applied:false. Se corrigió el caso de consulta 404 al proveedor sin ocultar errores 401 o 500; seis pruebas de respuesta de Mercado Pago aprobadas y patch Infrastructure publicado.
+
+Registro push del navegador realizado y persistencia verificada tras recargar; campanita activada. Pendiente transferencia real de otra cuenta para verificar detección, sonido y entrega push, y compra del abono con comprador distinto. SMTP continúa configurado, entrega pendiente de prueba.

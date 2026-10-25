@@ -23,9 +23,30 @@ public sealed class MercadoPagoResponseTests
         Assert.Null(page.NextOffset);
     }
 
-    private sealed class ResponseHandler(string json) : HttpMessageHandler
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    public async Task Checkout_ignores_only_missing_payments_and_preserves_provider_errors(HttpStatusCode status)
+    {
+        using var http = new HttpClient(new ResponseHandler("{}", status));
+        var checkout = new MercadoPagoCheckout(http, Options.Create(new CheckoutOptions()),
+            Options.Create(new MercadoPagoOptions { ApiBaseUrl = "https://provider.example" }),
+            Options.Create(new LoginSessionOptions()), new TestToken());
+        if (status == HttpStatusCode.NotFound)
+            Assert.Null(await checkout.ReadApprovedPaymentAsync("123456", CancellationToken.None));
+        else
+            await Assert.ThrowsAsync<HttpRequestException>(() => checkout.ReadApprovedPaymentAsync("123456", CancellationToken.None));
+    }
+
+    private sealed class TestToken : ICheckoutAccessToken
+    {
+        public Task<string> GetAsync(CancellationToken cancellationToken) => Task.FromResult("test-token");
+    }
+
+    private sealed class ResponseHandler(string json, HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+            => Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(json) });
     }
 }

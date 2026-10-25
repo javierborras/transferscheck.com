@@ -89,6 +89,9 @@ public sealed class MercadoPagoCheckout(
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{root}/v1/payments/{Uri.EscapeDataString(paymentId)}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await accessToken.GetAsync(cancellationToken));
         using var response = await http.SendAsync(request, cancellationToken);
+        // The official webhook simulator uses a payment ID that does not exist.
+        // No payment means no access to apply; authentication/outage errors still fail for retry.
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         if (doc.RootElement.GetProperty("status").GetString() != "approved")
