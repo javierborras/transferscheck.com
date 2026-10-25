@@ -180,3 +180,9 @@ JSON de cuenta de servicio del proyecto transferscheck-f2e77 validado y publicad
 Firma oficial de Mercado Pago guardada en Checkout:NotificationSigningKey, con secretos fuera de Git. Simulador oficial de pagos a /api/billing/webhook: HTTP 200 OK. Pago ficticio 123456 devuelve applied:false. Se corrigió el caso de consulta 404 al proveedor sin ocultar errores 401 o 500; seis pruebas de respuesta de Mercado Pago aprobadas y patch Infrastructure publicado.
 
 Registro push del navegador realizado y persistencia verificada tras recargar; campanita activada. Pendiente transferencia real de otra cuenta para verificar detección, sonido y entrega push, y compra del abono con comprador distinto. SMTP continúa configurado, entrega pendiente de prueba.
+
+### Prueba de transferencia y recuperación de conexión — 25/10/2026
+
+Se detectó HTTP 500 en refresh: CryptographicException por una clave antigua ausente en el keyring de la conexión Mercado Pago almacenada. No se encontró una copia local. Se renovó OAuth de la misma cuenta; refresh volvió a HTTP 200 y recuperó la transferencia real de ARS 133,20. Se respaldó privadamente el keyring productivo actual. El diagnóstico temporal stdout fue deshabilitado restaurando web.config original. No se atribuyó la pérdida de la clave a un despliegue sin evidencia.
+
+FCM validó el token del dispositivo aprobado mediante validate_only: HTTP 200. El usuario no observó una notificación para ARS 133,20; esa transferencia se recuperó durante la reconexión, por lo que no demuestra sonido ni entrega push en vivo. Mostrador con campanita activa; segunda transferencia solicitada para comprobar alerta nueva. No declarar entrega Windows aprobada con solo registro de token o dry-run FCM.
