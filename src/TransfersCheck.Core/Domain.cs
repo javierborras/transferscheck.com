@@ -30,6 +30,8 @@ public sealed class Merchant : ITenantOwned
     public string ChecklistStep { get; set; } = "account";
     public DateTimeOffset? RateLimitedUntil { get; set; }
     public DateTimeOffset? RefreshNotBefore { get; set; }
+    public DateTimeOffset? LastInteractionAt { get; set; }
+    public DateTimeOffset? LastTransferCheckAt { get; set; }
     /// <summary>Plan code for login caps and the plan table.</summary>
     public string? PlanCode { get; set; }
     public DateTimeOffset? FiveDayNoticeSentAt { get; set; }
@@ -57,6 +59,27 @@ public sealed class LoginAccount : ITenantOwned
     /// <summary>False until the invite link sets a password.</summary>
     public bool PasswordSet { get; set; } = true;
     public Guid? LiveSessionId { get; set; }
+    public int AlertPointPosition { get; set; }
+    public DateTimeOffset? ExtraAccessUntil { get; set; }
+    public bool RenewWithAdmin { get; set; } = true;
+}
+
+public sealed class BillingOrder : ITenantOwned
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public string PlanCode { get; set; } = "";
+    public int Amount { get; set; }
+    public string Currency { get; set; } = "ARS";
+    public int? DurationDays { get; set; }
+    public int? DurationHours { get; set; }
+    public Guid? AdditionalPointId { get; set; }
+    public string RenewPointIds { get; set; } = "[]";
+    public DateTimeOffset? TargetAccessUntil { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? PaidAt { get; set; }
+    public DateTimeOffset? ActivatedAt { get; set; }
+    public string? CheckoutUrl { get; set; }
 }
 
 public sealed class LoginSession : ITenantOwned

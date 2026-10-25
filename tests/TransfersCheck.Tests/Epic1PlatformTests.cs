@@ -55,14 +55,14 @@ public sealed class Epic1PlatformTests
         var sync = scope.ServiceProvider.GetRequiredService<IOptions<SyncOptions>>().Value;
         var onboarding = scope.ServiceProvider.GetRequiredService<IOptions<OnboardingOptions>>().Value;
         var session = scope.ServiceProvider.GetRequiredService<IOptions<LoginSessionOptions>>().Value;
-        Assert.Equal(500, commercial.WeeklyQueryCap);
-        Assert.Equal(50, commercial.WeeklyQueryWarningGap);
+        Assert.Null(typeof(CommercialOptions).GetProperty("WeeklyQueryCap"));
+        Assert.Null(typeof(CommercialOptions).GetProperty("WeeklyQueryWarningGap"));
         Assert.Equal("ARS", commercial.Currency);
         Assert.Equal(30, commercial.PaidPeriodDays);
         Assert.Equal(10, sync.PageSize);
         Assert.Equal(10, sync.AlertPointRecordCount);
-        Assert.Equal(TimeSpan.FromMinutes(5), sync.PollInterval);
-        Assert.Equal(TimeSpan.FromSeconds(60), sync.ButtonCooldown);
+        Assert.Equal(TimeSpan.FromSeconds(30), sync.PollInterval);
+        Assert.Equal(TimeSpan.FromSeconds(10), sync.ButtonCooldown);
         Assert.Equal("", onboarding.MercadoPagoVideoUrl);
         Assert.Equal(TimeSpan.FromHours(1), session.EmailCodeLifetime);
         Assert.Equal(TimeSpan.FromHours(1), session.InviteLinkLifetime);

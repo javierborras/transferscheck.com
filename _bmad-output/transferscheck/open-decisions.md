@@ -1,5 +1,7 @@
 # Open decisions
 
+> Cambio vigente 25/10/2026: prevalecen ADR-019 a ADR-023 de `adrs.md`: sin cuotas de consultas; Individual 1+1 por 24 horas con inicio explícito; Pack Mes 1+4; adicionales ARS 1.000 prepagos hasta el vencimiento del Admin; controles técnicos y notificaciones por capas. Las reglas anteriores incompatibles son históricas.
+
 23 October 2026, night. The weekly-cap cutoff and the old-UI salvage are closed. They are in `adrs.md`, `decisions.md`, and `party-old-ui-2026-10-23.md`. Nothing in this file is a build queue. Do not copy a line from `later-research.md` into an ADR or into a story acceptance check.
 
 ## Still unknown

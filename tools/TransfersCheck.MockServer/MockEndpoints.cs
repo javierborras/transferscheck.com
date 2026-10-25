@@ -148,7 +148,13 @@ public static class MockEndpoints
             if (request.Headers.Authorization.Count == 0)
                 return Results.Unauthorized();
             MockState.SearchCount++;
-            return Results.Json(new { results = MockState.Payments });
+            var rows = MockState.Payments.AsEnumerable();
+            if (DateTimeOffset.TryParse(request.Query["begin_date"], out var from)) rows = rows.Where(row => row.GetProperty("date_created").GetDateTimeOffset() >= from);
+            if (DateTimeOffset.TryParse(request.Query["end_date"], out var to)) rows = rows.Where(row => row.GetProperty("date_created").GetDateTimeOffset() <= to);
+            var all = rows.ToArray();
+            var offset = int.TryParse(request.Query["offset"], out var start) ? Math.Max(0, start) : 0;
+            var limit = int.TryParse(request.Query["limit"], out var count) ? Math.Clamp(count, 1, 100) : 10;
+            return Results.Json(new { results = all.Skip(offset).Take(limit), paging = new { total = all.Length, offset, limit } });
         });
 
         app.MapPost("/checkout/preferences", async (HttpRequest request) =>
@@ -181,6 +187,17 @@ public static class MockEndpoints
             return Results.Json(new { name = "projects/mock/messages/1" });
         });
 
+        app.MapGet("/checkout/pref-1", () => Results.Content("<html lang='es'><meta charset='utf-8'><title>Pago de prueba</title><main><h1>Pago simulado</h1><p>Entorno local de pruebas. No se realiza ningún cobro real.</p><a href='http://localhost:5183/pagar'>Volver a TransfersCheck</a></main></html>", "text/html"));
+
+        // Local browser tests simulate the provider's approval of the last real checkout quote.
+        app.MapPost("/mock/checkout/approve", () => {
+            if (string.IsNullOrWhiteSpace(MockState.LastCheckoutBody)) return Results.BadRequest();
+            using var preference = JsonDocument.Parse(MockState.LastCheckoutBody);
+            var paymentId = "browser-" + Guid.NewGuid().ToString("N");
+            MockState.CheckoutTenants[paymentId] = preference.RootElement.GetProperty("external_reference").GetString()!;
+            MockState.CheckoutAmounts[paymentId] = preference.RootElement.GetProperty("items")[0].GetProperty("unit_price").GetDecimal();
+            return Results.Ok(new { paymentId, amount = MockState.CheckoutAmounts[paymentId] });
+        });
         app.MapGet("/mock/pushes", () => Results.Json(MockState.SentPushes));
     }
 

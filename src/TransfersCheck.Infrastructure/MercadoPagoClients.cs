@@ -6,15 +6,24 @@ using TransfersCheck.Core;
 
 namespace TransfersCheck.Infrastructure;
 
-public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoPagoOptions> options) : ITransferSource
+public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoPagoOptions> options) : ITransferSource, ITransferQuerySource
 {
     public const string Code = "mercadopago";
     public string SourceCode => Code;
 
     public async Task<IReadOnlyList<IncomingTransfer>> ReadIncomingAsync(TokenSet tokens, int pageSize, CancellationToken cancellationToken)
+        => (await QueryAsync(tokens, null, null, 0, pageSize, cancellationToken)).Items;
+
+    public async Task<TransferPage> QueryAsync(TokenSet tokens, DateTimeOffset? from, DateTimeOffset? to, int offset, int limit, CancellationToken cancellationToken)
     {
         var root = options.Value.ApiBaseUrl.TrimEnd('/');
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"{root}/v1/payments/search?sort=date_created&criteria=desc&limit={pageSize}");
+        var url = $"{root}/v1/payments/search?sort=date_created&criteria=desc&limit={limit}&offset={offset}";
+        if (from is not null || to is not null) {
+            url += "&range=date_created";
+            if (from is { } start) url += "&begin_date=" + Uri.EscapeDataString(start.ToString("o"));
+            if (to is { } end) url += "&end_date=" + Uri.EscapeDataString(end.ToString("o"));
+        }
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
         using var response = await http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -26,9 +35,9 @@ public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoP
         var transfers = new List<IncomingTransfer>();
         foreach (var item in doc.RootElement.GetProperty("results").EnumerateArray())
         {
-            var payer = item.GetProperty("payer");
-            var first = payer.TryGetProperty("first_name", out var given) ? given.GetString() ?? "" : "";
-            var last = payer.TryGetProperty("last_name", out var family) ? family.GetString() ?? "" : "";
+            var hasPayer = item.TryGetProperty("payer", out var payer) && payer.ValueKind == JsonValueKind.Object;
+            var first = hasPayer && payer.TryGetProperty("first_name", out var given) ? given.GetString() ?? "" : "";
+            var last = hasPayer && payer.TryGetProperty("last_name", out var family) ? family.GetString() ?? "" : "";
             var name = $"{first} {last}".Trim();
             transfers.Add(new IncomingTransfer(
                 item.GetProperty("id").ToString(),
@@ -40,7 +49,9 @@ public sealed class MercadoPagoTransferSource(HttpClient http, IOptions<MercadoP
                 item.GetProperty("payment_type_id").GetString() ?? ""));
         }
 
-        return transfers;
+        var next = transfers.Count == limit ? offset + limit : (int?)null;
+        if (doc.RootElement.TryGetProperty("paging", out var paging) && paging.TryGetProperty("total", out var total) && offset + transfers.Count >= total.GetInt32()) next = null;
+        return new TransferPage(transfers, next);
     }
 }
 
@@ -48,6 +59,7 @@ public sealed class MercadoPagoCheckout(
     HttpClient http,
     IOptions<CheckoutOptions> checkout,
     IOptions<MercadoPagoOptions> mercadoPago,
+    IOptions<LoginSessionOptions> session,
     ICheckoutAccessToken accessToken) : ICheckout
 {
     public async Task<string> CreatePaymentLinkAsync(string reference, int amount, string currency, string title, CancellationToken cancellationToken)
@@ -62,7 +74,7 @@ public sealed class MercadoPagoCheckout(
                 new { title, quantity = 1, currency_id = currency, unit_price = amount }
             },
             external_reference = reference,
-            notification_url = checkout.Value.NotificationUrl,
+            notification_url = CheckoutNotificationSignature.BuildNotificationUrl(checkout.Value.NotificationUrl, reference, session.Value.SigningKey),
             back_urls = new { success = checkout.Value.ReturnUrl }
         });
         using var response = await http.SendAsync(request, cancellationToken);

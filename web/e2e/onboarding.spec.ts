@@ -19,7 +19,7 @@ test("signup, checklist, connect against the mock, see the ten, enable avisos", 
   await expect(page.locator("ol.transfers li.row")).toHaveCount(10, { timeout: 20_000 });
   await expect(page.getByText("Pagó: Persona 1 Perez")).toBeVisible();
   await expect(page.getByText("✓ Acreditado").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "🔄 Revisar si entró un pago ahora" })).toBeVisible();
+  await expect(page.locator(".dock button")).toBeVisible();
   await page.goto("/conectar");
   await expect(page.getByText("Conectado", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Reconectar Mercado Pago" })).toBeVisible();

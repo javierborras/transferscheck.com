@@ -1,5 +1,7 @@
 # Decisions
 
+> Cambio vigente 25/10/2026: prevalecen ADR-019 a ADR-023 de `adrs.md`: sin cuotas de consultas; Individual 1+1 por 24 horas con inicio explícito; Pack Mes 1+4; adicionales ARS 1.000 prepagos hasta el vencimiento del Admin; controles técnicos y notificaciones por capas. Las reglas anteriores incompatibles son históricas.
+
 Assumptions and non-blocking debt for the TransfersCheck MVP. Locked product behavior stays in `brief.md`, `epics-and-stories.md`, `adrs.md`, `parking-lot.md`, and `mp-authorization-setup.md`. The record dated 22 October 2026, parking-lot review, amends commercial locks in the earlier entries. The record dated 23 October 2026 wins where it conflicts with that review. The record dated 23 October 2026, night, wins where it conflicts with the earlier 23 October entries. Those entries stay as history. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. No secret values are recorded here.
 
 ## Already done

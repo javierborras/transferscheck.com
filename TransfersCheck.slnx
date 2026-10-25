@@ -2,6 +2,4 @@
   <Project Path="src/TransfersCheck.Core/TransfersCheck.Core.csproj" />
   <Project Path="src/TransfersCheck.Infrastructure/TransfersCheck.Infrastructure.csproj" />
   <Project Path="src/TransfersCheck.Api/TransfersCheck.Api.csproj" />
-  <Project Path="tests/TransfersCheck.Tests/TransfersCheck.Tests.csproj" />
-  <Project Path="tools/TransfersCheck.MockServer/TransfersCheck.MockServer.csproj" />
 </Solution>

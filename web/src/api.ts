@@ -1,7 +1,7 @@
-const origin = import.meta.env.VITE_API_ORIGIN ?? "http://localhost:5080";
+export const apiOrigin = import.meta.env.VITE_API_ORIGIN ?? (import.meta.env.DEV ? "http://localhost:5080" : "");
 
 export function apiUrl(path: string) {
-  return `${origin}${path}`;
+  return `${apiOrigin}${path}`;
 }
 
 export async function api(path: string, init: RequestInit = {}) {

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { enableDeviceAlerts } from "./push";
+import { claimPaymentNotice, showDesktopFallback, enableDeviceAlerts } from "./push";
 import { Landing } from "./Landing";
 import { Logo } from "./Logo";
 import { PlanCards } from "./Plans";
 import { playCashBell, unlockSound, soundEnabled, subscribeSound } from "./audio";
-import { api, apiUrl } from "./api";
+import { api, apiUrl, apiOrigin } from "./api";
+import { NotificationBanner } from "./NotificationBanner";
 import { liveTransferMessageType, type LiveTransferArrived } from "./liveTransferContract";
 
 type Session = { accountId: string; tenantId: string; email: string; isOwner: boolean };
@@ -44,9 +45,14 @@ type LoginRow = {
   pushApproved: boolean;
   revoked: boolean;
   passwordSet?: boolean;
+  included: boolean;
+  enabled: boolean;
+  requiresPayment: boolean;
+  extraAccessUntil?: string | null;
+  renewWithAdmin: boolean;
 };
 
-let firstOpen: Promise<void> | null = null;
+
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 });
 const when = new Intl.DateTimeFormat("es-AR", {
   day: "2-digit",
@@ -129,10 +135,10 @@ function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; b
             {isOwner ? (
               <>
                 <Link to="/historial" aria-current={here("/historial")}>
-                  Historial y Excel
+                  Movimientos y exportación
                 </Link>
                 <Link to="/usuarios" aria-current={here("/usuarios")}>
-                  Cajeros / Puntos de Alerta
+                  Puntos de Alerta
                 </Link>
                 <Link to="/pagar" aria-current={here("/pagar")}>
                   Mi Plan
@@ -172,7 +178,7 @@ function Shell({
   return (
     <div className={counter ? "shell counter" : "shell page"}>
       <AppHeader onSalir={onSalir} back={back ?? false} isOwner={isOwner} />
-      {isOwner && !counter ? <nav className="admin-nav" aria-label="Administración del comercio"><Link to="/">Mostrador en vivo</Link><Link to="/usuarios">Cajeros / Puntos de Alerta</Link><Link to="/historial">Historial y Excel</Link><Link to="/pagar">Mi Plan</Link><Link to="/conectar">Conectar Mercado Pago</Link></nav> : null}
+      {isOwner && !counter ? <nav className="admin-nav" aria-label="Administración del comercio"><Link to="/">Mostrador en vivo</Link><Link to="/usuarios">Puntos de Alerta</Link><Link to="/historial">Movimientos y exportación</Link><Link to="/pagar">Mi Plan</Link><Link to="/conectar">Conectar Mercado Pago</Link></nav> : null}
       {children}
     </div>
   );
@@ -559,7 +565,11 @@ function ChecklistPage({ session, onSalir }: { session: Session; onSalir: () => 
 
   async function reload() {
     const response = await api("/api/checklist");
-    if (response.ok) setChecklist(await response.json());
+    if (response.ok) {
+      const state = await response.json();
+      state.alertsDone = state.alertsDone && localStorage.getItem("push-account") === session.accountId;
+      setChecklist(state);
+    }
   }
 
   useEffect(() => {
@@ -633,7 +643,7 @@ function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload
           <li className={alertsNow ? "current" : checklist.alertsDone ? "done" : "later"} data-step="3">
             <div className="step-body">
               {alertsNow ? <h1>Activá los avisos en este dispositivo</h1> : "Activá los avisos en este dispositivo"}
-              <p>Habilitá las notificaciones para que la pantalla te avise apenas se acredite un pago.</p>
+              <p>Habilitá las notificaciones para recibir un aviso cuando detectemos un pago acreditado.</p>
               <p className="ios-hint">{checklist.iosHint}</p>
               {alertsNow && error ? <p role="alert" className="error">{error}</p> : null}
             </div>
@@ -675,19 +685,18 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   const [wait, setWait] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [alertsDone, setAlertsDone] = useState<boolean | null>(null);
   const [trial, setTrial] = useState(false);
   const [expired, setExpired] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [fiveDayWarning, setFiveDayWarning] = useState(false);
-  const [consultaWarn, setConsultaWarn] = useState(false);
-  const [quota, setQuota] = useState({ used: 0, cap: 500 });
+  const [connected, setConnected] = useState(true);
   const [audioActive, setAudioActive] = useState(soundEnabled);
   const [audioError, setAudioError] = useState("");
   useEffect(() => subscribeSound(() => setAudioActive(soundEnabled())), []);
   const announced = useRef(new Set<string>());
-  const [pollSeconds, setPollSeconds] = useState(300);
-  const [cooldownSeconds, setCooldownSeconds] = useState(60);
+  const [pollSeconds, setPollSeconds] = useState(30);
+  const displayLimit = useRef(10);
+  const [cooldownSeconds, setCooldownSeconds] = useState(10);
   const seen = useRef<Map<string, string> | null>(null);
   const first = params.get("first");
 
@@ -704,33 +713,37 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
 
   async function load(announce: boolean) {
     const path = first ? `/api/transfers?first=${encodeURIComponent(first)}` : "/api/transfers";
+    const billing = await api("/api/billing");
+    if (billing.status === 401) { window.location.assign("/ingresar"); return; }
+    if (billing.ok) {
+      const state = await billing.json();
+      setConnected(Boolean(state.connected));
+      setExpired(Boolean(state.accessUntil) && new Date(state.accessUntil).getTime() <= Date.now());
+      setBlocked(Boolean(state.blocked) || state.accountEnabled === false);
+      setFiveDayWarning(Boolean(state.fiveDayWarning));
+      if (state.blocked || state.accountEnabled === false) { setItems([]); return; }
+    }
     const response = await api(path);
+    if (response.status === 401) { window.location.assign("/ingresar"); return; }
+    if (response.status === 403) { setItems([]); setBlocked(true); return; }
     if (!response.ok) return;
     const body = await response.json();
     const next = body.items as Transfer[];
+    displayLimit.current = body.take ?? 10;
     setPollSeconds(body.pollIntervalSeconds);
     setCooldownSeconds(body.buttonCooldownSeconds);
+    if (body.refreshRetrySeconds > 0) setCooldown(body.refreshRetrySeconds);
     if (announce) announceArrivals(next);
     else if (!seen.current) {
-      seen.current = new Map(next.map((item) => [item.id, item.status]));
+      seen.current = new Map(next.map(item => [item.id, item.status]));
       next.filter(item => item.status === "approved").forEach(item => announced.current.add(item.id));
     }
     setItems(next);
     const check = await api("/api/checklist");
     if (check.ok) {
-      const state = await check.json();
-      setAlertsDone(state.alertsDone);
-      setTrial(state.trialRunning);
+      const state = await check.json(); setTrial(state.trialRunning);
     }
-    const billing = await api("/api/billing");
-    if (billing.ok) {
-      const { accessUntil, fiveDayWarning, blocked: isBlocked, consultaWarn: warnConsultas, consultasUsed, consultasCap } = await billing.json();
-      setQuota({ used: consultasUsed, cap: consultasCap });
-      setExpired(Boolean(accessUntil) && new Date(accessUntil).getTime() <= Date.now());
-      setBlocked(Boolean(isBlocked));
-      setFiveDayWarning(Boolean(fiveDayWarning));
-      setConsultaWarn(Boolean(warnConsultas));
-    }
+    return true;
   }
 
   function announceArrivals(next: Transfer[]) {
@@ -744,23 +757,49 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
       }
       previous.set(item.id, item.status);
     }
-    arrived.forEach((_, index) => playCashBell(index * 0.4));
+    arrived.forEach((item, index) => {
+      void claimPaymentNotice(session.tenantId, item.id).then(claimed => {
+        if (claimed) { playCashBell(index * 0.4); void showDesktopFallback(item.id, item.payerName, item.amount); }
+      });
+    });
     if (arrived.length) setNotice(arrived[0]);
   }
 
   useEffect(() => {
     let gone = false;
-    const opening = session.isOwner
-      ? (firstOpen ??= api("/api/transfers/refresh", { method: "POST" }).then(() => undefined, () => undefined))
-      : Promise.resolve();
-    void opening.then(() => {
-      if (!gone) void load(false);
-    });
+    void load(false).then(async ready => {
+      if (!ready || gone) return;
+      const response = await api("/api/transfers/refresh", { method: "POST" });
+      if (response.ok && !gone) await load(false);
+    }).catch(() => setWait("No pudimos cargar los movimientos. Revisá tu conexión."));
+    let lastInteraction = 0;
+    let lastLoad = Date.now();
+    const activity = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastInteraction >= 10000) {
+        lastInteraction = Date.now();
+        void api("/api/activity", { method: "POST" }).catch(() => undefined);
+      }
+    };
+    activity();
+    const events = ["pointerdown", "keydown", "scroll"] as const;
+    events.forEach(event => window.addEventListener(event, activity, { passive: true }));
+    const onVisible = () => { if (document.visibilityState === "visible") activity(); };
+    document.addEventListener("visibilitychange", onVisible);
+    const onPush = (event: MessageEvent) => { if (event.data?.type === "transfer-arrived") void load(true); };
+    navigator.serviceWorker?.addEventListener("message", onPush);
     const timer = window.setInterval(() => {
-      if (!gone) void load(true);
-    }, pollSeconds * 1000);
-    const origin = import.meta.env.VITE_API_ORIGIN ?? "http://localhost:5080";
-    const source = new EventSource(`${origin}/api/transfers/live`, { withCredentials: true });
+      const idle = Date.now() - lastInteraction;
+      const interval = idle >= 600000 ? 300000 : idle >= 120000 ? 60000 : pollSeconds * 1000;
+      if (!gone && Date.now() - lastLoad >= interval) { lastLoad = Date.now(); void load(true).catch(() => undefined); }
+    }, 1000);
+    const source = new EventSource(`${apiOrigin}/api/transfers/live`, { withCredentials: true });
+    source.addEventListener("AccessChanged", event => {
+      source.close(); setItems([]); setNotice(null); seen.current = null;
+      const reason = JSON.parse((event as MessageEvent).data).reason;
+      if (reason === "session-ended") window.location.assign("/ingresar");
+      else { setBlocked(true); void load(false); }
+    });
     source.addEventListener(liveTransferMessageType, (event) => {
       if (gone) return;
       const message = JSON.parse((event as MessageEvent).data) as LiveTransferArrived;
@@ -771,12 +810,15 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
       setItems(current => {
         const updated = current.some(item => item.id === row.id)
           ? current.map(item => item.id === row.id ? row : item) : [row, ...current];
-        return updated.sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt)).slice(0, current.length || 10);
+        return updated.sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt)).slice(0, displayLimit.current);
       });
     });
     return () => {
       gone = true;
       window.clearInterval(timer);
+      events.forEach(event => window.removeEventListener(event, activity));
+      document.removeEventListener("visibilitychange", onVisible);
+      navigator.serviceWorker?.removeEventListener("message", onPush);
       source.close();
     };
   }, [first, pollSeconds, session.isOwner]);
@@ -795,7 +837,7 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
       const response = await api("/api/transfers/refresh", { method: "POST" });
       if (response.status === 429) {
         const body = await response.json().catch(() => ({}));
-        setWait(body.error === "quota_wait" ? "Llegaste al tope de consultas de esta semana. Esperá al próximo período." : "Mercado Pago está demorado. Aguardá unos instantes para volver a consultar.");
+        setWait("Esperá unos segundos antes de volver a revisar los cobros.");
         setCooldown(body.retryAfterSeconds ?? cooldownSeconds);
       } else if (response.status === 409) { setExpired(true); setBlocked(true); }
       else if (!response.ok) setWait("No pudimos revisar los cobros. Volvé a intentar en un momento.");
@@ -809,27 +851,23 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
     if (response.ok) setDetail(await response.json());
   }
 
-  async function enableAlerts() {
-    try { await enableDeviceAlerts(); setAlertsDone(true); }
-    catch { setWait("No pudimos activar los avisos. Revisá los permisos de este navegador y volvé a intentar."); }
-  }
-
   const cooling = cooldown > 0;
 
   return (
     <Shell onSalir={onSalir} counter isOwner={session.isOwner}>
       <main className="board">
+        <NotificationBanner accountId={session.accountId} />
         {blocked || expired ? (
           <section className="access-block" role="alert">
-            <h1>Las alertas de tu mostrador están en pausa</h1>
-            <p>Terminó el período activo de tu cuenta. Tus Puntos de Alerta configurados y tu historial están guardados y seguros.</p>
+            <h1>{session.isOwner && !connected && !expired ? "Dejá listo tu mostrador en 3 pasos" : "Las alertas de tu mostrador están en pausa"}</h1>
+            <p>{session.isOwner && !connected && !expired ? "Conectá tu Mercado Pago de forma segura para empezar a recibir avisos de tus cobros." : "Terminó el período activo de tu cuenta. Tus Puntos de Alerta configurados y tu historial están guardados y seguros."}</p>
             {!session.isOwner ? <p>Pedile al Admin del comercio que renueve el acceso.</p> : null}
-            {session.isOwner ? <Link to="/pagar">Ir a Pagos</Link> : null}
+            {session.isOwner ? <><Link to={connected ? "/pagar" : "/conectar"}>{connected ? "Ir a Pagos" : "Conectar Mercado Pago"}</Link></> : null}
           </section>
         ) : (
           <>
             <div className="board-scroll">
-              <p className="quota" role="status">Consultas manuales disponibles: {Math.max(0, quota.cap - quota.used)} / {quota.cap}</p>
+              <p className="update-hint">Actualización automática. Si el cliente ya pagó, podés revisar ahora.</p>
               {!audioActive ? <section className="sound-banner" role="status"><p>🔇 El sonido de caja está desactivado en este navegador.</p><button className="secondary" onClick={() => void unlockSound().catch(() => setAudioError("No pudimos activar el sonido. Tocá de nuevo para intentar."))}>🔊 Tocá acá para activar la campanita de cobros</button>{audioError ? <p role="alert">{audioError}</p> : null}</section> : <p className="sound-active">🔊 Alerta sonora activa</p>}
               {session.isOwner && fiveDayWarning ? (
                 <p className="banner warning" role="status">
@@ -839,23 +877,11 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
               ) : session.isOwner && trial ? (
                 <p className="banner trial">La prueba está en curso.</p>
               ) : null}
-              {session.isOwner && consultaWarn ? (
-                <p className="banner warning" role="status">
-                  Te quedan pocas consultas de esta semana.
-                </p>
-              ) : null}
               {notice ? (
                 <p className="notice" role="status">
                   <strong>¡Entró un pago!</strong>
                   <span className="money">{notice.payerName} te transfirió {money.format(notice.amount)}</span>
                 </p>
-              ) : null}
-              {alertsDone === false ? (
-                <section className="alerts">
-                  <h2>Activá los avisos</h2>
-                  <p>En el iPhone, agregá la app a la pantalla de inicio.</p>
-                  <button className="secondary" type="button" onClick={enableAlerts}>Activar avisos</button>
-                </section>
               ) : null}
               <div className="transfer-columns" role="row">
                 <span>Fecha</span>
@@ -863,7 +889,7 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
                 <span>Monto</span>
                 <span>Estado</span>
               </div>
-              {!items.length ? <p className="empty">Todavía no entraron transferencias. Apenas te manden plata, va a aparecer acá con sonido.</p> : null}
+              {!items.length ? <p className="empty">Todavía no detectamos transferencias. Las revisamos periódicamente; también podés revisar ahora. Activá la campanita para escuchar los nuevos cobros.</p> : null}
               <ol className="transfers">
                 {items.map((item, index) => {
                   const tone = item.status === "approved" || item.status === "pending" || item.status === "rejected" ? item.status : "other";
@@ -920,8 +946,8 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
                   className={cooling ? "cooldown" : undefined}
                   type="button"
                   onClick={refresh}
-                  aria-disabled={cooling || loading || quota.used >= quota.cap}
-                  disabled={cooling || loading || quota.used >= quota.cap}
+                  aria-disabled={cooling || loading}
+                  disabled={cooling || loading}
                 >
                   {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "🔄 Revisar si entró un pago ahora"}
                 </button>
@@ -935,95 +961,41 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
 
 function HistoryPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [items, setItems] = useState<Transfer[]>([]);
-  const [totals, setTotals] = useState<{ byDay: number; byMonth: number; byRange: number } | null>(null);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-
-  async function load() {
-    const query = new URLSearchParams();
-    if (from) query.set("from", new Date(from).toISOString());
-    if (to) query.set("to", new Date(to).toISOString());
-    const suffix = query.toString() ? `?${query}` : "";
-    const response = await api(`/api/history${suffix}`);
-    if (!response.ok) return;
-    const body = await response.json();
-    setItems(body.items);
-    setTotals(body.totals);
+  const [from, setFrom] = useState(""); const [to, setTo] = useState("");
+  const [next, setNext] = useState<number | null>(null); const [offset, setOffset] = useState(0);
+  const [wait, setWait] = useState(0); const [loading, setLoading] = useState(false); const [error, setError] = useState("");
+  useEffect(() => { if (wait > 0) { const tick = setTimeout(() => setWait(value => value - 1), 1000); return () => clearTimeout(tick); } }, [wait]);
+  async function load(start = 0) {
+    if (loading || wait > 0) return; setLoading(true); setError("");
+    try {
+      const query = new URLSearchParams({ offset: String(start) });
+      if (from) query.set("from", new Date(`${from}T00:00:00`).toISOString());
+      if (to) query.set("to", new Date(`${to}T23:59:59.999`).toISOString());
+      const response = await api(`/api/history?${query}`);
+      const body = await response.json();
+      if (!response.ok) { setWait(body.retryAfterSeconds ?? 0); setError(response.status === 409 ? "Necesitás vincular Mercado Pago y tener acceso activo para consultar." : "Esperá unos segundos o revisá tu conexión antes de volver a consultar."); return; }
+      setItems(body.items); setNext(body.nextOffset); setOffset(start); setWait(body.buttonCooldownSeconds ?? 10);
+    } catch { setError("No pudimos consultar los movimientos. Volvé a intentar."); } finally { setLoading(false); }
   }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  return (
-    <Shell onSalir={onSalir} back isOwner={session.isOwner}>
-      <main className="history">
-        <h1>Historial Completo de Transferencias</h1>
-        <p>Vista exclusiva para vos como dueño. Filtrá por fechas o descargá la planilla para tu control.</p>
-        <form
-          className="history-range"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void load();
-          }}
-        >
-          <label>
-            Desde
-            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-          </label>
-          <label>
-            Hasta
-            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-          </label>
-          <button type="submit">Consultar</button>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              void (async () => {
-                const query = new URLSearchParams();
-                if (from) query.set("from", new Date(from).toISOString());
-                if (to) query.set("to", new Date(to).toISOString());
-                const suffix = query.toString() ? `?${query}` : "";
-                const response = await api(`/api/history/csv${suffix}`);
-                if (!response.ok) return;
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "historial.csv";
-                link.click();
-                URL.revokeObjectURL(url);
-              })();
-            }}
-          >
-            📥 Descargar planilla (Excel / CSV)
-          </button>
-        </form>
-        {totals ? (
-          <p className="history-totals money">
-            Día {money.format(totals.byDay)} · Mes {money.format(totals.byMonth)} · Rango {money.format(totals.byRange)}
-          </p>
-        ) : null}
-        <div className="transfer-columns" role="row">
-          <span>Fecha</span>
-          <span>Pagador</span>
-          <span>Monto</span>
-          <span>Estado</span>
-        </div>
-        <ol className="transfers">
-          {items.map((item) => (
-            <li key={item.id} className="row">
-              <div className="when">{when.format(new Date(item.occurredAt))}</div>
-              <div className="payer">{item.payerName || "Desconocido"}</div>
-              <div className="amount">{money.format(item.amount)}</div>
-              <div className="status">{item.statusLabel}</div>
-            </li>
-          ))}
-        </ol>
-      </main>
-    </Shell>
-  );
+  function downloadVisible() {
+    const cell = (text: string) => `"${(/^\s*[=+@-]/.test(text) ? "'" : "") + text.replaceAll('"', '""')}"`;
+    const csv = ["Fecha,Pagador,Monto,Estado", ...items.map(item => [cell(when.format(new Date(item.occurredAt))), cell(item.payerName), item.amount.toFixed(2), cell(item.statusLabel)].join(","))].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = "movimientos-visibles.csv"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  return <Shell onSalir={onSalir} back isOwner={session.isOwner}><main className="history">
+    <h1>Movimientos de tu cuenta</h1><p>Vista exclusiva del Admin. Consultá los movimientos disponibles en Mercado Pago. La descarga contiene únicamente las filas que ves en esta página.</p>
+    <form className="history-range" onSubmit={event => { event.preventDefault(); void load(); }}>
+      <label>Desde<input type="date" value={from} onChange={event => { setFrom(event.target.value); setItems([]); setNext(null); setOffset(0); }} /></label>
+      <label>Hasta<input type="date" value={to} onChange={event => { setTo(event.target.value); setItems([]); setNext(null); setOffset(0); }} /></label>
+      <button type="submit" disabled={loading || wait > 0}>{loading ? "Consultando..." : wait > 0 ? `Esperá ${wait}s...` : "Consultar movimientos"}</button>
+      <button type="button" className="secondary" disabled={!items.length} onClick={downloadVisible}>Descargar vista (Excel / CSV)</button>
+    </form>
+    {error ? <p className="error" role="alert">{error}</p> : null}
+    <p className="money">{items.length} movimientos visibles · Acreditado en esta página: {money.format(items.filter(item => item.status === "approved").reduce((total, item) => total + item.amount, 0))}</p>
+    <ol className="transfers">{items.map(item => <li key={item.id} className={`row ${item.status}`}><div className="when">{when.format(new Date(item.occurredAt))}</div><div className="payer">{item.payerName}</div><div className="amount">{money.format(item.amount)}</div><div className="status">{item.statusLabel}</div></li>)}</ol>
+    <div className="hero-actions"><button className="secondary" disabled={loading || wait > 0 || offset === 0} onClick={() => void load(Math.max(0, offset - 20))}>Página anterior</button><button className="secondary" disabled={loading || wait > 0 || next === null} onClick={() => next !== null && void load(next)}>Página siguiente</button></div>
+  </main></Shell>;
 }
 
 function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
@@ -1031,7 +1003,7 @@ function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<
     <Shell onSalir={onSalir} back isOwner={session.isOwner}>
       <main>
         <h1>Accesos de Mostrador (Puntos de Alerta)</h1>
-        <p>Creá hasta 4 accesos para tus cajeros o pantallas. Ellos solo ven las últimas 10 transferencias entrantes y reciben alertas con sonido.</p>
+        <p>Habilitá dispositivos para recibir avisos. Tu plan incluye Puntos de Alerta; cada adicional cuesta $ 1.000 y vence junto con el acceso del Admin.</p>
         {session.isOwner ? <OwnerLogins /> : null}
       </main>
     </Shell>
@@ -1041,6 +1013,7 @@ function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<
 function OwnerLogins() {
   const [rows, setRows] = useState<LoginRow[]>([]);
   const [pointCap, setPointCap] = useState(0);
+  const [savingRenewal, setSavingRenewal] = useState<string | null>(null);
   const [alias, setAlias] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -1126,12 +1099,26 @@ function OwnerLogins() {
     await reload();
   }
 
+  async function setRenewal(row: LoginRow, selected: boolean) {
+    if (savingRenewal) return;
+    setSavingRenewal(row.id); setError("");
+    setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: selected } : point));
+    try {
+      const response = await api(`/api/logins/${row.id}/renewal`, { method: "PUT", body: JSON.stringify({ renewWithAdmin: selected }) });
+      if (!response.ok) throw new Error();
+      await reload();
+    } catch {
+      setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: row.renewWithAdmin } : point));
+      setError("No pudimos guardar la selección de renovación. Volvé a intentar.");
+    } finally { setSavingRenewal(null); }
+  }
+
   const aliasBare = alias?.replace(/^#/, "") ?? "";
 
   return (
     <section className="logins">
-      <p className="point-cap">{rows.filter(row => !row.isOwner && !row.revoked).length} de {pointCap} puntos de alerta activos</p>
-      {pointCap === 0 ? <p>Tu plan incluye solo el acceso de Admin. <Link to="/pagar">Elegí Pack Mes para sumar Puntos de Alerta.</Link></p> : null}
+      <p className="point-cap">{rows.filter(row => !row.isOwner && !row.revoked).length} Puntos de Alerta creados · {pointCap} incluidos</p>
+      <p>Incluidos: {pointCap}. Los adicionales requieren pago y pueden renovarse con el Admin.</p>
       {alias ? (
         <p className="alias-confirmed">
           Alias confirmado: <strong>{alias}</strong>
@@ -1150,6 +1137,15 @@ function OwnerLogins() {
         <div className="login-row" key={row.id}>
           <span className="email">{row.displayName ?? row.email}</span>
           <span className="role">{row.isOwner ? "Admin" : "Punto de Alerta"}</span>
+          {!row.isOwner && !row.revoked ? <>
+            <p>{row.included ? "Incluido en tu plan" : row.enabled ? `Adicional habilitado hasta ${row.extraAccessUntil ? when.format(new Date(row.extraAccessUntil)) : "el vencimiento del Admin"}` : "Adicional pendiente de pago o renovación"}</p>
+            {!row.included ? <label><input type="checkbox" checked={row.renewWithAdmin} disabled={savingRenewal !== null} onChange={event => void setRenewal(row, event.target.checked)} />Incluir en la próxima renovación prepaga del Admin (+ $ 1.000)</label> : null}
+            {row.requiresPayment ? <button className="secondary" onClick={async () => {
+              const response = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ additionalPointId: row.id }) });
+              if (!response.ok) { setError("Primero necesitás un período activo del Admin para pagar este punto."); return; }
+              window.location.assign((await response.json()).initPoint);
+            }}>Habilitar adicional por $ 1.000 hasta el vencimiento del Admin</button> : null}
+          </> : null}
           {row.revoked ? null : (
             <label>
               <input type="checkbox" checked={row.pushApproved} onChange={(event) => void push(row, event.target.checked)} />
@@ -1169,7 +1165,7 @@ function OwnerLogins() {
           )}
         </div>
       ))}
-      {alias && pointCap > rows.filter(row => !row.isOwner && !row.revoked).length ? (
+      {alias ? (
         <form onSubmit={add}>
           <label>
             Nombre *
@@ -1221,6 +1217,11 @@ type PayScreen = {
   blocked: boolean;
   trialEligible: boolean;
   fiveDayWarning: boolean;
+  eventReadyCount: number;
+  eventDurationHours: number;
+  canStartEvent: boolean;
+  paymentsNeedingReview: number;
+  connected: boolean;
 };
 
 function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
@@ -1241,6 +1242,19 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
     });
   }, []);
 
+  async function startEvent() {
+    if (!screen || paying) return;
+    const estimate = new Date(Date.now() + screen.eventDurationHours * 3600000);
+    if (!window.confirm(`El evento empieza ahora. Las consultas y alertas de TransfersCheck se deshabilitarán el ${when.format(estimate)}. Tu cuenta de Mercado Pago seguirá funcionando. ¿Querés iniciar?`)) return;
+    setPaying(true); setPayError("");
+    try {
+      const response = await api("/api/billing/start-event", { method: "POST" });
+      const body = await response.json(); if (!response.ok) throw new Error();
+      window.alert(`Evento iniciado. TransfersCheck estará habilitado hasta ${when.format(new Date(body.accessUntil))}.`);
+      window.location.assign("/");
+    } catch { setPayError("No pudimos iniciar el evento. Verificá que esté pago, vinculado y que no tengas otro período activo."); setPaying(false); }
+  }
+
   async function pay(planCode: string) {
     if (paying || !session.isOwner) return;
     setPaying(true); setPayError("");
@@ -1257,7 +1271,8 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
       {!screen ? <main /> : (
         <>
           <main className="pay">
-            {screen.blocked ? <section className="andes-card pause-message" role="alert"><div className="pause-icon">⏸️</div><h1>Las alertas de tu mostrador están en pausa</h1><p>Terminó el período activo de tu cuenta. <strong>Tus Puntos de Alerta configurados y tu historial están guardados y seguros.</strong> Elegí un plan abajo para reactivar los avisos con sonido al instante.</p></section> : <h1>Extendé el acceso</h1>}
+            {screen.blocked ? <section className="andes-card pause-message" role="alert"><div className="pause-icon">⏸️</div><h1>{screen.accessUntil ? "Las alertas de tu mostrador están en pausa" : "Elegí cómo usar TransfersCheck"}</h1><p>{screen.accessUntil ? "Terminó el período activo de tu cuenta. " : "Activá tu acceso para empezar. "}<strong>Tus Puntos de Alerta configurados se conservan.</strong> Elegí un plan para habilitar la consulta y los avisos de TransfersCheck.</p></section> : <h1>Extendé el acceso</h1>}
+            {screen.paymentsNeedingReview > 0 ? <p className="banner warning" role="alert">Recibimos un pago de un Punto de Alerta que no pudo habilitarse porque el período venció o el acceso fue revocado. Ese pago requiere revisión para resolver la habilitación o devolución.</p> : null}
             {screen.fiveDayWarning ? <p className="banner warning">Quedan cinco días de acceso. Pagá para seguir recibiendo avisos.</p> : null}
             <p className="account-row">
               <span className="label">Email</span>
@@ -1282,8 +1297,9 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
                 autoComplete="off"
               />
             </label>
+            {screen.eventReadyCount > 0 ? <section className="andes-card"><h2>Tenés {screen.eventReadyCount} pase(s) Individual / Evento disponible(s)</h2><p>El tiempo comienza cuando iniciás el evento. Las alertas y consultas de TransfersCheck vencen {screen.eventDurationHours} horas después.</p>{screen.canStartEvent ? <button disabled={paying} onClick={() => void startEvent()}>Iniciar Evento</button> : <p>{!screen.connected ? "Primero vinculá tu Mercado Pago." : "Podés iniciarlo cuando termine tu período activo."}</p>}</section> : null}
             {payError ? <p className="error" role="alert">{payError}</p> : null}
-            {session.isOwner ? <PlanCards plans={screen.plans} initial={screen.trialEligible && !screen.blocked} onPay={code => void pay(code)} busy={paying} /> : <p>Pedile al Admin del comercio que renueve el acceso para reactivar las alertas.</p>}
+            {session.isOwner ? <PlanCards primary={!screen.canStartEvent} plans={screen.plans} initial={screen.trialEligible && !screen.blocked} onPay={code => void pay(code)} busy={paying} /> : <p>Pedile al Admin del comercio que renueve el acceso para reactivar las alertas.</p>}
           </main>
         </>
       )}
@@ -1680,39 +1696,7 @@ function OwnerSite() {
           );
         })}
       </ul>
-      <form className="owner-new-plan" onSubmit={createPlan}>
-        <h2>Nuevo plan</h2>
-        <label>
-          Código
-          <input value={newPlan.code} onChange={(event) => setNewPlan({ ...newPlan, code: event.target.value })} required />
-        </label>
-        <label>
-          Nombre
-          <input
-            value={newPlan.displayName}
-            onChange={(event) => setNewPlan({ ...newPlan, displayName: event.target.value })}
-            required
-          />
-        </label>
-        <label>
-          Importe
-          <input
-            type="number"
-            value={newPlan.amount}
-            onChange={(event) => setNewPlan({ ...newPlan, amount: event.target.value })}
-            required
-          />
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={newPlan.enableCopilotHelp}
-            onChange={(event) => setNewPlan({ ...newPlan, enableCopilotHelp: event.target.checked })}
-          />
-          EnableCopilotHelp
-        </label>
-        <button type="submit">Agregar plan</button>
-      </form>
+
 
       <h1>Panel de servicios</h1>
       <p className="gate-lead">Cada tarjeta es un servicio que el producto ya usa. El valor completo no se muestra.</p>

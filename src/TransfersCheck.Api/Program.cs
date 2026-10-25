@@ -18,7 +18,18 @@ using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
 
+if (args.Length == 2 && args[0] == "--validate-production-config")
+{
+    var configuration = new ConfigurationBuilder().AddJsonFile(Path.GetFullPath(args[1]), optional: false).Build();
+    var errors = TransfersCheck.Api.Configuration.ProductionConfiguration.Errors(configuration, "Production");
+    foreach (var error in errors) Console.Error.WriteLine(error);
+    if (errors.Count == 0) Console.WriteLine("Production configuration validated. No database, host, or background services started.");
+    Environment.ExitCode = errors.Count == 0 ? 0 : 1;
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
+TransfersCheck.Api.Configuration.ProductionConfiguration.RequireValid(builder.Configuration, builder.Environment.EnvironmentName);
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<CommercialOptions>(builder.Configuration.GetSection(CommercialOptions.Section));
@@ -148,7 +159,9 @@ if (app.Environment.IsDevelopment())
 
 AccountEndpoints.Map(app);
 Auth0Endpoints.Map(app);
+#if DEBUG
 DevPlanEndpoints.Map(app);
+#endif
 OwnerEndpoints.Map(app);
 HelpEndpoints.Map(app);
 ConnectionEndpoints.Map(app);

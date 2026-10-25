@@ -19,7 +19,6 @@ public sealed class EfOwnerSecretStore(
     IOptions<CheckoutOptions> checkout,
     IOptions<MailOptions> mail,
     IOptions<FirebaseOptions> firebase,
-    IOptions<MercadoPagoOptions> mercadoPago,
     TimeProvider clock) : IOwnerSecretStore
 {
     public async Task<IReadOnlyList<OwnerSecretStatus>> ListAsync(CancellationToken cancellationToken)
@@ -80,7 +79,7 @@ public sealed class EfOwnerSecretStore(
 
         var fromConfig = card switch
         {
-            OwnerServiceCards.MercadoPagoPlatform => FirstNonEmpty(checkout.Value.AccessToken, mercadoPago.Value.ClientSecret),
+            OwnerServiceCards.MercadoPagoPlatform => checkout.Value.AccessToken,
             OwnerServiceCards.Mail => FirstNonEmpty(mail.Value.Password, mail.Value.Host),
             OwnerServiceCards.BrowserPush => FirstNonEmpty(firebase.Value.VapidKey, firebase.Value.ApiKey),
             _ => ""

@@ -7,17 +7,17 @@ test("pay screen shows Pack Evento and Pack Mes from the plan table", async ({ p
   const email = `e2e-plans-${Date.now()}@counter.test`;
   await signUpWithAuth0(page, email);
   await page.goto("/pagar");
-  await expect(page.getByRole("heading", { name: "Extendé el acceso" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Elegí cómo usar TransfersCheck" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Email", { exact: true })).toBeVisible();
   await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByText("Plan", { exact: true })).toBeVisible();
   await expect(page.getByText("Suscripción", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Pack Evento", exact: true })).toBeVisible();
-  await expect(page.getByText("Un día, un usuario. Ideal para la fiesta, feria o show.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Individual / Evento", exact: true })).toBeVisible();
+  await expect(page.getByText("24 horas desde que iniciás el evento. Admin + 1 Punto de Alerta.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Pack Mes", exact: true })).toBeVisible();
   await expect(page.getByText("24 horas", { exact: true })).toBeVisible();
   await expect(page.getByText("30 días", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Pagar Pack Mes con Mercado Pago" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Renovar Pack Mes con Mercado Pago" })).toBeVisible();
 });
 
 test("browser return from pay does not move access; checkout returns a payment link", async ({ page }) => {
@@ -72,7 +72,7 @@ test("renewal does not promise another trial and each card checks out the select
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.screenshot({ path: "test-results/renewal-mobile.png", fullPage: true });
   const checkout = page.waitForRequest(request => request.url().endsWith("/api/billing/checkout"));
-  await page.getByRole("button", { name: "Pagar Pack Evento (24 hs)" }).click();
+  await page.getByRole("button", { name: "Comprar Individual (24 hs)" }).click();
   expect((await checkout).postDataJSON().planCode).toBe("pack_evento");
   await page.waitForURL(/checkout\/pref-1/);
 });

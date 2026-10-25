@@ -15,7 +15,7 @@ public sealed class LoginAccountCap
     {
         if (string.Equals(planCode, PlanCodes.PackMes, StringComparison.OrdinalIgnoreCase))
             return alertPointCount < 4;
-        return false;
+        return alertPointCount < 1;
     }
 }
 

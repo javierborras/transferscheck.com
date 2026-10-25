@@ -22,7 +22,7 @@ test("pay screen loads after signup", async ({ page }) => {
   const email = `e2e-pay-${Date.now()}@counter.test`;
   await signUpWithAuth0(page, email);
   await page.goto("/pagar");
-  await expect(page.getByRole("heading", { name: "Extendé el acceso" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Elegí cómo usar TransfersCheck" })).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(".commercial-plan .money").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Pagar Pack Mes con Mercado Pago" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Renovar Pack Mes con Mercado Pago" })).toBeVisible();
 });

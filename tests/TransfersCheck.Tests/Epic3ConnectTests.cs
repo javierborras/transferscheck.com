@@ -16,6 +16,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task Connect_uses_pkce_and_an_expired_state_is_rejected()
     {
         MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         var clock = new MutableClock();
         await using var factory = new TransfersApiFactory(sql) { Clock = clock };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -44,6 +45,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task Callback_stores_an_encrypted_connection_starts_the_trial_and_opens_the_list()
     {
         MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var cookie = await SignUp(client);
@@ -98,6 +100,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task A_mercado_pago_account_already_linked_is_refused()
     {
         MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         var linkedUser = Random.Shared.Next(2000, 2_000_000_000);
         // Mock oauth increments UserId per code exchange; pin the same id for both merchants.
         MockState.UserId = linkedUser - 1;
@@ -138,6 +141,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task Checklist_exposes_connect_words_trial_status_and_no_client_advance()
     {
         MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

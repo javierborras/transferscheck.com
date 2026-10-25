@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
+using TransfersCheck.Infrastructure;
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Core;
 
@@ -14,6 +16,7 @@ public static class AccountEndpoints
     public sealed record InviteName(string? Name);
     public sealed record InvitePassword(string? Password);
     public sealed record PushApproval(bool Approved);
+    public sealed record RenewalBody(bool RenewWithAdmin);
 
     public static void Map(WebApplication app)
     {
@@ -28,6 +31,12 @@ public static class AccountEndpoints
         group.MapPost("/logins", Create).AddEndpointFilter<LiveSessionFilter>();
         group.MapDelete("/logins/{id:guid}", Revoke).AddEndpointFilter<LiveSessionFilter>();
         group.MapPut("/logins/{id:guid}/push", SetPush).AddEndpointFilter<LiveSessionFilter>();
+        group.MapPut("/logins/{id:guid}/renewal", async (Guid id, RenewalBody body, HttpContext http, IMerchantStore store, CancellationToken ct) => {
+            if (!Owner(http)) return Results.StatusCode(403);
+            var row = await store.FindAccountAsync(id, ct);
+            if (row is null || row.IsOwner || row.Revoked) return Results.NotFound();
+            row.RenewWithAdmin = body.RenewWithAdmin; await store.SaveChangesAsync(ct); return Results.NoContent();
+        }).AddEndpointFilter<LiveSessionFilter>();
         group.MapPost("/invites/{token}", ClaimInvite);
     }
 
@@ -174,6 +183,7 @@ public static class AccountEndpoints
         }
 
         account.LiveSessionId = null;
+        await store.DeletePushDevicesForAccountAsync(account.Id, cancellationToken);
         await store.SaveChangesAsync(cancellationToken);
         response.Cookies.Delete(sessionOptions.Value.CookieName, new CookieOptions
         {
@@ -243,6 +253,7 @@ public static class AccountEndpoints
     private static async Task<IResult> List(
         HttpContext http,
         IMerchantStore store,
+        TimeProvider clock,
         ICommerceAliasStore aliases,
         CancellationToken cancellationToken)
     {
@@ -250,6 +261,7 @@ public static class AccountEndpoints
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         var alias = await aliases.GetAsync(Tenant(http), cancellationToken);
         var accounts = await store.ListAccountsAsync(cancellationToken);
+        var merchant = await store.FindMerchantAsync(Tenant(http), cancellationToken);
         return Results.Ok(accounts.Select(a => new
         {
             id = a.Id,
@@ -261,7 +273,11 @@ public static class AccountEndpoints
             role = a.IsOwner ? "Admin" : "Punto de Alerta",
             pushApproved = a.PushApproved,
             revoked = a.Revoked,
-            passwordSet = a.PasswordSet
+            passwordSet = a.PasswordSet,
+            included = a.IsOwner || merchant is not null && AlertPointAccess.IsIncluded(a, merchant),
+            enabled = AlertPointAccess.Allows(a, merchant, clock.GetUtcNow()),
+            extraAccessUntil = a.ExtraAccessUntil, renewWithAdmin = a.RenewWithAdmin,
+            requiresPayment = !a.IsOwner && merchant is not null && !AlertPointAccess.IsIncluded(a, merchant) && !(a.ExtraAccessUntil > clock.GetUtcNow())
         }));
     }
 
@@ -271,8 +287,7 @@ public static class AccountEndpoints
         IMerchantStore store,
         ICommerceAliasStore aliases,
         IAlertInviteStore invites,
-        ITenantPlanCode planCode,
-        LoginAccountCap accountCap,
+        TransfersCheckDb db,
         IOptions<LoginSessionOptions> sessionOptions,
         IOptions<UiOptions> ui,
         TimeProvider clock,
@@ -287,10 +302,14 @@ public static class AccountEndpoints
         if (!AlertPointIdentity.TryNormalizeUser(body.Name, out var userName))
             return Results.BadRequest(new { error = "invalid_name" });
 
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var resource = $"TransfersCheck.Points.{Tenant(http)}";
+        await db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @r int; EXEC @r = sp_getapplock @Resource={resource}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=10000; IF @r < 0 THROW 51000, 'Point lock unavailable', 1;", cancellationToken);
         var accounts = await store.ListAccountsAsync(cancellationToken);
-        var alertPoints = accounts.Count(a => !a.IsOwner && !a.Revoked);
-        if (!accountCap.AllowsAnotherAlertPoint(await planCode.GetAsync(cancellationToken), alertPoints))
-            return Results.Conflict(new { error = "account_cap" });
+        var positions = accounts.Where(a => !a.IsOwner && !a.Revoked).Select(a => a.AlertPointPosition).ToHashSet();
+        var position = 1;
+        while (positions.Contains(position)) position++;
+        var merchant = await store.FindMerchantAsync(Tenant(http), cancellationToken);
 
         var email = AlertPointIdentity.EmailKey(userName, alias);
         if (await store.FindAccountByEmailAsync(email, cancellationToken) is not null)
@@ -302,6 +321,7 @@ public static class AccountEndpoints
             TenantId = Tenant(http),
             Email = email,
             UserName = userName,
+            AlertPointPosition = position,
             PasswordHash = PasswordHasher.Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
             IsOwner = false,
             PasswordSet = false
@@ -319,6 +339,7 @@ public static class AccountEndpoints
             ExpiresAt = now.Add(sessionOptions.Value.InviteLinkLifetime)
         }, cancellationToken);
 
+        await transaction.CommitAsync(cancellationToken);
         var origin = (ui.Value.Origin ?? "").TrimEnd('/');
         var inviteUrl = $"{origin}{AlertPointIdentity.InvitePath(token)}";
         var displayName = AlertPointIdentity.Display(userName, alias);
@@ -330,7 +351,8 @@ public static class AccountEndpoints
             role = "Punto de Alerta",
             inviteUrl,
             waMeUrl = AlertPointIdentity.WaMeUrl(inviteUrl),
-            token
+            token,
+            requiresPayment = position > AlertPointAccess.Included(merchant?.PlanCode)
         });
     }
 
@@ -427,6 +449,7 @@ public static class AccountEndpoints
         var now = clock.GetUtcNow();
         if (account.LiveSessionId is { } previousId)
         {
+            await store.DeletePushDevicesForAccountAsync(account.Id, cancellationToken);
             var previous = await store.FindSessionAsync(previousId, cancellationToken);
             if (previous is not null)
                 previous.ReplacedAt = now;

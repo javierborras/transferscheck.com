@@ -22,7 +22,7 @@ async function confirmAlias(page: Page, alias: string) {
 async function logOut(page: Page) {
   await page.getByRole("button", { name: "Menú" }).click();
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
-  await expect(page.getByRole("heading", { name: /Que tu mostrador/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: /Que tu mostrador|Hola de nuevo/ })).toBeVisible({ timeout: 20_000 });
 }
 
 test("a new Auth0 account stays signed in across reloads and signs back in after logout", async ({ page }) => {
@@ -48,7 +48,7 @@ test("a first-time email arriving through the login button creates the account",
   const email = `e2e-first-login-${Date.now()}@counter.test`;
   await signInWithAuth0(page, email);
   await page.getByRole("button", { name: "Menú" }).click();
-  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Cajeros / Puntos de Alerta" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Puntos de Alerta" })).toBeVisible();
 });
 
 test("Punto de Alerta: invite, create password, log out, wrong password, log in, reload, log out", async ({ page }) => {
@@ -59,7 +59,7 @@ test("Punto de Alerta: invite, create password, log out, wrong password, log in,
   await confirmAlias(page, alias);
 
   await page.getByRole("button", { name: "Menú" }).click();
-  await page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Cajeros / Puntos de Alerta" }).click();
+  await page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Puntos de Alerta" }).click();
   await page.getByLabel("Nombre *").fill("caja1");
   await page.getByRole("button", { name: "Crear invitación" }).click();
   const inviteUrl = await page.getByLabel("Enlace de invitación").inputValue();
@@ -73,10 +73,10 @@ test("Punto de Alerta: invite, create password, log out, wrong password, log in,
   await page.getByRole("button", { name: "Guardar e ingresar" }).click();
   await expect(page.getByRole("button", { name: "Menú" })).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "Menú" }).click();
-  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Cajeros / Puntos de Alerta" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Puntos de Alerta" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Mostrador en vivo" })).toBeVisible();
   await page.getByRole("button", { name: "Cerrar sesión" }).click();
-  await expect(page.getByRole("heading", { name: /Que tu mostrador/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: /Que tu mostrador|Hola de nuevo/ })).toBeVisible({ timeout: 20_000 });
 
   // The link is single use.
   await page.goto(new URL(inviteUrl).pathname);

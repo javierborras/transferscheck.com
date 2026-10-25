@@ -11,10 +11,12 @@ test("admin history preserves real transfers and the CSV download", async ({ pag
   await page.goto("/");
   await expect(page.locator("ol.transfers li")).toHaveCount(10);
   await page.goto("/historial");
-  await expect(page.getByRole("heading", { name: "Historial Completo de Transferencias" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Movimientos de tu cuenta" })).toBeVisible();
+  await page.waitForTimeout(10500);
+  await page.getByRole("button", { name: "Consultar movimientos" }).click();
   await expect(page.locator("ol.transfers li")).toHaveCount(10);
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "📥 Descargar planilla (Excel / CSV)" }).click();
-  expect((await download).suggestedFilename()).toBe("historial.csv");
+  await page.getByRole("button", { name: "Descargar vista (Excel / CSV)" }).click();
+  expect((await download).suggestedFilename()).toBe("movimientos-visibles.csv");
   await page.screenshot({ path: "test-results/history-desktop.png", fullPage: true });
 });

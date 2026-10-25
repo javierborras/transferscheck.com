@@ -29,7 +29,9 @@ public sealed class LiveSessionFilter(IMerchantStore store, ITenantContext tenan
         if (!account.IsOwner)
         {
             var merchant = await store.FindMerchantAsync(account.TenantId, context.HttpContext.RequestAborted);
-            if (merchant?.PlanCode == PlanCodes.PackEvento) return Results.StatusCode(403);
+            var path = context.HttpContext.Request.Path.Value ?? "";
+            var metadata = path is "/api/session" or "/api/billing" or "/api/sessions";
+            if (!metadata && !AlertPointAccess.Allows(account, merchant, now)) return Results.Json(new { error = "point_disabled" }, statusCode: 403);
         }
         context.HttpContext.Items["account"] = account;
         return await next(context);

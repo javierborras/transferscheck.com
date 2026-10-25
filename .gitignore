@@ -149,6 +149,7 @@ ipch/
 
 # Visual Studio Trace Files
 *.e2e
+!web/.env.e2e
 
 # TFS 2012 Local Workspace
 $tf/
@@ -314,6 +315,9 @@ web/dist/
 web/test-results/
 web/playwright-report/
 web/blob-report/
+web/test-results-prod/
+web/.vite/
+test-results/
 
 # Visual Studio 6 build log
 *.plg

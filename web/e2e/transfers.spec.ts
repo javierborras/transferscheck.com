@@ -23,11 +23,11 @@ test("last-10 list uses adopted columns and refresh; no Sincronizar", async ({ p
   await expect(page.getByText("✓ Acreditado").first()).toBeVisible();
   await expect(page.getByText("Pendiente").first()).toBeVisible();
   await expect(page.getByText("Rechazado").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "🔄 Revisar si entró un pago ahora" })).toBeVisible();
+  await expect(page.locator(".dock button")).toBeVisible();
   await expect(page.getByText("Sincronizar")).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const refresh = page.getByRole("button", { name: "🔄 Revisar si entró un pago ahora" });
+  const refresh = page.locator(".dock button");
   const box = await refresh.boundingBox();
   expect(box).toBeTruthy();
   expect(box!.height).toBeGreaterThanOrEqual(48);

@@ -48,7 +48,7 @@ public sealed class Epic12PlanEditorTests(SqlFixture sql)
             enableCopilotHelp = false,
             active = true
         });
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, created.StatusCode);
 
         using var commerce = factory.CreateClient();
         var email = $"plan-edit-{Guid.NewGuid():N}@counter.test";
@@ -60,7 +60,7 @@ public sealed class Epic12PlanEditorTests(SqlFixture sql)
         var body = await billing.Content.ReadFromJsonAsync<JsonElement>();
         var payPlans = body.GetProperty("plans").EnumerateArray().ToArray();
         Assert.Contains(payPlans, plan => plan.GetProperty("code").GetString() == PlanCodes.PackMes && plan.GetProperty("amount").GetInt32() == 6100);
-        Assert.Contains(payPlans, plan => plan.GetProperty("code").GetString() == "pack-extra" && plan.GetProperty("amount").GetInt32() == 2500);
+        Assert.DoesNotContain(payPlans, plan => plan.GetProperty("code").GetString() == "pack-extra");
 
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
         Assert.Contains("Planes", app, StringComparison.Ordinal);

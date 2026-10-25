@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TransfersCheck.Core;
 
 namespace TransfersCheck.Infrastructure;
@@ -8,8 +10,7 @@ public enum SyncStatus
     Ok,
     Waiting,
     NotEntitled,
-    NotConnected,
-    QuotaWait
+    NotConnected
 }
 
 public sealed class TransferSync(
@@ -21,34 +22,32 @@ public sealed class TransferSync(
     ITokenProtector protector,
     IPushSender push,
     ILiveListPublisher liveList,
-    IConsultaCounter consultas,
     IOptions<SyncOptions> syncOptions,
-    IOptions<CommercialOptions> commercial,
-    TimeProvider clock)
+    TimeProvider clock,
+    TransfersCheckDb db,
+    ILogger<TransferSync> logger)
 {
     public async Task<SyncStatus> Run(Guid tenantId, bool manual, CancellationToken cancellationToken)
     {
         tenant.TenantId = tenantId;
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var resource = $"TransfersCheck.Refresh.{tenantId}";
+        await db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @r int; EXEC @r = sp_getapplock @Resource={resource}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=10000; IF @r < 0 THROW 51000, 'Refresh lock unavailable', 1;", cancellationToken);
         var merchant = await store.FindMerchantAsync(tenantId, cancellationToken);
         if (merchant is null)
             return SyncStatus.NotConnected;
 
+        await db.Entry(merchant).ReloadAsync(cancellationToken);
         var now = clock.GetUtcNow();
         if (!entitlement.AllowsSyncAndPush(merchant.AccessUntil, now))
             return SyncStatus.NotEntitled;
         if (merchant.RateLimitedUntil is { } wait && wait > now)
             return SyncStatus.Waiting;
-        if (manual && merchant.RefreshNotBefore is { } next && next > now)
+        if (merchant.RefreshNotBefore is { } next && next > now)
             return SyncStatus.Waiting;
 
-        // Story 10.1: at the weekly wall, queries and alerts wait — poll must not sync or push either.
-        if (merchant.ConnectedAt is { } link)
-        {
-            var (periodStart, periodEnd) = WeeklyQueryQuota.Period(link, now);
-            var used = await consultas.CountAsync(tenantId, periodStart, periodEnd, cancellationToken);
-            if (WeeklyQueryQuota.Evaluate(used, commercial.Value.WeeklyQueryCap, commercial.Value.WeeklyQueryWarningGap) is QuotaLevel.Wait)
-                return SyncStatus.QuotaWait;
-        }
+        if (!manual && merchant.LastTransferCheckAt is { } last && now - last < PollingCadence.Interval(merchant.LastInteractionAt, now, syncOptions.Value))
+            return SyncStatus.Waiting;
 
         var connection = await store.FindConnectionAsync(cancellationToken);
         if (connection is null)
@@ -67,6 +66,12 @@ public sealed class TransferSync(
             await store.SaveChangesAsync(cancellationToken);
         }
 
+        merchant.LastTransferCheckAt = now;
+        merchant.RefreshNotBefore = now.Add(syncOptions.Value.ButtonCooldown);
+        if (manual) {
+            merchant.LastInteractionAt = now;
+            merchant.RefreshNotBefore = now.Add(syncOptions.Value.ButtonCooldown);
+        }
         IReadOnlyList<TransferChange> changes;
         try
         {
@@ -80,16 +85,20 @@ public sealed class TransferSync(
         }
         catch (RateLimitedException)
         {
-            merchant.RateLimitedUntil = now.Add(syncOptions.Value.PollInterval);
+            merchant.RateLimitedUntil = now.Add(syncOptions.Value.IdlePollInterval);
             await store.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return SyncStatus.Waiting;
+        }
+        catch (HttpRequestException ex) {
+            logger.LogWarning(ex, "Transfer provider unavailable; retaining technical cooldown.");
+            await store.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return SyncStatus.Waiting;
         }
 
-        if (manual)
-        {
-            merchant.RefreshNotBefore = now.Add(syncOptions.Value.ButtonCooldown);
-            await store.SaveChangesAsync(cancellationToken);
-        }
+        await store.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         foreach (var change in changes)
         {
@@ -108,15 +117,23 @@ public sealed class TransferSync(
         if (entitlement.AllowsSyncAndPush(merchant.AccessUntil, now))
         {
             var devices = await store.ListApprovedPushDevicesAsync(cancellationToken);
-            if (merchant.PlanCode == PlanCodes.PackEvento)
-            {
-                var owners = (await store.ListAccountsAsync(cancellationToken)).Where(account => account.IsOwner).Select(account => account.Id).ToHashSet();
-                devices = devices.Where(device => owners.Contains(device.AccountId)).ToArray();
-            }
+            var accounts = (await store.ListAccountsAsync(cancellationToken)).ToDictionary(account => account.Id);
+            devices = devices.Where(device => accounts.TryGetValue(device.AccountId, out var account) && AlertPointAccess.Allows(account, merchant, now)).ToArray();
             foreach (var change in changes.Where(change => change.NewlyArrived))
             {
-                foreach (var device in devices)
-                    await push.SendArrivedAsync(device.Token, change.TransferId, change.PayerName, change.Amount, "ARS", cancellationToken);
+                foreach (var device in devices.DistinctBy(device => device.Token))
+                {
+                    try { await push.SendArrivedAsync(device.Token, change.TransferId, change.PayerName, change.Amount, "ARS", cancellationToken); }
+                    catch (InvalidPushTokenException) {
+                        devices = devices.Where(item => item.Id != device.Id).ToArray();
+                        db.PushDevices.Remove(device);
+                        await db.SaveChangesAsync(cancellationToken);
+                    }
+                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        logger.LogWarning(ex, "Push delivery failed for device {DeviceId}; transfer remains recorded.", device.Id);
+                    }
+                }
             }
         }
 

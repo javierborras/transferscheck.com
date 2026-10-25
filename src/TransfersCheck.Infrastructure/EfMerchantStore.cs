@@ -138,6 +138,9 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
 
     public async Task AddPushDeviceAsync(PushDevice device, CancellationToken cancellationToken)
     {
+        // One browser token belongs to the account that most recently enabled it.
+        var previous = await db.PushDevices.IgnoreQueryFilters().Where(d => d.Token == device.Token && d.AccountId != device.AccountId).ToListAsync(cancellationToken);
+        db.PushDevices.RemoveRange(previous);
         var existing = await db.PushDevices.FirstOrDefaultAsync(d => d.AccountId == device.AccountId, cancellationToken);
         if (existing is null)
             db.PushDevices.Add(device);

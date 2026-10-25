@@ -51,8 +51,8 @@ public sealed class Epic4SyncTests(SqlFixture sql)
             Assert.False(item.TryGetProperty("medio", out _));
             Assert.False(item.TryGetProperty("paymentMethod", out _));
         });
-        Assert.Equal(300, body.GetProperty("pollIntervalSeconds").GetInt32());
-        Assert.Equal(60, body.GetProperty("buttonCooldownSeconds").GetInt32());
+        Assert.Equal(30, body.GetProperty("pollIntervalSeconds").GetInt32());
+        Assert.Equal(10, body.GetProperty("buttonCooldownSeconds").GetInt32());
     }
 
     [Fact]

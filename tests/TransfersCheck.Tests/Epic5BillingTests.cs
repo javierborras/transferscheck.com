@@ -22,6 +22,10 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         await using var factory = new TransfersApiFactory(sql) { Clock = clock };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var cookie = await SignUp(client);
+        if (planCode == PlanCodes.PackEvento) {
+            await SetPlanCode(factory, cookie, planCode);
+            using var linked = await Connect(client, cookie); Assert.Equal(HttpStatusCode.Redirect, linked.StatusCode);
+        }
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/billing/checkout");
         request.Headers.TryAddWithoutValidation("Cookie", cookie);
         request.Content = JsonContent.Create(new { planCode });
@@ -40,6 +44,10 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         using var applied = await client.SendAsync(Webhook(client, payment));
         applied.EnsureSuccessStatusCode();
         Assert.True((await applied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
+        if (planCode == PlanCodes.PackEvento && await AccessUntil(client, cookie) is null) {
+            using var activation = await Send(client, "/api/billing/start-event", cookie); activation.EnsureSuccessStatusCode();
+            using var repeated = await Send(client, "/api/billing/start-event", cookie); Assert.Equal(HttpStatusCode.Conflict, repeated.StatusCode);
+        }
         Assert.Equal(clock.Now.AddHours(hours), await AccessUntil(client, cookie));
         using var replay = await client.SendAsync(Webhook(client, payment));
         Assert.False((await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
@@ -71,7 +79,7 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         Assert.Equal("ARS", evento.GetProperty("currency").GetString());
         Assert.Equal(24, evento.GetProperty("durationHours").GetInt32());
         Assert.Equal(
-            "Un día, un usuario. Ideal para la fiesta o el show.",
+            "24 horas desde que iniciás el evento. Admin + 1 Punto de Alerta.",
             evento.GetProperty("faceCopy").GetString());
         Assert.False(evento.GetProperty("enableCopilotHelp").GetBoolean());
 
@@ -226,6 +234,8 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         var linkAt = clock.Now;
         using var connected = await Connect(client, eventoCookie);
         Assert.Equal(HttpStatusCode.Redirect, connected.StatusCode);
+        Assert.Null(await AccessUntil(client, eventoCookie));
+        await ActivatePaidEvent(client, eventoCookie);
         Assert.Equal(linkAt.AddHours(24), await AccessUntil(client, eventoCookie));
         clock.Now = linkAt.AddHours(24);
         eventoCookie = await TestAuth.SignInWithCode(client, factory, eventoEmail);
@@ -305,6 +315,98 @@ public sealed class Epic5BillingTests(SqlFixture sql)
         var core = File.ReadAllText(Path.Combine(RepoRoot(), "src", "TransfersCheck.Core", "Ports.cs"));
         Assert.DoesNotContain("Cashback", core, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Coupon", core, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Extra_points_are_prepaid_coterminal_and_only_selected_points_renew()
+    {
+        MockState.Reset(); MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var clock = new MutableClock();
+        await using var factory = new TransfersApiFactory(sql) { Clock = clock };
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var email = $"extras-{Guid.NewGuid():N}@counter.test";
+        var cookie = await ConnectOwner(client, factory, email);
+        var originalEnd = (await AccessUntil(client, cookie))!.Value;
+        async Task<JsonElement> Post(string path, object body) {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path); request.Headers.TryAddWithoutValidation("Cookie", cookie); request.Content = JsonContent.Create(body);
+            using var result = await client.SendAsync(request); result.EnsureSuccessStatusCode(); return await result.Content.ReadFromJsonAsync<JsonElement>();
+        }
+        await Post("/api/alias", new { alias = "ex" + Guid.NewGuid().ToString("N")[..10] });
+        Guid extra = Guid.Empty;
+        for (var i = 0; i < 5; i++) {
+            var point = await Post("/api/logins", new { name = $"punto{i}" });
+            Assert.Equal(i == 4, point.GetProperty("requiresPayment").GetBoolean());
+            extra = point.GetProperty("id").GetGuid();
+        }
+        async Task<JsonElement> Point() {
+            using var response = await Send(client, "/api/logins", cookie, HttpMethod.Get);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().Single(p => p.GetProperty("id").GetGuid() == extra).Clone();
+        }
+        Assert.False((await Point()).GetProperty("enabled").GetBoolean());
+        // Buying halfway through the period still costs the full fixed amount.
+        clock.Now = clock.Now.AddDays(15); cookie = await TestAuth.SignInWithCode(client, factory, email);
+        var checkout = await Post("/api/billing/checkout", new { additionalPointId = extra });
+        Assert.Equal(1000, checkout.GetProperty("amount").GetDecimal());
+        Assert.Equal(originalEnd, checkout.GetProperty("accessUntil").GetDateTimeOffset());
+        async Task ConfirmCurrentPreference() {
+            using var pref = JsonDocument.Parse(MockState.LastCheckoutBody);
+            var payment = "extra-" + Guid.NewGuid().ToString("N");
+            MockState.CheckoutTenants[payment] = pref.RootElement.GetProperty("external_reference").GetString()!;
+            MockState.CheckoutAmounts[payment] = pref.RootElement.GetProperty("items")[0].GetProperty("unit_price").GetDecimal();
+            using var response = await client.SendAsync(Webhook(client, payment)); response.EnsureSuccessStatusCode();
+            using var replay = await client.SendAsync(Webhook(client, payment));
+            Assert.False((await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
+        }
+        await ConfirmCurrentPreference();
+        Assert.True((await Point()).GetProperty("enabled").GetBoolean());
+        Assert.Equal(originalEnd, (await Point()).GetProperty("extraAccessUntil").GetDateTimeOffset());
+        checkout = await Post("/api/billing/checkout", new { planCode = PlanCodes.PackMes });
+        Assert.Equal(6999, checkout.GetProperty("amount").GetDecimal());
+        await ConfirmCurrentPreference();
+        Assert.Equal(originalEnd.AddDays(30), await AccessUntil(client, cookie));
+        Assert.Equal(originalEnd.AddDays(30), (await Point()).GetProperty("extraAccessUntil").GetDateTimeOffset());
+        using var renewal = new HttpRequestMessage(HttpMethod.Put, $"/api/logins/{extra}/renewal"); renewal.Headers.TryAddWithoutValidation("Cookie", cookie); renewal.Content = JsonContent.Create(new { renewWithAdmin = false });
+        using var updated = await client.SendAsync(renewal); updated.EnsureSuccessStatusCode();
+        checkout = await Post("/api/billing/checkout", new { planCode = PlanCodes.PackMes });
+        Assert.Equal(5999, checkout.GetProperty("amount").GetDecimal());
+        await ConfirmCurrentPreference();
+        clock.Now = originalEnd.AddDays(30); cookie = await TestAuth.SignInWithCode(client, factory, email);
+        Assert.True(await AccessUntil(client, cookie) > clock.Now);
+        Assert.False((await Point()).GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Paid_event_waits_until_explicit_start_even_days_after_purchase()
+    {
+        MockState.Reset(); MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        var clock = new MutableClock(); await using var factory = new TransfersApiFactory(sql) { Clock = clock };
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var email = $"event-wait-{Guid.NewGuid():N}@counter.test"; var cookie = await SignUp(client, email);
+        Assert.Null(await AccessUntil(client, cookie));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/billing/checkout"); request.Headers.TryAddWithoutValidation("Cookie", cookie); request.Content = JsonContent.Create(new { planCode = PlanCodes.PackEvento });
+        using var checkout = await client.SendAsync(request); checkout.EnsureSuccessStatusCode();
+        using var pref = JsonDocument.Parse(MockState.LastCheckoutBody); var payment = "wait-" + Guid.NewGuid().ToString("N");
+        MockState.CheckoutTenants[payment] = pref.RootElement.GetProperty("external_reference").GetString()!;
+        MockState.CheckoutAmounts[payment] = 1000;
+        using var paid = await client.SendAsync(Webhook(client, payment)); paid.EnsureSuccessStatusCode();
+        Assert.Null(await AccessUntil(client, cookie));
+        using var linked = await Connect(client, cookie); Assert.Equal(HttpStatusCode.Redirect, linked.StatusCode);
+        Assert.Null(await AccessUntil(client, cookie));
+        clock.Now = clock.Now.AddDays(7); cookie = await TestAuth.SignInWithCode(client, factory, email);
+        using var start = await Send(client, "/api/billing/start-event", cookie); start.EnsureSuccessStatusCode();
+        Assert.Equal(clock.Now.AddHours(24), await AccessUntil(client, cookie));
+        using var repeat = await Send(client, "/api/billing/start-event", cookie); Assert.Equal(HttpStatusCode.Conflict, repeat.StatusCode);
+    }
+
+    private static async Task ActivatePaidEvent(HttpClient client, string cookie) {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/billing/checkout"); request.Headers.TryAddWithoutValidation("Cookie", cookie); request.Content = JsonContent.Create(new { planCode = PlanCodes.PackEvento });
+        using var checkout = await client.SendAsync(request); checkout.EnsureSuccessStatusCode();
+        using var pref = JsonDocument.Parse(MockState.LastCheckoutBody);
+        var id = "event-" + Guid.NewGuid().ToString("N");
+        MockState.CheckoutTenants[id] = pref.RootElement.GetProperty("external_reference").GetString()!;
+        MockState.CheckoutAmounts[id] = pref.RootElement.GetProperty("items")[0].GetProperty("unit_price").GetDecimal();
+        using var confirmed = await client.SendAsync(Webhook(client, id)); confirmed.EnsureSuccessStatusCode();
+        using var start = await Send(client, "/api/billing/start-event", cookie); start.EnsureSuccessStatusCode();
     }
 
     private static string RepoRoot()

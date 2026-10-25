@@ -1,8 +1,5 @@
----
-id: pagar
-title: Pagar el Pack Mes
-summary: En Pagos elegís el Pack Mes y seguís el link de Mercado Pago hacia la cuenta del dueño del producto.
-path: /ayuda/pagar
-keywords: pagar pack mes evento precio
----
-El Pack Mes dura 30 días y habilita hasta cinco cuentas. El Pack Evento dura 24 horas. Los precios los edita el dueño en el microsite; la pantalla de Pagos del comercio solo muestra los planes activos.
+# Planes y pagos
+
+Individual / Evento dura 24 horas desde que confirmás Iniciar Evento y suma un Punto de Alerta al Admin. Vincular Mercado Pago no inicia el pase. Pack Mes incluye cuatro Puntos de Alerta y mantiene la prueba inicial de 21 días al vincular una cuenta nueva.
+
+Los pagos son prepagos, sin débito automático. Cada adicional cuesta $ 1.000 hasta el vencimiento del Admin; podés incluirlo en la siguiente renovación. Sólo la confirmación del pago habilita el servicio; volver desde la página de pago no acredita por sí solo.

@@ -40,7 +40,7 @@ public sealed class Epic2LoginTests(SqlFixture sql)
     }
 
     [Fact]
-    public async Task Pack_mes_refuses_a_fifth_punto_de_alerta_and_pack_evento_refuses_a_second_account()
+    public async Task Fixed_plans_allow_extra_points_pending_payment()
     {
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient();
@@ -61,7 +61,8 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         }
 
         using var fifth = await Send(client, HttpMethod.Post, "/api/logins", mesCookie, new { name = "alertaextra" });
-        Assert.Equal(HttpStatusCode.Conflict, fifth.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, fifth.StatusCode);
+        Assert.True((await fifth.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requiresPayment").GetBoolean());
 
         var eventoCookie = await SignUp(client, $"evento-{Guid.NewGuid():N}@counter.test");
         await SetPlanCode(factory, eventoCookie, PlanCodes.PackEvento);
@@ -69,7 +70,10 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         using (var alias = await Send(client, HttpMethod.Post, "/api/alias", eventoCookie, new { alias = eventoAlias }))
             alias.EnsureSuccessStatusCode();
         using var second = await Send(client, HttpMethod.Post, "/api/logins", eventoCookie, new { name = "extra" });
-        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        Assert.False((await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requiresPayment").GetBoolean());
+        using var extra = await Send(client, HttpMethod.Post, "/api/logins", eventoCookie, new { name = "segundo" });
+        Assert.True((await extra.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("requiresPayment").GetBoolean());
     }
 
     [Fact]
@@ -93,12 +97,18 @@ public sealed class Epic2LoginTests(SqlFixture sql)
         using var client = factory.CreateClient();
         var email = $"one-{Guid.NewGuid():N}@counter.test";
         var first = await SignUp(client, email);
+        using var registered = await Send(client, HttpMethod.Post, "/api/push/tokens", first, new { token = "previous-browser" });
+        registered.EnsureSuccessStatusCode();
         var second = await TestAuth.SignInWithCode(client, factory, email);
 
         using var oldSession = await Send(client, HttpMethod.Get, "/api/session", first);
         using var newSession = await Send(client, HttpMethod.Get, "/api/session", second);
         Assert.Equal(HttpStatusCode.Unauthorized, oldSession.StatusCode);
         Assert.Equal(HttpStatusCode.OK, newSession.StatusCode);
+        var tenantId = (await newSession.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tenantId").GetGuid();
+        using var scope = factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<ITenantContext>().TenantId = tenantId;
+        Assert.False(await scope.ServiceProvider.GetRequiredService<IMerchantStore>().HasPushDeviceAsync(CancellationToken.None));
     }
 
     [Fact]

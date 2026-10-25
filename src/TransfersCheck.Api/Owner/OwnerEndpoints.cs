@@ -135,7 +135,7 @@ public static class OwnerEndpoints
     private static async Task<IResult> ListPlans(IPlanCatalog plans, CancellationToken cancellationToken)
     {
         var rows = await plans.ListAllAsync(cancellationToken);
-        return Results.Ok(rows.Select(PlanDto));
+        return Results.Ok(rows.Where(plan => plan.Code is PlanCodes.PackMes or PlanCodes.PackEvento).Select(PlanDto));
     }
 
     private static async Task<IResult> UpsertPlan(
@@ -160,19 +160,8 @@ public static class OwnerEndpoints
         IPlanCatalog plans,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(body.Code))
-            return Results.BadRequest(new { error = "code_required" });
-        var code = body.Code.Trim();
-        if (code.Length > 32)
-            return Results.BadRequest(new { error = "code_too_long" });
-        if (await plans.FindByCodeAsync(code, cancellationToken) is not null)
-            return Results.Conflict(new { error = "code_exists" });
-        if (string.IsNullOrWhiteSpace(body.DisplayName) || body.Amount is null)
-            return Results.BadRequest(new { error = "display_and_amount_required" });
-
-        var plan = Apply(new Plan { Code = code, Currency = "ARS", Active = true }, body);
-        await plans.UpsertAsync(plan, cancellationToken);
-        return Results.Ok(PlanDto(plan));
+        await Task.CompletedTask;
+        return Results.Conflict(new { error = "fixed_plans_only" });
     }
 
     private static async Task<IResult> RefreshHelp(

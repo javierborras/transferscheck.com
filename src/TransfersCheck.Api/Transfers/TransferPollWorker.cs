@@ -13,7 +13,7 @@ public sealed class TransferPollWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(sync.Value.PollInterval, clock);
+        using var timer = new PeriodicTimer(sync.Value.TimerInterval, clock);
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try

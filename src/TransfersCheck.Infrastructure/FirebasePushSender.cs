@@ -51,6 +51,10 @@ public sealed class FirebasePushSender(HttpClient http, IOptions<FirebaseOptions
             }
         });
         using var response = await http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode) {
+            var error = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (error.Contains("UNREGISTERED", StringComparison.Ordinal)) throw new InvalidPushTokenException();
+        }
         response.EnsureSuccessStatusCode();
     }
 

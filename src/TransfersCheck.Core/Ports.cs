@@ -28,6 +28,12 @@ public interface ITransferSource
     Task<IReadOnlyList<IncomingTransfer>> ReadIncomingAsync(TokenSet tokens, int pageSize, CancellationToken cancellationToken);
 }
 
+public sealed record TransferPage(IReadOnlyList<IncomingTransfer> Items, int? NextOffset);
+public interface ITransferQuerySource
+{
+    Task<TransferPage> QueryAsync(TokenSet tokens, DateTimeOffset? from, DateTimeOffset? to, int offset, int limit, CancellationToken cancellationToken);
+}
+
 public interface IMerchantAuthorizer
 {
     string BuildAuthorizationUrl(string state, string codeChallenge);
@@ -164,3 +170,5 @@ public interface IIdentityProvider
     string BuildLogoutUrl(string returnTo);
     Task<IdentityClaims> ExchangeAsync(string code, string codeVerifier, string nonce, CancellationToken cancellationToken);
 }
+
+public sealed class InvalidPushTokenException : Exception { }

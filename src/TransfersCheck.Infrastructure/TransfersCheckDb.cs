@@ -25,7 +25,7 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<EmailSignInChallenge> EmailSignInChallenges => Set<EmailSignInChallenge>();
     public DbSet<AlertInvite> AlertInvites => Set<AlertInvite>();
     public DbSet<ReferralGrant> ReferralGrants => Set<ReferralGrant>();
-    public DbSet<ConsultaEvent> ConsultaEvents => Set<ConsultaEvent>();
+    public DbSet<BillingOrder> BillingOrders => Set<BillingOrder>();
     public DbSet<OwnerSecretRow> OwnerSecrets => Set<OwnerSecretRow>();
     public DbSet<HelpArticle> HelpArticles => Set<HelpArticle>();
     public DbSet<HelpCorpusState> HelpCorpusStates => Set<HelpCorpusState>();
@@ -55,8 +55,8 @@ public sealed class TransfersCheckDb : DbContext
                     "El Pack Mes dura 30 días y habilita hasta cinco cuentas. El Pack Evento dura 24 horas. Los precios los edita el dueño en el microsite; la pantalla de Pagos del comercio solo muestra los planes activos.",
                     "pagar pack mes evento precio", 1),
                 SeedArticle("transferencias", "Transferencias en vivo",
-                    "La lista se actualiza sola cada cinco minutos; el botón de consulta tiene un enfriamiento de un minuto.",
-                    "En mostrador ves Fecha, Pagador, Monto y Estado. Un pagador vacío se muestra como Desconocido. Las consultas on-demand cuentan para el tope semanal del plan.",
+                    "La actualización automática se espacia según actividad; el botón espera diez segundos entre consultas.",
+                    "En mostrador ves Fecha, Pagador, Monto y Estado. Un pagador vacío se muestra como Desconocido. No hay cupos comerciales de consultas. Los controles de espera son técnicos.",
                     "transferencias lista refresco consulta cuota", 1));
         });
 
@@ -80,10 +80,12 @@ public sealed class TransfersCheckDb : DbContext
             entity.Property(g => g.Outcome).HasMaxLength(32);
         });
 
-        modelBuilder.Entity<ConsultaEvent>(entity =>
+        modelBuilder.Entity<BillingOrder>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => new { e.TenantId, e.OccurredAt });
+            entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+            entity.Property(e => e.PlanCode).HasMaxLength(32);
+            entity.Property(e => e.Currency).HasMaxLength(8);
             entity.HasQueryFilter(e => _tenant.TenantId != Guid.Empty && e.TenantId == _tenant.TenantId);
         });
 
@@ -153,6 +155,8 @@ public sealed class TransfersCheckDb : DbContext
         modelBuilder.Entity<LoginAccount>(entity =>
         {
             entity.HasKey(a => a.Id);
+            entity.Property(a => a.AlertPointPosition).HasDefaultValue(0);
+            entity.Property(a => a.RenewWithAdmin).HasDefaultValue(true);
             entity.Property(a => a.Email).HasMaxLength(256);
             entity.Property(a => a.Auth0Subject).HasMaxLength(128);
             entity.Property(a => a.UserName).HasMaxLength(32);

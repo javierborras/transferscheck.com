@@ -31,7 +31,6 @@ public static class DependencyInjection
         services.AddScoped<ITransferHistoryStore, EfTransferHistoryStore>();
         services.AddScoped<IReferralStore, EfReferralStore>();
         services.AddSingleton<ILiveListPublisher, InMemoryLiveListPublisher>();
-        services.AddScoped<IConsultaCounter, EfConsultaCounter>();
         services.AddScoped<IOwnerSecretStore, EfOwnerSecretStore>();
         services.AddScoped<ICheckoutAccessToken, CheckoutAccessTokenSource>();
         services.Configure<HelpCopilotOptions>(configuration.GetSection(HelpCopilotOptions.Section));
@@ -52,6 +51,7 @@ public static class DependencyInjection
         services.AddSingleton<LoginAccountCap>();
         services.AddHttpClient<MercadoPagoTransferSource>();
         services.AddScoped<ITransferSource>(sp => sp.GetRequiredService<MercadoPagoTransferSource>());
+        services.AddScoped<ITransferQuerySource>(sp => sp.GetRequiredService<MercadoPagoTransferSource>());
         services.AddScoped<TransferSync>();
         services.AddHttpClient<MercadoPagoAuthorizer>();
         services.AddScoped<IMerchantAuthorizer>(sp => sp.GetRequiredService<MercadoPagoAuthorizer>());

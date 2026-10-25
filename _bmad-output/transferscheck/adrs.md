@@ -423,3 +423,54 @@ The previous local requirement that every commerce-admin sign-in also required a
 ### Consequences
 
 Story 2.1 and the commerce door accept Auth0 Universal Login (SSO or Database password). Story 7.1 no longer requires a local email-code field on the commerce door. Wave and e2e checks that asserted "no Auth0 and no Google" are obsolete and must realign. Auth0 domain, client id, and client secret stay typed configuration outside the repo. PL-12 in `parking-lot-waves.md` is unparked for commerce only. Superadmin and Punto de Alerta rules above stay.
+
+
+## ADR-019 — Consultas sin cupos comerciales; protección técnica adaptativa
+
+Estado: Aceptado. Fuente: decisión explícita del propietario, 25 de octubre de 2026. Sustituye los cupos y cortes de ADR-007 y las frecuencias de ADR-006.
+
+No hay límites semanales, paquetes de requests, saldo de consultas ni recargas. Ningún plan se monetiza por uso de API. Se retiran contador, advertencias y cortes por 500. Los datos históricos de contadores existentes pueden conservarse sin uso; no se borran bases existentes.
+
+La captura de transferencias usa timer y revisión manual; no depende de eventos entrantes de Mercado Pago. La página no promete inmediatez. El botón manual espera 10 segundos, compartidos por comercio y validados en servidor. Las consultas automáticas se reducen por inactividad: intervalo base 30 segundos con actividad reciente, 60 segundos tras 2 minutos y 300 segundos tras 10 minutos. Con página cerrada se mantiene la consulta de fondo más espaciada para push. Son defaults técnicos configurables, nunca atributos del plan. El timer se comprueba cada 10 segundos; una exclusión mutua por comercio evita consultas simultáneas de varias pantallas/replicas. Se respeta la espera del proveedor ante errores o 429. La actividad sólo mantiene la frecuencia; no dispara una consulta a Mercado Pago.
+
+## ADR-020 — Dos planes fijos y Puntos de Alerta adicionales prepagos
+
+Estado: Aceptado. Fuente: propietario, 25 de octubre de 2026. Sustituye ADR-008/009/013 en cupos y extensibilidad de planes.
+
+Individual (código compatible pack_evento): 24 horas, un Admin y un Punto de Alerta incluido. Pack Mes: duración mensual configurada, un Admin y cuatro Puntos de Alerta incluidos. Se conservan los precios base configurados y la prueba inicial de 21 días de Pack Mes. No se agregan tipos de planes arbitrarios.
+
+Punto de Alerta significa un acceso/dispositivo receptor de avisos; no se denomina cajero. Cada cuenta mantiene una sesión operativa a la vez. Cada punto adicional cuesta ARS 1.000 por el período del Admin, sin prorrateo: cuesta lo mismo si se agrega al principio o al final. No hay débito automático.
+
+Cada punto tiene una posición estable; las primeras posiciones del plan están incluidas y las siguientes requieren un vencimiento pagado. El punto adicional se crea pendiente de pago y se habilita sólo tras confirmar su compra. Su vencimiento nunca supera el acceso del Admin y la compra queda vinculada al vencimiento cotizado. No se habilitan por el retorno del navegador.
+
+La renovación prepaga del Admin incluye el precio base más ARS 1.000 por cada adicional seleccionado para renovar. La selección por defecto conserva los adicionales no revocados, pero el Admin puede desmarcarlos: siguen habilitados hasta su vencimiento pagado y luego quedan suspendidos. La confirmación de la renovación amplía el acceso del Admin y los puntos incluidos en esa compra. No se borran puntos por vencimiento, cambio de plan o falta de pago. Se persiste cada orden con precio y puntos cotizados; no se recalcula un pago usando el catálogo posterior. El período de un adicional es siempre coterminal al acceso del Admin; no existe reloj independiente, prorrateo ni saldo monetario.
+
+## ADR-021 — Activación explícita de Individual / Evento
+
+Estado: Aceptado. Fuente: propietario y aclaración del 25 de octubre de 2026. Sustituye la concesión automática de 24 horas al vincular.
+
+Vincular Mercado Pago no inicia ni regala un pase Individual. Una compra aprobada queda disponible, sin consumir tiempo. Sólo el Admin puede tocar Iniciar Evento, con confirmación y vista previa del horario de corte. El servidor inicia 24 horas corridas con su reloj, responde el vencimiento real y no reinicia una activación repetida. No se inicia otro evento mientras haya acceso vigente. Cada compra aprobada tiene una única activación; varias compras quedan pendientes en orden, sin sumar horas silenciosamente a un evento ya iniciado. Sus adicionales seleccionados vencen al mismo instante. La UI informa que se deshabilita la consulta/recepción en TransfersCheck, no la cuenta ni los movimientos de Mercado Pago.
+
+## ADR-022 — Confirmación segura de cobros del abono y adicionales
+
+Estado: Decisión aceptada; validación productiva pendiente. No confundir cobros del SaaS con captura de transferencias del comercio.
+
+El retorno del navegador nunca concede acceso. Confirmación idempotente por pago y orden, consulta del estado/importe/moneda al proveedor y órdenes persistidas son obligatorios para habilitar períodos y puntos. Se conserva el mecanismo de pruebas con encabezado compartido, pero NO se lo declara compatible ni suficiente para producción. Actualización 25/10/2026: implementada la autenticación oficial y la conciliación autenticada por orden. (1) Cuando `Checkout:NotificationSigningKey` está configurada, el webhook exige `x-signature` (`ts` y `v1`, HMAC-SHA256 del manifiesto `id:{data.id};request-id:{x-request-id};ts:{ts};`) con tolerancia de reloj configurable (10 min) y comparación en tiempo constante. (2) Al crear cada preferencia en `/checkout/preferences`, `MercadoPagoCheckout` firma la `notification_url` servidor-a-servidor con `Session:SigningKey` (`?ref=order:…&sig=HMAC-SHA256`), y el webhook verifica en tiempo constante la firma de `ref`, consulta el pago directamente a Mercado Pago (`/v1/payments/{id}`) con el token del propietario, comprueba que `external_reference` coincida exactamente con `ref`, valida importe y moneda contra `BillingOrder`, y aplica idempotencia por pago. `ProductionConfiguration` rechaza `Checkout:WebhookSecret` en producción; el encabezado compartido queda exclusivamente para Development/Test. No se elimina la validación para lograr que una notificación pase. Una confirmación tardía de un adicional no amplía el vencimiento cotizado ni regala un nuevo período; si ya venció, queda registrada para revisión/devolución, sin habilitar acceso vencido. No hay débito automático.
+
+## ADR-023 — Avisos en capas, permisos y revocación de canales abiertos
+
+Estado: Aceptado, 25 de octubre de 2026. Completa ADR-003/010.
+
+Aviso visual siempre; campanita Web Audio C5/E5/G5 sólo con interacción explícita y contexto habilitado; notificación del sistema mediante push del navegador cuando sea compatible, configurado y autorizado. El sistema operativo controla su sonido; no se promete un tono ni entrega garantizados con pantalla bloqueada. Si push no puede activarse, se conserva la página con avisos visuales y sonido habilitable; no se simula un token en producción ni se pide permiso repetidamente si fue rechazado. Un permiso concedido no equivale a registro completado.
+
+El service worker coordina las pestañas abiertas para evitar avisos duplicados, usa un identificador estable por pago y enfoca la app en el click. El envío push se deduplica por pago/dispositivo y un token inválido no interrumpe la captura ni los demás destinatarios. Conectividad/configuración y permisos se muestran con mensajes concretos. La habilitación se comprueba por dispositivo actual, no por la existencia de otro punto del comercio.
+
+Los canales abiertos revalidan cuenta, sesión y derecho del punto periódicamente (máximo 5 segundos) y antes de entregar novedades. Revocación, reemplazo de sesión, vencimiento o punto impago cierran el canal y limpian la vista. Al cerrar sesión o reemplazar la sesión por otro ingreso se retiran sus registros push; el nuevo navegador debe habilitarlos nuevamente. Esto no depende de esperar el próximo pago.
+
+Referencias técnicas: https://firebase.google.com/docs/cloud-messaging/web/receive-messages y https://developer.chrome.com/blog/autoplay (consultadas el 25/10/2026).
+
+## ADR-024 — Salida a producción y verificación en el sitio publicado
+
+Estado: Aceptado, 25 de octubre de 2026. Fuente: propietario. Completa ADR-002, ADR-016 y ADR-022.
+
+La API se publica en MonsterASP (WebDeploy, sitio site56119) y la UI en Cloudflare Workers (wrangler deploy desde web/). Son dos despliegues de la misma revisión; se publican API primero y UI después. Antes de publicar la API se respalda SQL y se aplica Database__EnsureSchema=true sólo en el primer arranque de una build que agrega columnas o tablas. Los secretos (Auth0, Mercado Pago, Checkout:NotificationSigningKey, Firebase) viven fuera del repositorio. La verificación posterior se hace sobre el sitio publicado (https://www.transferscheck.com): Swagger de la API y recorrido en navegador de landing, alta, conexión, pago y lista. Un archivo suelto sin cambio de código puede subirse por FTP de MonsterASP sin redeploy, dejando constancia. Un fallo en la verificación se corrige y se vuelve a publicar; no se cierra el pase con pruebas rojas. No se hacen cobros reales de prueba sin que el propietario lo autorice.

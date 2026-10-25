@@ -23,7 +23,7 @@ public interface IPlanCatalog
 }
 
 /// <summary>
-/// Starts access from the Mercado Pago link: Pack Mes 21-day trial, Pack Evento 24 hours.
+/// Starts only the Pack Mes 21-day trial at linking; Individual requires a paid explicit start.
 /// </summary>
 public static class PackMesTrial
 {
@@ -48,8 +48,7 @@ public static class PackMesTrial
             return;
         }
 
-        // Pack Evento (and unset) — 24 hours from the link (story 5.7).
-        merchant.AccessUntil = linkInstant.AddHours(24);
+        // ADR-021: Individual starts only after a paid order is explicitly activated.
     }
 }
 
