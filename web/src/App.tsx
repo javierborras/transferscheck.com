@@ -9,6 +9,9 @@ import { api, apiUrl, apiOrigin } from "./api";
 import { NotificationBanner } from "./NotificationBanner";
 import { liveTransferMessageType, type LiveTransferArrived } from "./liveTransferContract";
 
+// TEST ONLY: esta línea existe solo para probar la automatización Revisión de PR y no debe mergearse.
+// client_secret=TEST_ONLY_NOT_A_REAL_SECRET
+
 type Session = { accountId: string; tenantId: string; email: string; isOwner: boolean };
 type Checklist = {
   accountTitle: string;
