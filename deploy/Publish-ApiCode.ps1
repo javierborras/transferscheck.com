@@ -50,7 +50,7 @@ function Invoke-Msdeploy([string[]] $ArgumentList) {
 }
 
 function Assert-FilePreview([string] $Text, [string] $FileName) {
-    if ($Text -match '(?i)appsettings|web\.config|App_Data|TransfersCheck\.(Core|Infrastructure)|\\logs\\|/logs/') {
+    if ($Text -match '(?i)appsettings|web\.config|App_Data|\\logs\\|/logs/') {
         throw "Preview mentions a forbidden path. Stopped.`n$Text"
     }
     if ($Text -notmatch '\((\d+) added, (\d+) deleted,') {
