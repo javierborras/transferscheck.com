@@ -143,6 +143,13 @@ if (!string.IsNullOrWhiteSpace(connectionString)
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
     await SchemaBootstrap.EnsureAsync(db, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaBootstrap"));
+}
+
+// Keep the new commercial plan available on existing production databases as well as fresh schemas.
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
     if (!await db.Plans.AnyAsync(plan => plan.Code == PlanCodes.PackCorporativo))
     {
         db.Plans.Add(new Plan { Code = PlanCodes.PackCorporativo, DisplayName = "Pack Corporativo", Amount = 15999, Currency = "ARS", DurationDays = 30, FaceCopy = "Escala y multi-sucursal para equipos que necesitan crecer.", EnableCopilotHelp = true, Active = true });
