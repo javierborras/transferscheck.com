@@ -52,6 +52,8 @@ try {
     $env:Firebase__ProjectId = "mock"
     $env:Ui__Origin = "http://localhost:5183"
     $env:Cors__UiOrigin = "http://localhost:5183"
+    $env:Owner__Email = "owner@transferscheck.test"
+    $env:Owner__Password = "owner-password-1"
     & $dotnet run --no-launch-profile --project (Join-Path $root "src\TransfersCheck.Api\TransfersCheck.Api.csproj")
 }
 finally {

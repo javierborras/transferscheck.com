@@ -260,6 +260,7 @@ public sealed class TransfersApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("MercadoPago:TokenUrl", "http://127.0.0.1:5099/oauth/token");
         builder.UseSetting("MercadoPago:ApiBaseUrl", "http://127.0.0.1:5099");
         builder.UseSetting("MercadoPago:RedirectUri", "http://127.0.0.1:5099/ignored-callback");
+        builder.UseSetting("Sentry:Dsn", "");
         builder.UseSetting("Checkout:AccessToken", "mock-checkout-token");
         builder.UseSetting("Checkout:WebhookSecret", "test-webhook-secret");
         builder.UseSetting("Checkout:NotificationUrl", "http://127.0.0.1:5080/api/billing/webhook");

@@ -6,7 +6,7 @@ export async function allowMockNotifications(context: BrowserContext) {
   await context.addInitScript(() => Object.defineProperty(Notification, "permission", { get: () => "granted" }));
 }
 
-const apiOrigin = "http://localhost:5080";
+export const apiOrigin = "http://localhost:5080";
 
 // Commerce door is Auth0 Universal Login (ADR-018). The mock tenant in the mock server serves a
 // one-field Universal Login page; the e2e API points Auth0:Authority at it (start-api.ps1).

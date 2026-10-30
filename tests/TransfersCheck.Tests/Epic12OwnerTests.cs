@@ -53,7 +53,8 @@ public sealed class Epic12OwnerTests(SqlFixture sql)
         Assert.Contains("Not Auth0", ownerApi, StringComparison.Ordinal);
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
         Assert.Contains("/owner", app, StringComparison.Ordinal);
-        Assert.Contains("Panel de servicios", app, StringComparison.Ordinal);
+        var owner = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "owner", "OwnerSite.tsx"));
+        Assert.Contains("Panel de servicios", owner, StringComparison.Ordinal);
     }
 
     private static async Task<HttpResponseMessage> Send(HttpClient client, string url, string cookie, HttpMethod? method = null, object? json = null)

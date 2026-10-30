@@ -109,6 +109,8 @@ public sealed class MerchantConnection : ITenantOwned
     public string AccessTokenProtected { get; set; } = "";
     public string RefreshTokenProtected { get; set; } = "";
     public DateTimeOffset AccessTokenExpiresAt { get; set; }
+    /// <summary>Set when Mercado Pago rejects the stored grant. The poll skips the tenant until a new link.</summary>
+    public bool ReconnectRequired { get; set; }
 }
 
 public sealed class TransferType
@@ -126,8 +128,19 @@ public sealed class Transfer : ITenantOwned
     public decimal Amount { get; set; }
     public string Currency { get; set; } = "ARS";
     public DateTimeOffset OccurredAt { get; set; }
+    public DateTimeOffset? ApprovedAt { get; set; }
     public string Status { get; set; } = "";
+    public string StatusDetail { get; set; } = "";
     public string TypeCode { get; set; } = "";
+    public string OperationType { get; set; } = "";
+    public string PaymentMethodId { get; set; } = "";
+    public string CoelsaId { get; set; } = "";
+    public string BankTransferId { get; set; } = "";
+    public string PayerDocument { get; set; } = "";
+    public string PayerEmail { get; set; } = "";
+    public string OriginBank { get; set; } = "";
+    public string OriginAccount { get; set; } = "";
+    public string Description { get; set; } = "";
 }
 
 public sealed class PushDevice : ITenantOwned
@@ -145,6 +158,41 @@ public sealed class ProcessedPayment : ITenantOwned
     public DateTimeOffset AppliedAt { get; set; }
 }
 
+/// <summary>Short error row for the owner screen. No stack and no request body.</summary>
+public sealed class ErrorLog
+{
+    public long Id { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
+    public string CorrelationId { get; set; } = "";
+    public string Message { get; set; } = "";
+    public string Path { get; set; } = "";
+    public string Level { get; set; } = "Error";
+}
+
+/// <summary>One row per exception fingerprint. Counts and links only. No stack (ADR-026).</summary>
+public sealed class IncidentLatch
+{
+    public string Fingerprint { get; set; } = "";
+    public int Count { get; set; }
+    public string? ReleaseTag { get; set; }
+    public string? SentryId { get; set; }
+    public int? GitHubIssueNumber { get; set; }
+    public string? PullRequestUrl { get; set; }
+    public DateTimeOffset LastSeenAt { get; set; }
+}
+
+/// <summary>A short note from a commerce. The session tenant is the only tenant. No reply thread (ADR-031, ADR-032).</summary>
+public sealed class CommerceHelpMessage : ITenantOwned
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public string Alias { get; set; } = "";
+    public string AdminEmail { get; set; } = "";
+    public string Text { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? ClosedAt { get; set; }
+}
+
 public static class SqlCompat
 {
     public const int Level = 150;
@@ -156,9 +204,46 @@ public static class StatusWords
     {
         "approved" => "Llegó",
         "pending" => "Pendiente",
+        "in_process" => "En proceso",
         "rejected" => "Rechazado",
+        "cancelled" => "Cancelado",
+        "refunded" => "Devuelto",
+        "charged_back" => "Contracargo",
         _ => status
     };
+
+    public static string DetailLabel(string statusDetail) => statusDetail switch
+    {
+        "accredited" => "Acreditado en cuenta",
+        "pending_waiting_transfer" => "Esperando transferencia bancaria",
+        "pending_contingency" => "Procesando el pago",
+        "bank_rejected" => "Rechazado por el banco",
+        "rejected_by_bank" => "Operación rechazada por el banco",
+        "bank_error" => "Error con el banco emisor",
+        _ => statusDetail
+    };
+
+    public static string OperationLabel(string operationType, string paymentMethodId, string typeCode)
+    {
+        if (string.Equals(paymentMethodId, "cvu", StringComparison.OrdinalIgnoreCase)
+            || (string.Equals(operationType, "account_fund", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(typeCode, "bank_transfer", StringComparison.OrdinalIgnoreCase)))
+            return "Transferencia bancaria / CVU (Coelsa)";
+        if (string.Equals(operationType, "money_transfer", StringComparison.OrdinalIgnoreCase))
+            return "Envío entre cuentas de Mercado Pago";
+        if (string.Equals(paymentMethodId, "debin_transfer", StringComparison.OrdinalIgnoreCase))
+            return "Transferencia DEBIN";
+        if (string.Equals(operationType, "pos_payment", StringComparison.OrdinalIgnoreCase))
+            return "Cobro presencial / QR";
+        if (string.Equals(operationType, "regular_payment", StringComparison.OrdinalIgnoreCase))
+            return "Cobro con Mercado Pago";
+        return typeCode switch
+        {
+            "bank_transfer" => "Transferencia bancaria",
+            "account_money" => "Dinero en cuenta Mercado Pago",
+            _ => operationType
+        };
+    }
 
     public static bool MakesSound(string status) => status == "approved";
 }

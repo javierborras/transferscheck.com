@@ -7,13 +7,34 @@ public sealed record IncomingTransfer(
     string Currency,
     DateTimeOffset OccurredAt,
     string Status,
-    string TypeCode);
+    string TypeCode,
+    DateTimeOffset? ApprovedAt = null,
+    string StatusDetail = "",
+    string OperationType = "",
+    string PaymentMethodId = "",
+    string CoelsaId = "",
+    string BankTransferId = "",
+    string PayerDocument = "",
+    string PayerEmail = "",
+    string OriginBank = "",
+    string OriginAccount = "",
+    string Description = "");
 
 public sealed record TransferChange(Guid TransferId, string ExternalId, string PayerName, decimal Amount, DateTimeOffset OccurredAt, string Status, bool NewlyArrived);
 
 public sealed class RateLimitedException : Exception
 {
     public RateLimitedException() : base("Mercado Pago rate limit.") { }
+}
+
+/// <summary>
+/// Mercado Pago refused the stored grant (invalid or revoked refresh token, or a 401/403 on the token endpoint).
+/// Retrying the same credentials will not succeed; the commerce has to connect again.
+/// </summary>
+public sealed class MerchantAuthorizationRejectedException : InvalidOperationException
+{
+    public MerchantAuthorizationRejectedException()
+        : base("Mercado Pago rejected the merchant authorization.") { }
 }
 
 public sealed record TokenSet(

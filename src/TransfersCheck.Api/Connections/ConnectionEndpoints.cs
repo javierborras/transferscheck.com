@@ -54,6 +54,7 @@ public static class ConnectionEndpoints
         IEntitlement entitlement,
         IOptions<UiOptions> ui,
         TimeProvider clock,
+        ILogger<Program> logger,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
@@ -72,10 +73,12 @@ public static class ConnectionEndpoints
         TokenSet tokens;
         try
         {
-            tokens = await authorizer.ExchangeAsync(code, verifier, cancellationToken);
+            using (MercadoPagoCallScope.Begin(attempt.TenantId))
+                tokens = await authorizer.ExchangeAsync(code, verifier, cancellationToken);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException exception)
         {
+            logger.LogError(exception, "Mercado Pago connection exchange failed.");
             return Results.BadRequest(new { error = "exchange_failed" });
         }
 
@@ -103,6 +106,7 @@ public static class ConnectionEndpoints
             existing.AccessTokenProtected = protector.Protect(tokens.AccessToken);
             existing.RefreshTokenProtected = protector.Protect(tokens.RefreshToken);
             existing.AccessTokenExpiresAt = tokens.ExpiresAt;
+            existing.ReconnectRequired = false;
             await store.SaveChangesAsync(cancellationToken);
         }
 
@@ -131,8 +135,9 @@ public static class ConnectionEndpoints
         var merchant = await store.FindMerchantAsync(account.TenantId, cancellationToken);
         var connection = await store.FindConnectionAsync(cancellationToken);
         var push = await store.HasPushDeviceAsync(cancellationToken);
-        var connected = connection is not null;
-        var step = ChecklistRules.Step(true, connected, push);
+        var needsReconnect = connection?.ReconnectRequired == true;
+        var connected = connection is not null && !needsReconnect;
+        var step = needsReconnect ? "connect" : ChecklistRules.Step(true, connected, push);
         if (merchant is not null && merchant.ChecklistStep != step)
         {
             merchant.ChecklistStep = step;
@@ -151,7 +156,7 @@ public static class ConnectionEndpoints
             button = "Conectar Mercado Pago",
             reconnectButton = "Re-conectar cuenta",
             reconnectConfirm = "¿Querés volver a conectar tu cuenta de Mercado Pago?",
-            connectionBadge = connected ? "Conectado" : "No conectado",
+            connectionBadge = needsReconnect ? "Hay que volver a vincular" : connected ? "Conectado" : "No conectado",
             accountDone = true,
             connectDone = connected,
             alertsDone = push,

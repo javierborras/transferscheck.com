@@ -62,7 +62,7 @@ public sealed class Epic12PlanEditorTests(SqlFixture sql)
         Assert.Contains(payPlans, plan => plan.GetProperty("code").GetString() == PlanCodes.PackMes && plan.GetProperty("amount").GetInt32() == 6100);
         Assert.DoesNotContain(payPlans, plan => plan.GetProperty("code").GetString() == "pack-extra");
 
-        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "owner", "OwnerSite.tsx"));
         Assert.Contains("Planes", app, StringComparison.Ordinal);
         Assert.Contains("/api/owner/plans", app, StringComparison.Ordinal);
         Assert.DoesNotContain("plan-editing", app, StringComparison.Ordinal);

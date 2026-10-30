@@ -49,7 +49,7 @@ public sealed class SchemaBootstrapTests
 
         // Recreate what an older build left behind: no PasswordSet/UserName, no later tables, no alias index.
         await Run("ALTER TABLE LoginAccounts DROP COLUMN UserName, PasswordSet");
-        await Run("DROP TABLE BillingOrders; DROP TABLE Plans; DROP TABLE AlertInvites; DROP TABLE EmailSignInChallenges; DROP TABLE ReferralGrants; DROP TABLE OwnerSecrets");
+        await Run("DROP TABLE BillingOrders; DROP TABLE Plans; DROP TABLE AlertInvites; DROP TABLE EmailSignInChallenges; DROP TABLE ReferralGrants; DROP TABLE OwnerSecrets; DROP TABLE ErrorLogs");
         await Run("DROP INDEX IX_Merchants_Alias ON Merchants");
         var legacy = Guid.NewGuid();
         await Run($"INSERT INTO LoginAccounts (Id, TenantId, Email, PasswordHash, IsOwner, Revoked, PushApproved) VALUES ('{legacy}', '{legacy}', 'legacy@old.test', 'hash', 1, 0, 0)");
@@ -62,6 +62,7 @@ public sealed class SchemaBootstrapTests
             Assert.Contains("column LoginAccounts.UserName", applied);
             Assert.Contains("table Plans", applied);
             Assert.Contains("table AlertInvites", applied);
+            Assert.Contains("table ErrorLogs", applied);
             Assert.Contains("index Merchants.IX_Merchants_Alias", applied);
         }
 

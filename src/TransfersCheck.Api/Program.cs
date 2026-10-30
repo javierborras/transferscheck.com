@@ -9,9 +9,11 @@ using Microsoft.IdentityModel.Tokens;
 using TransfersCheck.Api.Accounts;
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Api.Billing;
+using TransfersCheck.Api.Configuration;
 using TransfersCheck.Api.Connections;
 using TransfersCheck.Api.Jobs;
 using TransfersCheck.Api.Help;
+using TransfersCheck.Api.Logging;
 using TransfersCheck.Api.Owner;
 using TransfersCheck.Api.Push;
 using TransfersCheck.Api.Transfers;
@@ -30,6 +32,10 @@ if (args.Length == 2 && args[0] == "--validate-production-config")
 
 var builder = WebApplication.CreateBuilder(args);
 TransfersCheck.Api.Configuration.ProductionConfiguration.RequireValid(builder.Configuration, builder.Environment.EnvironmentName);
+TransfersCheck.Api.Configuration.SentryCapture.Register(builder);
+var errorLogs = new ErrorLogServices();
+builder.Logging.AddProvider(new ErrorLogLoggerProvider(errorLogs));
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<CommercialOptions>(builder.Configuration.GetSection(CommercialOptions.Section));
@@ -53,7 +59,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("ui", policy =>
     {
         if (!string.IsNullOrWhiteSpace(uiOrigin))
-            policy.WithOrigins(uiOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+            policy.WithOrigins(uiOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials().WithExposedHeaders(Correlation.HeaderName);
     });
 });
 
@@ -110,6 +116,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+errorLogs.Provider = app.Services;
 
 // ADR-018: a tenant with a missing client id, secret or redirect would lock every commerce admin out (the local door closes). Fail at startup instead.
 var auth0Options = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Auth0Options>>().Value;
@@ -138,6 +145,7 @@ recurringJobs.AddOrUpdate<FiveDayNoticeJob>("five-day-notice", job => job.Execut
 recurringJobs.AddOrUpdate<ReferralBonusJob>("referral-bonus", job => job.Execute(), hangfireJobs.ReferralBonusCron);
 
 app.UseCors("ui");
+Correlation.Use(app);
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
 {
     app.UseAuthentication();

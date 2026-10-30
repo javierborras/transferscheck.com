@@ -71,7 +71,15 @@ public static class Auth0Endpoints
             return Results.NotFound();
 
         var origin = (ui.Value.Origin ?? "").TrimEnd('/');
-        IResult Fail(string error) => Results.Redirect($"{origin}/?auth0_error={error}");
+        IResult Fail(string error)
+        {
+            var technical = error is "exchange_failed" or "server_error";
+            var location = $"{origin}/?auth0_error={Uri.EscapeDataString(error)}";
+            if (technical && http.Items[TransfersCheck.Api.Configuration.Correlation.ItemKey] is string correlationId
+                && TransfersCheck.Api.Configuration.Correlation.Accept(correlationId))
+                location += "&correlation_id=" + Uri.EscapeDataString(correlationId);
+            return Results.Redirect(location);
+        }
 
         var attempt = ReadAttempt(http, protector, clock.GetUtcNow());
         http.Response.Cookies.Delete(AttemptCookie, new CookieOptions
@@ -95,7 +103,7 @@ public static class Auth0Endpoints
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
             // Timeouts, a malformed JWKS or id_token, or a bad Authority all end as a login-screen message, never a 500.
-            logger.LogWarning(exception, "Auth0 exchange failed.");
+            logger.LogError(exception, "Auth0 exchange failed.");
             return Fail("exchange_failed");
         }
 

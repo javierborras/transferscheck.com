@@ -9,6 +9,7 @@
     <PackageReference Include="Hangfire.AspNetCore" Version="1.8.25" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.25" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageReference Include="Sentry.AspNetCore" Version="6.12.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
     <!-- Hangfire's older minimum must not pin the vulnerable JSON.NET implementation. -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />

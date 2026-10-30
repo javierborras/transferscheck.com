@@ -127,7 +127,7 @@ public static class TransferEndpoints
         var row = rows.FirstOrDefault(item => item.Id == id);
         if (row is null)
             return Results.NotFound();
-        return Results.Ok(MapRow(row));
+        return Results.Ok(MapDetail(row));
     }
 
     private static async Task<IResult> Refresh(
@@ -152,6 +152,8 @@ public static class TransferEndpoints
 
         if (status is SyncStatus.NotConnected)
             return Results.Conflict(new { error = "not_connected" });
+        if (status is SyncStatus.ReconnectRequired)
+            return Results.Conflict(new { error = "reconnect_required" });
         var rows = await store.ListTransfersAsync(options.Value.PageSize, cancellationToken);
         return Results.Ok(new { count = rows.Count });
     }
@@ -159,11 +161,28 @@ public static class TransferEndpoints
     private static object MapRow(Transfer row) => new
     {
         id = row.Id,
+        externalId = row.ExternalId,
         payerName = string.IsNullOrWhiteSpace(row.PayerName) ? "Desconocido" : row.PayerName,
         amount = row.Amount,
+        currency = row.Currency,
         occurredAt = row.OccurredAt,
+        approvedAt = row.ApprovedAt,
         status = row.Status,
         statusLabel = StatusWords.Label(row.Status),
-        typeCode = row.TypeCode
+        statusDetail = row.StatusDetail,
+        statusDetailLabel = StatusWords.DetailLabel(row.StatusDetail),
+        typeCode = row.TypeCode,
+        operationType = row.OperationType,
+        paymentMethodId = row.PaymentMethodId,
+        operationLabel = StatusWords.OperationLabel(row.OperationType, row.PaymentMethodId, row.TypeCode),
+        coelsaId = row.CoelsaId,
+        bankTransferId = row.BankTransferId,
+        payerDocument = row.PayerDocument,
+        payerEmail = row.PayerEmail,
+        originBank = row.OriginBank,
+        originAccount = row.OriginAccount,
+        description = row.Description
     };
+
+    private static object MapDetail(Transfer row) => MapRow(row);
 }

@@ -5,7 +5,8 @@ import { Landing } from "./Landing";
 import { Logo } from "./Logo";
 import { PlanCards } from "./Plans";
 import { playCashBell, unlockSound, soundEnabled, subscribeSound } from "./audio";
-import { api, apiUrl, apiOrigin } from "./api";
+import { api, apiUrl, apiOrigin, withCorrelation } from "./api";
+import { OwnerSite } from "./owner/OwnerSite";
 import { NotificationBanner } from "./NotificationBanner";
 import { liveTransferMessageType, type LiveTransferArrived } from "./liveTransferContract";
 
@@ -31,11 +32,27 @@ type Checklist = {
 };
 type Transfer = {
   id: string;
+  externalId?: string;
   payerName: string;
   amount: number;
+  currency?: string;
   occurredAt: string;
+  approvedAt?: string | null;
   status: string;
   statusLabel: string;
+  statusDetail?: string;
+  statusDetailLabel?: string;
+  typeCode?: string;
+  operationType?: string;
+  paymentMethodId?: string;
+  operationLabel?: string;
+  coelsaId?: string;
+  bankTransferId?: string;
+  payerDocument?: string;
+  payerEmail?: string;
+  originBank?: string;
+  originAccount?: string;
+  description?: string;
 };
 type LoginRow = {
   id: string;
@@ -275,21 +292,25 @@ function startAuth0(signUp: boolean) {
   window.location.assign(apiUrl(`/api/auth0/login${signUp ? "?signup=true" : ""}`));
 }
 
-function auth0Message(code: string | null) {
-  switch (code) {
-    case null:
-      return "";
-    case "email_unverified":
-      return "Verificá tu email y volvé a intentar.";
-    case "not_allowed":
-      return "Esa cuenta no puede entrar como admin.";
-    case "invalid_state":
-      return "El inicio de sesión venció. Probá de nuevo.";
-    case "server_error":
-      return "No pudimos abrir tu sesión. Probá de nuevo en un momento.";
-    default:
-      return "No pudimos abrir tu sesión. Volvé a intentar.";
-  }
+function auth0Message(code: string | null, correlationId: string | null) {
+  const text = (() => {
+    switch (code) {
+      case null:
+        return "";
+      case "email_unverified":
+        return "Verificá tu email y volvé a intentar.";
+      case "not_allowed":
+        return "Esa cuenta no puede entrar como admin.";
+      case "invalid_state":
+        return "El inicio de sesión venció. Probá de nuevo.";
+      case "server_error":
+        return "No pudimos abrir tu sesión. Probá de nuevo en un momento.";
+      default:
+        return "No pudimos abrir tu sesión. Volvé a intentar.";
+    }
+  })();
+  if (!text || (code !== "server_error" && code !== "exchange_failed")) return text;
+  return correlationId && /^[A-Za-z0-9_-]{8,64}$/.test(correlationId) ? `${text} Referencia: ${correlationId}.` : text;
 }
 function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const navigate = useNavigate();
@@ -305,12 +326,12 @@ function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void 
       body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
     });
     if (!response.ok) {
-      setError("No se pudo crear la cuenta.");
+      setError(response.status >= 500 ? withCorrelation(response, "No se pudo crear la cuenta.") : "No se pudo crear la cuenta.");
       return;
     }
     const current = await api("/api/session");
     if (!current.ok) {
-      setError("No se pudo crear la cuenta.");
+      setError(withCorrelation(current, "No se pudo crear la cuenta."));
       return;
     }
     await api("/api/billing/initial-plan", { method: "POST", body: JSON.stringify({ planCode: new URLSearchParams(window.location.search).get("plan") === "pack_evento" ? "pack_evento" : "pack_mes" }) });
@@ -396,6 +417,10 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
       body: JSON.stringify(payload)
     });
     if (!response.ok) {
+      if (response.status >= 500) {
+        setError(withCorrelation(response, "No se pudo abrir la sesión."));
+        return;
+      }
       const body = await response.json().catch(() => ({} as { error?: string }));
       if (body.error === "code_required") {
         setNeedsCode(true);
@@ -413,7 +438,7 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
     }
     const current = await api("/api/session");
     if (!current.ok) {
-      setError("No se pudo abrir la sesión.");
+      setError(withCorrelation(current, "No se pudo abrir la sesión."));
       return;
     }
     onSignedIn(await current.json());
@@ -429,7 +454,7 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   }
 
   const adminAuth0 = auth0 && !alertPoint;
-  const auth0Error = auth0Message(params.get("auth0_error"));
+  const auth0Error = auth0Message(params.get("auth0_error"), params.get("correlation_id"));
 
   return (
     <main className="gate">
@@ -521,12 +546,12 @@ function ClaimInvite({ onSignedIn }: { onSignedIn: (session: Session) => void })
       body: JSON.stringify({ password: data.get("password") })
     });
     if (!response.ok) {
-      setError("El enlace no sirve o ya se usó.");
+      setError(response.status >= 500 ? withCorrelation(response, "No pudimos usar el enlace. Volvé a intentar.") : "El enlace no sirve o ya se usó.");
       return;
     }
     const current = await api("/api/session");
     if (!current.ok) {
-      setError("El enlace no sirve o ya se usó.");
+      setError(withCorrelation(current, "No pudimos usar el enlace. Volvé a intentar."));
       return;
     }
     onSignedIn(await current.json());
@@ -593,7 +618,7 @@ function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload
     if (checklist.connectDone && !window.confirm(checklist.reconnectConfirm)) return;
     const response = await api("/api/connections/mercadopago", { method: "POST" });
     if (!response.ok) {
-      setError("No se pudo empezar la conexión.");
+      setError(withCorrelation(response, "No se pudo empezar la conexión."));
       return;
     }
     const body = await response.json();
@@ -602,7 +627,7 @@ function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload
 
   async function enableAlerts() {
     try { await enableDeviceAlerts(); await onReload(); navigate("/"); }
-    catch { setError("No pudimos activar los avisos. Revisá los permisos de este navegador y volvé a intentar."); }
+    catch (error) { setError(withCorrelation(error, "No pudimos activar los avisos. Revisá los permisos de este navegador y volvé a intentar.")); }
   }
 
   const connectBody = (
@@ -927,18 +952,7 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
                 if (!inside) dialog.close();
               }}
             >
-              {detail ? (
-                <>
-                  <h2 id="transfer-detail-title">Detalle</h2>
-                  <p>{when.format(new Date(detail.occurredAt))}</p>
-                  <p>{detail.payerName || "Desconocido"}</p>
-                  <p className="money">{money.format(detail.amount)}</p>
-                  <p>{detail.statusLabel}</p>
-                  <form method="dialog">
-                    <button type="submit">Cerrar</button>
-                  </form>
-                </>
-              ) : null}
+              {detail ? <TransferDetailContent detail={detail} /> : null}
             </dialog>
             {wait ? <p className="wait" role="status">{wait}</p> : null}
             <Dock>
@@ -959,12 +973,110 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   );
 }
 
+function TransferDetailContent({ detail }: { detail: Transfer }) {
+  return (
+    <div className="receipt-card">
+      <div className="receipt-header">
+        <h2 id="transfer-detail-title">Detalle del comprobante</h2>
+        <span className={`status-pill ${detail.status}`}>
+          {detail.status === "approved" ? "✓ Acreditado" : detail.statusLabel}
+        </span>
+      </div>
+      <p className="receipt-amount money">{money.format(detail.amount)}</p>
+      <p className="receipt-payer">{detail.payerName || "Desconocido"}</p>
+      <p className="receipt-when">{when.format(new Date(detail.occurredAt))}</p>
+      <p className="visually-hidden">{detail.statusLabel}</p>
+
+      <dl className="receipt-grid">
+        {detail.externalId ? (
+          <div className="receipt-row">
+            <dt>N.° de operación MP</dt>
+            <dd className="mono">{detail.externalId}</dd>
+          </div>
+        ) : null}
+        {detail.coelsaId ? (
+          <div className="receipt-row">
+            <dt>Código COELSA / ID</dt>
+            <dd className="mono">{detail.coelsaId}</dd>
+          </div>
+        ) : null}
+        {detail.bankTransferId ? (
+          <div className="receipt-row">
+            <dt>ID Transferencia bancaria</dt>
+            <dd className="mono">{detail.bankTransferId}</dd>
+          </div>
+        ) : null}
+        {detail.operationLabel ? (
+          <div className="receipt-row">
+            <dt>Tipo de operación</dt>
+            <dd>{detail.operationLabel}</dd>
+          </div>
+        ) : null}
+        {detail.payerDocument ? (
+          <div className="receipt-row">
+            <dt>CUIT / CUIL / Doc</dt>
+            <dd className="mono">{detail.payerDocument}</dd>
+          </div>
+        ) : null}
+        {detail.payerEmail ? (
+          <div className="receipt-row">
+            <dt>Correo del pagador</dt>
+            <dd>{detail.payerEmail}</dd>
+          </div>
+        ) : null}
+        {detail.originBank ? (
+          <div className="receipt-row">
+            <dt>Entidad de origen</dt>
+            <dd>{detail.originBank}</dd>
+          </div>
+        ) : null}
+        {detail.originAccount ? (
+          <div className="receipt-row">
+            <dt>CBU / CVU origen</dt>
+            <dd className="mono">{detail.originAccount}</dd>
+          </div>
+        ) : null}
+        {detail.description ? (
+          <div className="receipt-row">
+            <dt>Concepto / Motivo</dt>
+            <dd>{detail.description}</dd>
+          </div>
+        ) : null}
+        {detail.statusDetailLabel ? (
+          <div className="receipt-row">
+            <dt>Detalle de estado</dt>
+            <dd>{detail.statusDetailLabel}</dd>
+          </div>
+        ) : null}
+        {detail.approvedAt ? (
+          <div className="receipt-row">
+            <dt>Acreditado el</dt>
+            <dd>{when.format(new Date(detail.approvedAt))}</dd>
+          </div>
+        ) : null}
+      </dl>
+
+      <form method="dialog">
+        <button type="submit">Cerrar</button>
+      </form>
+    </div>
+  );
+}
+
 function HistoryPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [items, setItems] = useState<Transfer[]>([]);
+  const [detail, setDetail] = useState<Transfer | null>(null);
+  const detailDialog = useRef<HTMLDialogElement>(null);
   const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const [next, setNext] = useState<number | null>(null); const [offset, setOffset] = useState(0);
   const [wait, setWait] = useState(0); const [loading, setLoading] = useState(false); const [error, setError] = useState("");
   useEffect(() => { if (wait > 0) { const tick = setTimeout(() => setWait(value => value - 1), 1000); return () => clearTimeout(tick); } }, [wait]);
+  useEffect(() => {
+    const dialog = detailDialog.current;
+    if (!dialog) return;
+    if (detail) { if (!dialog.open) dialog.showModal(); return; }
+    if (dialog.open) dialog.close();
+  }, [detail]);
   async function load(start = 0) {
     if (loading || wait > 0) return; setLoading(true); setError("");
     try {
@@ -973,18 +1085,23 @@ function HistoryPage({ session, onSalir }: { session: Session; onSalir: () => Pr
       if (to) query.set("to", new Date(`${to}T23:59:59.999`).toISOString());
       const response = await api(`/api/history?${query}`);
       const body = await response.json();
-      if (!response.ok) { setWait(body.retryAfterSeconds ?? 0); setError(response.status === 409 ? "Necesitás vincular Mercado Pago y tener acceso activo para consultar." : "Esperá unos segundos o revisá tu conexión antes de volver a consultar."); return; }
+      if (!response.ok) {
+        if (response.status >= 500) { setError(withCorrelation(response, "No pudimos consultar los movimientos. Volvé a intentar.")); return; }
+        setWait(body.retryAfterSeconds ?? 0);
+        setError(response.status === 409 ? "Necesitás vincular Mercado Pago y tener acceso activo para consultar." : "Esperá unos segundos o revisá tu conexión antes de volver a consultar.");
+        return;
+      }
       setItems(body.items); setNext(body.nextOffset); setOffset(start); setWait(body.buttonCooldownSeconds ?? 10);
-    } catch { setError("No pudimos consultar los movimientos. Volvé a intentar."); } finally { setLoading(false); }
+    } catch (error) { setError(withCorrelation(error, "No pudimos consultar los movimientos. Volvé a intentar.")); } finally { setLoading(false); }
   }
   function downloadVisible() {
     const cell = (text: string) => `"${(/^\s*[=+@-]/.test(text) ? "'" : "") + text.replaceAll('"', '""')}"`;
-    const csv = ["Fecha,Pagador,Monto,Estado", ...items.map(item => [cell(when.format(new Date(item.occurredAt))), cell(item.payerName), item.amount.toFixed(2), cell(item.statusLabel)].join(","))].join("\r\n");
+    const csv = ["Fecha,Pagador,Monto,Estado,OperacionMP,CoelsaID,Documento", ...items.map(item => [cell(when.format(new Date(item.occurredAt))), cell(item.payerName), item.amount.toFixed(2), cell(item.statusLabel), cell(item.externalId ?? ""), cell(item.coelsaId ?? ""), cell(item.payerDocument ?? "")].join(","))].join("\r\n");
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = "movimientos-visibles.csv"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <Shell onSalir={onSalir} back isOwner={session.isOwner}><main className="history">
-    <h1>Movimientos de tu cuenta</h1><p>Vista exclusiva del Admin. Consultá los movimientos disponibles en Mercado Pago. La descarga contiene únicamente las filas que ves en esta página.</p>
+    <h1>Movimientos de tu cuenta</h1><p>Vista exclusiva del Admin. Consultá los movimientos disponibles en Mercado Pago. Tocá cualquier fila para ver el comprobante completo. La descarga contiene únicamente las filas que ves en esta página.</p>
     <form className="history-range" onSubmit={event => { event.preventDefault(); void load(); }}>
       <label>Desde<input type="date" value={from} onChange={event => { setFrom(event.target.value); setItems([]); setNext(null); setOffset(0); }} /></label>
       <label>Hasta<input type="date" value={to} onChange={event => { setTo(event.target.value); setItems([]); setNext(null); setOffset(0); }} /></label>
@@ -993,7 +1110,8 @@ function HistoryPage({ session, onSalir }: { session: Session; onSalir: () => Pr
     </form>
     {error ? <p className="error" role="alert">{error}</p> : null}
     <p className="money">{items.length} movimientos visibles · Acreditado en esta página: {money.format(items.filter(item => item.status === "approved").reduce((total, item) => total + item.amount, 0))}</p>
-    <ol className="transfers">{items.map(item => <li key={item.id} className={`row ${item.status}`}><div className="when">{when.format(new Date(item.occurredAt))}</div><div className="payer">{item.payerName}</div><div className="amount">{money.format(item.amount)}</div><div className="status">{item.statusLabel}</div></li>)}</ol>
+    <ol className="transfers">{items.map(item => <li key={item.id} className={`row ${item.status}`}><button type="button" className="row-open" onClick={() => setDetail(item)}><div className="when">{when.format(new Date(item.occurredAt))}</div><div className="payer">{item.payerName}</div><div className="amount">{money.format(item.amount)}</div><div className="status">{item.statusLabel}</div></button></li>)}</ol>
+    <dialog ref={detailDialog} className="transfer-detail" closedby="any" aria-labelledby="transfer-detail-title" onClose={() => setDetail(null)}>{detail ? <TransferDetailContent detail={detail} /> : null}</dialog>
     <div className="hero-actions"><button className="secondary" disabled={loading || wait > 0 || offset === 0} onClick={() => void load(Math.max(0, offset - 20))}>Página anterior</button><button className="secondary" disabled={loading || wait > 0 || next === null} onClick={() => next !== null && void load(next)}>Página siguiente</button></div>
   </main></Shell>;
 }
@@ -1067,11 +1185,13 @@ function OwnerLogins() {
     if (!response.ok) {
       const body = await response.json().catch(() => ({} as { error?: string }));
       setError(
-        body.error === "account_cap"
-          ? "No se puede agregar otro Punto de Alerta en este plan."
-          : body.error === "alias_required"
-            ? "Confirmá el alias primero."
-            : "No se pudo crear la cuenta."
+        response.status >= 500
+          ? withCorrelation(response, "No se pudo crear la cuenta.")
+          : body.error === "account_cap"
+            ? "No se puede agregar otro Punto de Alerta en este plan."
+            : body.error === "alias_required"
+              ? "Confirmá el alias primero."
+              : "No se pudo crear la cuenta."
       );
       return;
     }
@@ -1105,11 +1225,15 @@ function OwnerLogins() {
     setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: selected } : point));
     try {
       const response = await api(`/api/logins/${row.id}/renewal`, { method: "PUT", body: JSON.stringify({ renewWithAdmin: selected }) });
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: row.renewWithAdmin } : point));
+        setError(withCorrelation(response, "No pudimos guardar la selección de renovación. Volvé a intentar."));
+        return;
+      }
       await reload();
-    } catch {
+    } catch (error) {
       setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: row.renewWithAdmin } : point));
-      setError("No pudimos guardar la selección de renovación. Volvé a intentar.");
+      setError(withCorrelation(error, "No pudimos guardar la selección de renovación. Volvé a intentar."));
     } finally { setSavingRenewal(null); }
   }
 
@@ -1142,7 +1266,7 @@ function OwnerLogins() {
             {!row.included ? <label><input type="checkbox" checked={row.renewWithAdmin} disabled={savingRenewal !== null} onChange={event => void setRenewal(row, event.target.checked)} />Incluir en la próxima renovación prepaga del Admin (+ $ 1.000)</label> : null}
             {row.requiresPayment ? <button className="secondary" onClick={async () => {
               const response = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ additionalPointId: row.id }) });
-              if (!response.ok) { setError("Primero necesitás un período activo del Admin para pagar este punto."); return; }
+              if (!response.ok) { setError(response.status >= 500 ? withCorrelation(response, "No pudimos abrir el pago. Volvé a intentar en un momento.") : "Primero necesitás un período activo del Admin para pagar este punto."); return; }
               window.location.assign((await response.json()).initPoint);
             }}>Habilitar adicional por $ 1.000 hasta el vencimiento del Admin</button> : null}
           </> : null}
@@ -1249,10 +1373,17 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
     setPaying(true); setPayError("");
     try {
       const response = await api("/api/billing/start-event", { method: "POST" });
-      const body = await response.json(); if (!response.ok) throw new Error();
+      const body = await response.json();
+      if (!response.ok) {
+        setPayError(response.status >= 500
+          ? withCorrelation(response, "No pudimos iniciar el evento. Volvé a intentar en un momento.")
+          : "No pudimos iniciar el evento. Verificá que esté pago, vinculado y que no tengas otro período activo.");
+        setPaying(false);
+        return;
+      }
       window.alert(`Evento iniciado. TransfersCheck estará habilitado hasta ${when.format(new Date(body.accessUntil))}.`);
       window.location.assign("/");
-    } catch { setPayError("No pudimos iniciar el evento. Verificá que esté pago, vinculado y que no tengas otro período activo."); setPaying(false); }
+    } catch (error) { setPayError(withCorrelation(error, "No pudimos iniciar el evento. Volvé a intentar en un momento.")); setPaying(false); }
   }
 
   async function pay(planCode: string) {
@@ -1260,10 +1391,14 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
     setPaying(true); setPayError("");
     try {
       const response = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ planCode, referralCode: inviteCode || undefined }) });
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        setPayError(withCorrelation(response, "No pudimos abrir el pago. Volvé a intentar en un momento."));
+        setPaying(false);
+        return;
+      }
       const body = await response.json();
       window.location.assign(body.initPoint);
-    } catch { setPayError("No pudimos abrir el pago. Volvé a intentar en un momento."); setPaying(false); }
+    } catch (error) { setPayError(withCorrelation(error, "No pudimos abrir el pago. Volvé a intentar en un momento.")); setPaying(false); }
   }
 
   return (
@@ -1307,19 +1442,6 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
   );
 }
 
-type OwnerCard = { card: string; isSet: boolean; lastFour: string | null; expiresAt: string | null };
-type OwnerPlan = {
-  code: string;
-  displayName: string;
-  amount: number;
-  currency: string;
-  durationDays?: number | null;
-  durationHours?: number | null;
-  faceCopy: string;
-  enableCopilotHelp: boolean;
-  active: boolean;
-};
-
 type HelpCatalog = {
   enableCopilotHelp: boolean;
   helpCenterPath: string;
@@ -1335,13 +1457,6 @@ type HelpAsk = {
   clarification?: string | null;
 };
 
-const ownerCardLabels: Record<string, string> = {
-  mercadopago_platform: "Mercado Pago (plataforma)",
-  mail: "Mail",
-  browser_push: "Notificaciones web",
-  whatsapp: "WhatsApp"
-};
-
 function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const { id } = useParams();
   const [catalog, setCatalog] = useState<HelpCatalog | null>(null);
@@ -1349,6 +1464,10 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<HelpAsk | null>(null);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [sendingNote, setSendingNote] = useState(false);
+  const [noteStatus, setNoteStatus] = useState("");
+  const [noteError, setNoteError] = useState("");
 
   useEffect(() => {
     let gone = false;
@@ -1390,6 +1509,26 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
     setBusy(false);
     if (!response.ok) return;
     setAnswer(await response.json());
+  }
+
+  async function sendNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = note.trim();
+    if (!text) return;
+    setSendingNote(true);
+    setNoteStatus("");
+    setNoteError("");
+    const response = await api("/api/help/messages", {
+      method: "POST",
+      body: JSON.stringify({ text })
+    });
+    setSendingNote(false);
+    if (!response.ok) {
+      setNoteError(response.status >= 500 ? withCorrelation(response, "No se pudo enviar el mensaje.") : "No se pudo enviar el mensaje.");
+      return;
+    }
+    setNote("");
+    setNoteStatus("Recibido. Lo lee el dueño del producto en Helpdesk.");
   }
 
   return (
@@ -1450,6 +1589,27 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
             </section>
           </>
         ) : null}
+        <form className="help-message" onSubmit={(event) => void sendNote(event)}>
+          <h2>Escribile al producto</h2>
+          <label htmlFor="help-message">Mensaje</label>
+          <textarea
+            id="help-message"
+            name="text"
+            value={note}
+            onChange={(event) => {
+              setNote(event.target.value);
+              if (noteError) setNoteError("");
+            }}
+            maxLength={1000}
+            required
+            rows={4}
+            aria-describedby="help-message-hint"
+          />
+          <p id="help-message-hint" className="gate-lead">Un mensaje corto. No es un chat.</p>
+          {noteError ? <p className="error" role="alert">{noteError}</p> : null}
+          {noteStatus ? <p role="status">{noteStatus}</p> : null}
+          <button type="submit" disabled={sendingNote}>Enviar mensaje</button>
+        </form>
         {answer ? (
           <section className="help-answer" aria-live="polite">
             {answer.explanation ? <p>{answer.explanation}</p> : null}
@@ -1467,271 +1627,5 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
         ) : null}
       </main>
     </Shell>
-  );
-}
-
-function OwnerSite() {
-  const [email, setEmail] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [cards, setCards] = useState<OwnerCard[]>([]);
-  const [plans, setPlans] = useState<OwnerPlan[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [planDrafts, setPlanDrafts] = useState<Record<string, OwnerPlan>>({});
-  const [newPlan, setNewPlan] = useState({ code: "", displayName: "", amount: "", faceCopy: "", enableCopilotHelp: false });
-
-  async function loadPanel() {
-    const [services, planRows] = await Promise.all([api("/api/owner/services"), api("/api/owner/plans")]);
-    if (!services.ok || !planRows.ok) {
-      setEmail(null);
-      return;
-    }
-    const nextPlans = (await planRows.json()) as OwnerPlan[];
-    setCards(await services.json());
-    setPlans(nextPlans);
-    setPlanDrafts(Object.fromEntries(nextPlans.map((plan) => [plan.code, { ...plan }])));
-  }
-
-  useEffect(() => {
-    let gone = false;
-    api("/api/owner/session").then(async (response) => {
-      if (gone) return;
-      if (!response.ok) {
-        setEmail(null);
-        return;
-      }
-      const body = (await response.json()) as { email: string };
-      setEmail(body.email);
-      await loadPanel();
-    });
-    return () => {
-      gone = true;
-    };
-  }, []);
-
-  async function signIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const response = await api("/api/owner/sessions", {
-      method: "POST",
-      body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
-    });
-    if (!response.ok) {
-      setError("El correo o la contraseña no sirven.");
-      return;
-    }
-    const body = (await response.json()) as { email: string };
-    setEmail(body.email);
-    setError("");
-    await loadPanel();
-  }
-
-  async function signOut() {
-    await api("/api/owner/sessions", { method: "DELETE" });
-    setEmail(null);
-    setCards([]);
-    setPlans([]);
-  }
-
-  async function replaceSecret(card: string) {
-    const secret = drafts[card]?.trim() ?? "";
-    if (!secret) {
-      setError("Pegá el secreto de nuevo para reemplazarlo.");
-      return;
-    }
-    const response = await api(`/api/owner/services/${card}`, {
-      method: "PUT",
-      body: JSON.stringify({ secret })
-    });
-    if (!response.ok) {
-      setError("No se pudo guardar el secreto.");
-      return;
-    }
-    setDrafts((value) => ({ ...value, [card]: "" }));
-    setError("");
-    await loadPanel();
-  }
-
-  async function savePlan(code: string) {
-    const draft = planDrafts[code];
-    if (!draft) return;
-    const response = await api(`/api/owner/plans/${encodeURIComponent(code)}`, {
-      method: "PUT",
-      body: JSON.stringify(draft)
-    });
-    if (!response.ok) {
-      setError("No se pudo guardar el plan.");
-      return;
-    }
-    setError("");
-    await loadPanel();
-  }
-
-  async function createPlan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const amount = Number(newPlan.amount);
-    if (!newPlan.code.trim() || !newPlan.displayName.trim() || !Number.isFinite(amount)) {
-      setError("Código, nombre e importe son obligatorios.");
-      return;
-    }
-    const response = await api("/api/owner/plans", {
-      method: "POST",
-      body: JSON.stringify({
-        code: newPlan.code.trim(),
-        displayName: newPlan.displayName.trim(),
-        amount,
-        faceCopy: newPlan.faceCopy,
-        enableCopilotHelp: newPlan.enableCopilotHelp,
-        active: true,
-        currency: "ARS"
-      })
-    });
-    if (!response.ok) {
-      setError("No se pudo crear el plan.");
-      return;
-    }
-    setNewPlan({ code: "", displayName: "", amount: "", faceCopy: "", enableCopilotHelp: false });
-    setError("");
-    await loadPanel();
-  }
-
-  if (!email) {
-    return (
-      <main className="gate">
-        <Wordmark />
-        <h1>Owner</h1>
-        <p className="gate-lead">Acceso del producto. No es la puerta del comercio.</p>
-        <form onSubmit={signIn}>
-          <label>
-            Dirección de email *
-            <input name="email" type="email" autoComplete="username" required />
-          </label>
-          <label>
-            Contraseña *
-            <input name="password" type="password" autoComplete="current-password" required />
-          </label>
-          {error ? <p className="error">{error}</p> : null}
-          <button type="submit">Entrar</button>
-        </form>
-      </main>
-    );
-  }
-
-  return (
-    <main className="shell page">
-      <header className="app-header">
-        <Wordmark />
-        <span className="alias-slot">{email}</span>
-        <button className="salir" type="button" onClick={() => void signOut()}>
-          Salir
-        </button>
-      </header>
-      {error ? <p className="error">{error}</p> : null}
-
-      <h1>Planes</h1>
-      <p className="gate-lead">Editá precios y alta de planes. La pantalla de Pagos del comercio solo lee los activos.</p>
-      <ul className="plans">
-        {plans.map((plan) => {
-          const draft = planDrafts[plan.code] ?? plan;
-          return (
-            <li key={plan.code} className="plan">
-              <strong>{plan.code}</strong>
-              <label>
-                Nombre
-                <input
-                  value={draft.displayName}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, displayName: event.target.value } }))
-                  }
-                />
-              </label>
-              <label>
-                Importe
-                <input
-                  type="number"
-                  value={draft.amount}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({
-                      ...value,
-                      [plan.code]: { ...draft, amount: Number(event.target.value) }
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Texto de cara
-                <input
-                  value={draft.faceCopy}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, faceCopy: event.target.value } }))
-                  }
-                />
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={draft.enableCopilotHelp}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({
-                      ...value,
-                      [plan.code]: { ...draft, enableCopilotHelp: event.target.checked }
-                    }))
-                  }
-                />
-                EnableCopilotHelp
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={draft.active}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, active: event.target.checked } }))
-                  }
-                />
-                Activo
-              </label>
-              <button type="button" onClick={() => void savePlan(plan.code)}>
-                Guardar plan
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-
-      <h1>Panel de servicios</h1>
-      <p className="gate-lead">Cada tarjeta es un servicio que el producto ya usa. El valor completo no se muestra.</p>
-      <ul className="plans">
-        {cards.map((card) => (
-          <li key={card.card} className="plan">
-            <strong>{ownerCardLabels[card.card] ?? card.card}</strong>
-            <span>
-              {card.isSet
-                ? card.lastFour
-                  ? `Configurado · ···${card.lastFour}`
-                  : "Configurado"
-                : "Sin configurar"}
-            </span>
-            {card.card !== "whatsapp" ? (
-              <>
-                <label>
-                  Reemplazar secreto
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={drafts[card.card] ?? ""}
-                    onChange={(event) => setDrafts((value) => ({ ...value, [card.card]: event.target.value }))}
-                  />
-                </label>
-                <button type="button" onClick={() => void replaceSecret(card.card)}>
-                  Guardar
-                </button>
-              </>
-            ) : (
-              <span className="face">Solo wa.me · sin clave</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </main>
   );
 }

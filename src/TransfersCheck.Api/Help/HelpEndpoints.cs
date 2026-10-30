@@ -1,5 +1,6 @@
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Core;
+using TransfersCheck.Infrastructure;
 
 namespace TransfersCheck.Api.Help;
 
@@ -12,6 +13,7 @@ public static class HelpEndpoints
         group.MapGet("/", Catalog);
         group.MapGet("/{id}", Article);
         group.MapPost("/ask", Ask);
+        group.MapPost("/messages", CreateMessage);
     }
 
     private static async Task<IResult> Catalog(
@@ -55,6 +57,26 @@ public static class HelpEndpoints
     }
 
     private sealed record AskBody(string? Question, string? OptionId);
+
+    private sealed record HelpMessageBody(string? Text);
+
+    private static async Task<IResult> CreateMessage(
+        HelpMessageBody body,
+        HttpContext http,
+        TransfersCheckDb db,
+        TimeProvider clock,
+        CancellationToken cancellationToken)
+    {
+        var text = body.Text?.Trim() ?? "";
+        if (text.Length == 0)
+            return Results.BadRequest(new { error = "text_required" });
+        if (text.Length > HelpdeskStore.TextMaxLength)
+            return Results.BadRequest(new { error = "text_too_long" });
+
+        var account = (LoginAccount)http.Items["account"]!;
+        var id = await HelpdeskStore.CreateMessageAsync(db, account.TenantId, text, clock.GetUtcNow(), cancellationToken);
+        return Results.Json(new { id }, statusCode: StatusCodes.Status201Created);
+    }
 
     private static async Task<IResult> Ask(
         AskBody body,

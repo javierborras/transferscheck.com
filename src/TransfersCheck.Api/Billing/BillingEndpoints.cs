@@ -83,7 +83,7 @@ public static class BillingEndpoints
 
     private sealed record CheckoutBody(string? ReferralCode, string? PlanCode, Guid? AdditionalPointId);
     private static async Task<IResult> Checkout(CheckoutBody? body, HttpContext http, ICheckout checkout, IPlanCatalog plans,
-        IReferralStore referrals, IMerchantStore store, TransfersCheckDb db, TimeProvider clock, CancellationToken ct)
+        IReferralStore referrals, IMerchantStore store, TransfersCheckDb db, TimeProvider clock, ILogger<Program> logger, CancellationToken ct)
     {
         var account = (LoginAccount)http.Items["account"]!;
         if (!account.IsOwner) return Results.Json(new { error = "owner_only" }, statusCode: 403);
@@ -108,7 +108,16 @@ public static class BillingEndpoints
         if (!string.IsNullOrWhiteSpace(body?.ReferralCode)) await referrals.AttachCodeAsync(account.TenantId, body.ReferralCode, ct);
         if (order.AdditionalPointId is null && merchant is { ConnectedAt: null, AccessUntil: null }) merchant.PlanCode = plan.Code;
         db.BillingOrders.Add(order); await db.SaveChangesAsync(ct);
-        order.CheckoutUrl = await checkout.CreatePaymentLinkAsync($"order:{order.Id:N}", order.Amount, order.Currency, title, ct);
+        try
+        {
+            using (MercadoPagoCallScope.Begin(account.TenantId))
+                order.CheckoutUrl = await checkout.CreatePaymentLinkAsync($"order:{order.Id:N}", order.Amount, order.Currency, title, ct);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or JsonException or InvalidOperationException)
+        {
+            logger.LogError(exception, "Checkout link could not be created.");
+            return Results.Json(new { error = "checkout_unavailable" }, statusCode: StatusCodes.Status502BadGateway);
+        }
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { initPoint = order.CheckoutUrl, amount = order.Amount, planCode = plan.Code, orderId = order.Id, accessUntil = order.TargetAccessUntil });
     }

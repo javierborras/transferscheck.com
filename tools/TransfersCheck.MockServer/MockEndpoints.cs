@@ -15,9 +15,13 @@ public static class MockState
     public static readonly List<JsonElement> Payments = [];
     public static readonly List<string> SentPushes = [];
     public static string RateLimit = "";
+    public static bool RejectRefresh;
+    public static int UnauthorizedSearchesRemaining;
     public static long UserId = 1001;
     public static int RefreshCount;
+    public static int TokenPosts;
     public static int SearchCount;
+    public static int SearchAttempts;
     public static string LastCheckoutAuthorization = "";
     public static string LastCheckoutBody = "";
     public static string LastPushAuthorization = "";
@@ -35,9 +39,13 @@ public static class MockState
         CheckoutAmounts.Clear();
         Auth0Mock.Reset();
         RateLimit = "";
+        RejectRefresh = false;
+        UnauthorizedSearchesRemaining = 0;
         UserId = 1001;
         RefreshCount = 0;
+        TokenPosts = 0;
         SearchCount = 0;
+        SearchAttempts = 0;
         LastCheckoutAuthorization = "";
         LastCheckoutBody = "";
         LastPushAuthorization = "";
@@ -55,19 +63,46 @@ public static class MockState
 
     public static JsonElement Payment(int id, string status, string type, decimal amount, string name)
     {
+        var created = DateTimeOffset.UtcNow.AddMinutes(-id).ToString("o");
         var json = JsonSerializer.Serialize(new
         {
             id,
-            date_created = DateTimeOffset.UtcNow.AddMinutes(-id).ToString("o"),
+            date_created = created,
+            date_approved = status == "approved" ? created : null,
             transaction_amount = amount,
             currency_id = "ARS",
             status,
+            status_detail = status == "approved" ? "accredited" : "pending_contingency",
+            operation_type = type == "bank_transfer" ? "account_fund" : "money_transfer",
             payment_type_id = type,
+            payment_method_id = type == "bank_transfer" ? "cvu" : "account_money",
+            description = $"Transferencia {id}",
+            collector_id = 1001,
             payer = new
             {
+                id = 5000 + id,
                 first_name = name,
                 last_name = string.IsNullOrWhiteSpace(name) ? "" : "Perez",
-                email = $"p{id}@counter.test"
+                email = $"p{id}@counter.test",
+                identification = new
+                {
+                    type = "CUIT",
+                    number = $"203040506{id:D2}"
+                }
+            },
+            transaction_details = new
+            {
+                transaction_id = $"COELSA-{id:D8}",
+                bank_transfer_id = 129581790000L + id
+            },
+            point_of_interaction = new
+            {
+                sub_type = type == "bank_transfer" ? "INTER_PSP" : "INTRA_PSP",
+                transaction_data = new
+                {
+                    e2e_id = $"COELSA-{id:D8}",
+                    transaction_id = $"COELSA-{id:D8}"
+                }
             }
         });
         return JsonDocument.Parse(json).RootElement.Clone();
@@ -101,9 +136,10 @@ public static class MockEndpoints
             var grant = form["grant_type"].ToString();
             if (grant == "refresh_token")
             {
+                MockState.TokenPosts++;
                 var refresh = form["refresh_token"].ToString();
-                if (!MockState.RefreshUsers.ContainsKey(refresh))
-                    return Results.BadRequest(new { error = "invalid_grant" });
+                if (MockState.RejectRefresh || !MockState.RefreshUsers.ContainsKey(refresh))
+                    return Results.BadRequest(new { error = "invalid_grant", status = 400 });
                 MockState.RefreshCount++;
                 var next = "refresh-" + Guid.NewGuid().ToString("N");
                 MockState.RefreshUsers[next] = MockState.RefreshUsers[refresh];
@@ -141,12 +177,19 @@ public static class MockEndpoints
 
         app.MapGet("/v1/payments/search", (HttpRequest request) =>
         {
+            MockState.SearchAttempts++;
             if (MockState.RateLimit == "429")
                 return Results.StatusCode(StatusCodes.Status429TooManyRequests);
             if (MockState.RateLimit == "2001")
                 return Results.BadRequest(new { message = "2001", error = "bad_request" });
             if (request.Headers.Authorization.Count == 0)
                 return Results.Unauthorized();
+            if (MockState.RateLimit == "401" || MockState.UnauthorizedSearchesRemaining > 0)
+            {
+                if (MockState.UnauthorizedSearchesRemaining > 0)
+                    MockState.UnauthorizedSearchesRemaining--;
+                return Results.Unauthorized();
+            }
             MockState.SearchCount++;
             var rows = MockState.Payments.AsEnumerable();
             if (DateTimeOffset.TryParse(request.Query["begin_date"], out var from)) rows = rows.Where(row => row.GetProperty("date_created").GetDateTimeOffset() >= from);

@@ -257,7 +257,7 @@ public sealed class Epic2LoginTests(SqlFixture sql)
             factory, $"code-{Guid.NewGuid():N}@counter.test", signUp: true,
             tamperCallback: path => System.Text.RegularExpressions.Regex.Replace(path, "code=[^&]+", "code=forged"));
         Assert.Null(badCode.SessionCookie);
-        Assert.EndsWith("/?auth0_error=exchange_failed", badCode.Location);
+        Assert.Contains("/?auth0_error=exchange_failed", badCode.Location, StringComparison.Ordinal);
     }
 
     [Fact]

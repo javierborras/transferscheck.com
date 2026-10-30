@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./api";
+import { api, withCorrelation } from "./api";
 import { enableDeviceAlerts } from "./push";
 
 type Status = "checking" | "active" | "off" | "blocked" | "unavailable";
@@ -49,7 +49,7 @@ export function NotificationBanner({ accountId }: { accountId: string }) {
   async function enable() {
     setBusy(true); setError("");
     try { await enableDeviceAlerts(); }
-    catch { setError("No pudimos activar las notificaciones. Revisá los permisos de este navegador y volvé a intentar."); }
+    catch (error) { setError(withCorrelation(error, "No pudimos activar las notificaciones. Revisá los permisos de este navegador y volvé a intentar.")); }
     finally { setBusy(false); setRevision(value => value + 1); }
   }
 

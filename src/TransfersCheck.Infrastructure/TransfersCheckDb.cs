@@ -29,6 +29,10 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<OwnerSecretRow> OwnerSecrets => Set<OwnerSecretRow>();
     public DbSet<HelpArticle> HelpArticles => Set<HelpArticle>();
     public DbSet<HelpCorpusState> HelpCorpusStates => Set<HelpCorpusState>();
+    public DbSet<IncidentLatch> IncidentLatches => Set<IncidentLatch>();
+    public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
+    public DbSet<CommerceHelpMessage> CommerceHelpMessages => Set<CommerceHelpMessage>();
+    public DbSet<MercadoPagoApiCall> MercadoPagoApiCalls => Set<MercadoPagoApiCall>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -206,7 +210,17 @@ public sealed class TransfersCheckDb : DbContext
             entity.Property(t => t.PayerName).HasMaxLength(256);
             entity.Property(t => t.Currency).HasMaxLength(8);
             entity.Property(t => t.Status).HasMaxLength(32);
+            entity.Property(t => t.StatusDetail).HasMaxLength(64);
             entity.Property(t => t.TypeCode).HasMaxLength(64);
+            entity.Property(t => t.OperationType).HasMaxLength(64);
+            entity.Property(t => t.PaymentMethodId).HasMaxLength(64);
+            entity.Property(t => t.CoelsaId).HasMaxLength(128);
+            entity.Property(t => t.BankTransferId).HasMaxLength(64);
+            entity.Property(t => t.PayerDocument).HasMaxLength(64);
+            entity.Property(t => t.PayerEmail).HasMaxLength(256);
+            entity.Property(t => t.OriginBank).HasMaxLength(128);
+            entity.Property(t => t.OriginAccount).HasMaxLength(64);
+            entity.Property(t => t.Description).HasMaxLength(256);
             entity.Property(t => t.Amount).HasPrecision(18, 2);
             entity.HasIndex(t => new { t.TenantId, t.Source, t.ExternalId }).IsUnique();
             entity.HasQueryFilter(t => _tenant.TenantId != Guid.Empty && t.TenantId == _tenant.TenantId);
@@ -225,6 +239,42 @@ public sealed class TransfersCheckDb : DbContext
             entity.HasKey(p => p.PaymentId);
             entity.Property(p => p.PaymentId).HasMaxLength(64);
             entity.HasQueryFilter(p => _tenant.TenantId != Guid.Empty && p.TenantId == _tenant.TenantId);
+        });
+
+        modelBuilder.Entity<MercadoPagoApiCall>(entity =>
+        {
+            entity.HasKey(call => call.Id);
+            entity.HasIndex(call => call.OccurredAt);
+            entity.HasIndex(call => call.TenantId);
+        });
+
+        modelBuilder.Entity<ErrorLog>(entity =>
+        {
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.CorrelationId).HasMaxLength(64);
+            entity.Property(row => row.Message).HasMaxLength(400);
+            entity.Property(row => row.Path).HasMaxLength(256);
+            entity.Property(row => row.Level).HasMaxLength(16);
+            entity.HasIndex(row => row.OccurredAt);
+        });
+
+        modelBuilder.Entity<IncidentLatch>(entity =>
+        {
+            entity.HasKey(l => l.Fingerprint);
+            entity.Property(l => l.Fingerprint).HasMaxLength(HelpdeskStore.FingerprintMaxLength);
+            entity.Property(l => l.ReleaseTag).HasMaxLength(64);
+            entity.Property(l => l.SentryId).HasMaxLength(256);
+            entity.Property(l => l.PullRequestUrl).HasMaxLength(512);
+        });
+
+        modelBuilder.Entity<CommerceHelpMessage>(entity =>
+        {
+            entity.HasKey(m => m.Id);
+            entity.Property(m => m.Alias).HasMaxLength(32);
+            entity.Property(m => m.AdminEmail).HasMaxLength(256);
+            entity.Property(m => m.Text).HasMaxLength(HelpdeskStore.TextMaxLength);
+            entity.HasIndex(m => m.CreatedAt);
+            entity.HasQueryFilter(m => _tenant.TenantId != Guid.Empty && m.TenantId == _tenant.TenantId);
         });
     }
 

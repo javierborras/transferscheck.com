@@ -49,6 +49,7 @@ public static class DependencyInjection
             services.AddSingleton<IMailSender, NullMailSender>();
         services.AddScoped<ITenantPlanCode, TenantPlanCode>();
         services.AddSingleton<LoginAccountCap>();
+        services.AddSingleton<IMercadoPagoCallLog, EfMercadoPagoCallLog>();
         services.AddHttpClient<MercadoPagoTransferSource>();
         services.AddScoped<ITransferSource>(sp => sp.GetRequiredService<MercadoPagoTransferSource>());
         services.AddScoped<ITransferQuerySource>(sp => sp.GetRequiredService<MercadoPagoTransferSource>());

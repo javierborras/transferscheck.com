@@ -1,11 +1,11 @@
-import { api } from "./api";
+import { api, attachCorrelation } from "./api";
 
 export async function enableDeviceAlerts() {
   if (!("Notification" in window) || !("serviceWorker" in navigator)) throw new Error();
   const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
   if (permission !== "granted") throw new Error();
   const response = await api("/api/push/config");
-  if (!response.ok) throw new Error();
+  if (!response.ok) throw attachCorrelation(new Error("config"), response);
   const config = await response.json();
   let token: string;
   if (config.apiKey) {
@@ -19,7 +19,7 @@ export async function enableDeviceAlerts() {
   } else throw new Error();
   if (!token) throw new Error();
   const saved = await api("/api/push/tokens", { method: "POST", body: JSON.stringify({ token }) });
-  if (!saved.ok) throw new Error();
+  if (!saved.ok) throw attachCorrelation(new Error("token"), saved);
   const session = await api("/api/session");
   if (session.ok) localStorage.setItem("push-account", (await session.json()).accountId);
 }
