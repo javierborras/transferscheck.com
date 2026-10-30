@@ -4,7 +4,11 @@ test("landing reads public prices and leads to the real signup and login", async
   expect(response.ok()).toBeTruthy();
   const { plans } = await response.json();
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Que tu mostrador/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Confirmá al instante cada transferencia/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Casos reales todos los días" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pack Corporativo" })).toBeVisible();
+  await expect(page.locator("#desarrolladores")).toBeVisible();
+  await expect(page.locator("#desarrolladores form")).toBeVisible();
   for (const plan of plans) {
     const card = page.locator(".commercial-plan").filter({ has: page.getByRole("heading", { name: plan.displayName, exact: true }) });
     await expect(card.locator(".money")).toHaveText(new Intl.NumberFormat("es-AR", { style: "currency", currency: plan.currency }).format(plan.amount));

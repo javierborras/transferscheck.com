@@ -8,9 +8,20 @@
 
 What is still unknown is `later-research.md`. That file is pending research, resume later. It is not a build queue.
 
-- Owner microsite, including superadmin login, plan editing, the services panel, the helpdesk, and the log/PR agent. Hosts are not designed there.
 - Help copilot and Jev. Provider names, model thresholds, and the index name are still unset. The spec is `help-copilot-technical-spec.md`. Pack Mes `EnableCopilotHelp` and the Pack Evento static menu stay decided. Implementation waits.
 - Production pipeline and the post-deploy help ingest. There is no GitHub Actions pipeline today.
+
+## Closed 27 October 2026 (helpdesk and the incident agent)
+
+- Release identity is an annotated tag (`api-YYYYMMDD.N`). `main` stays the only integration branch. A hotfix is a short-lived branch cut from that tag. ADR-025. Completes ADR-024.
+- Sentry captures. A SQL row only latches a fingerprint. ADR-026.
+- The dossier is one GitHub issue per fingerprint. ADR-027.
+- The agent opens a draft pull request and does not merge. ADR-028.
+- Local review is manual. The notice is GitHub's own notification. ADR-029.
+- The agent does not restart production, run migrations, or touch secrets. ADR-030.
+- Owner Helpdesk is one menu item with an incident list and a commerce-message list. ADR-031. Story 12.4.
+- A commerce message does not create an issue, a branch, or a pull request. ADR-032.
+- Commercial data, a money balance, and each commerce's collection transfers stay out.
 
 ## Closed 24 October 2026 (first-build)
 

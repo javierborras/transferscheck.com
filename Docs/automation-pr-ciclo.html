@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Ciclo de automatización de pull requests</title>
+  <style>
+    :root {
+      --bg: #101114;
+      --fg: #eceae4;
+      --muted: #b7b3a8;
+      --dim: #8d897f;
+      --line: #34322c;
+      --accent: #d7c4a1;
+      --code: #17181c;
+      --pad: clamp(1.5rem, 4vw, 4.25rem);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 100%;
+      line-height: 1.35;
+    }
+
+    body {
+      min-height: 100dvh;
+    }
+
+    .sr {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .deck {
+      position: relative;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: safe center;
+      padding: var(--pad);
+      padding-bottom: 5.5rem;
+      opacity: 0;
+      translate: 0 10px;
+      transition: opacity 180ms ease-out, translate 180ms ease-out;
+      pointer-events: none;
+      z-index: 0;
+      overflow: auto;
+    }
+
+    .slide.is-active {
+      opacity: 1;
+      translate: 0 0;
+      pointer-events: auto;
+      z-index: 1;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide {
+        transition: none;
+        translate: none;
+      }
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 18ch;
+      font-size: clamp(2.3rem, 5.2vw, 4.4rem);
+      font-weight: 560;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+
+    .lede {
+      margin: 1.25rem 0 0;
+      max-width: 34ch;
+      color: var(--muted);
+      font-size: clamp(1.2rem, 2vw, 1.65rem);
+      line-height: 1.4;
+    }
+
+    .kicker {
+      margin: 0 0 1rem;
+      color: var(--accent);
+      font-size: 0.95rem;
+      letter-spacing: 0.04em;
+    }
+
+    .slide-cycle h1,
+    .slide-sentry h1,
+    .slide-contract h1,
+    .slide-check h1,
+    .slide-close h1 {
+      max-width: none;
+      font-size: clamp(1.8rem, 3.4vw, 2.8rem);
+    }
+
+    .cycle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.25rem 3rem;
+      margin-top: 1.75rem;
+      max-width: 72rem;
+    }
+
+    .steps {
+      list-style: none;
+      margin: 0;
+      padding: 0 0 0 0.15rem;
+      border-left: 1px solid var(--line);
+    }
+
+    .steps li {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.85rem;
+      align-items: start;
+      padding: 0 0 1rem 1rem;
+    }
+
+    .steps li:last-child {
+      padding-bottom: 0;
+    }
+
+    .n {
+      margin-left: -1.7rem;
+      width: 1.7rem;
+      height: 1.7rem;
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      background: var(--bg);
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      display: grid;
+      place-items: center;
+    }
+
+    .steps p {
+      margin: 0.15rem 0 0;
+      font-size: clamp(0.98rem, 1.25vw, 1.12rem);
+      line-height: 1.35;
+    }
+
+    .points {
+      list-style: none;
+      margin: 1.75rem 0 0;
+      padding: 0;
+      max-width: 40rem;
+    }
+
+    .points li {
+      margin: 0;
+      padding: 0.85rem 0;
+      border-top: 1px solid var(--line);
+      font-size: clamp(1.25rem, 2.2vw, 1.7rem);
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .points li:last-child {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .contract-label {
+      margin: 1rem 0 0.6rem;
+      color: var(--accent);
+      font-size: 0.95rem;
+    }
+
+    pre {
+      margin: 0;
+      max-width: 44rem;
+      padding: 1rem 1.15rem;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: auto;
+      font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+      font-size: clamp(0.78rem, 1.15vw, 0.95rem);
+      line-height: 1.45;
+      color: #e6e2d8;
+    }
+
+    pre .k { color: var(--accent); }
+    pre .s { color: #eceae4; }
+    pre .num { color: #c9c3b4; }
+
+    .states {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem;
+      margin: 1.75rem 0 0;
+      padding: 0;
+      list-style: none;
+      max-width: 62rem;
+    }
+
+    .states li {
+      margin: 0;
+      padding: 1.1rem 1rem 1.15rem;
+      border-top: 1px solid var(--accent);
+      background: transparent;
+    }
+
+    .states strong {
+      display: block;
+      margin-bottom: 0.45rem;
+      font-size: clamp(1.25rem, 2vw, 1.6rem);
+      font-weight: 560;
+      letter-spacing: -0.02em;
+    }
+
+    .states span {
+      color: var(--muted);
+      font-size: 1.02rem;
+      line-height: 1.35;
+    }
+
+    .aside {
+      margin: 1.5rem 0 0;
+      max-width: 40rem;
+      color: var(--muted);
+      font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+    }
+
+    .ban {
+      margin: 1.25rem 0 0;
+      font-size: clamp(1.35rem, 2.2vw, 1.8rem);
+      letter-spacing: -0.02em;
+    }
+
+    .chrome {
+      position: fixed;
+      z-index: 2;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem var(--pad) 1rem;
+      background: linear-gradient(to top, var(--bg) 70%, transparent);
+    }
+
+    .chrome p {
+      margin: 0;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.9rem;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--fg);
+      font: inherit;
+      font-size: 0.9rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover { border-color: var(--accent); }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button:disabled { opacity: 0.35; cursor: default; }
+
+    .hint { color: var(--dim); }
+
+    @media (max-width: 860px) {
+      .cycle, .states { grid-template-columns: 1fr; }
+      h1 { max-width: none; }
+    }
+
+    @media (max-height: 760px) {
+      .slide { padding-top: 1.25rem; }
+      .cycle { margin-top: 1rem; }
+      .steps li { padding-bottom: 0.65rem; }
+      .points li { padding: 0.55rem 0; }
+    }
+  </style>
+</head>
+<body>
+  <p id="live" class="sr" aria-live="polite"></p>
+  <main class="deck" id="deck" aria-label="Presentación">
+    <section class="slide is-active" aria-hidden="false">
+      <p class="kicker">Pull requests</p>
+      <h1>Una automatización vigila los pull requests</h1>
+      <p class="lede">Usa la API de tu propio micrositio de administración como plano de soporte.</p>
+    </section>
+
+    <section class="slide slide-cycle" aria-hidden="true" inert>
+      <h1>El ciclo</h1>
+      <div class="cycle">
+        <ol class="steps">
+          <li>
+            <span class="n">1</span>
+            <p>Un pull request se abre o se actualiza.</p>
+          </li>
+          <li>
+            <span class="n">2</span>
+            <p>La automatización llama a la API del micrositio.</p>
+          </li>
+          <li>
+            <span class="n">3</span>
+            <p>El micrositio trae el issue de Sentry relacionado (release, stack, conteo) y lo adjunta al registro de soporte.</p>
+          </li>
+          <li>
+            <span class="n">4</span>
+            <p>El agente pide a la API cada clave de Jira nombrada en los encabezados del mensaje de commit de ese pull request.</p>
+          </li>
+        </ol>
+        <ol class="steps" start="5">
+          <li>
+            <span class="n">5</span>
+            <p>La API devuelve un solo JSON estructurado: claves de Jira, resumen del issue y criterios de aceptación.</p>
+          </li>
+          <li>
+            <span class="n">6</span>
+            <p>El agente compara el diff con la rama de origen de la que se cortó la tarea, no con una rama cualquiera.</p>
+          </li>
+          <li>
+            <span class="n">7</span>
+            <p>Revisión estática: el diff satisface cada criterio de aceptación de esa historia o issue de Jira.</p>
+          </li>
+          <li>
+            <span class="n">8</span>
+            <p>El resultado queda en el comentario del pull request y en el registro de soporte del micrositio. Una persona sigue aprobando.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="slide slide-sentry" aria-hidden="true" inert>
+      <h1>Sentry queda detrás del micrositio</h1>
+      <ul class="points">
+        <li>El agente llama a un solo sistema: la API del micrositio.</li>
+        <li>Sentry no es una segunda bandeja.</li>
+        <li>El micrositio guarda el enlace, el release y el conteo.</li>
+        <li>El stack completo no se copia en su base de datos.</li>
+      </ul>
+    </section>
+
+    <section class="slide slide-contract" aria-hidden="true" inert>
+      <h1>Lo que recibe el agente</h1>
+      <p class="contract-label">Contrato. Un solo objeto.</p>
+      <pre><code>{
+  <span class="k">"pr"</span>: <span class="num">128</span>,
+  <span class="k">"baseBranch"</span>: <span class="s">"linea-origen"</span>,
+  <span class="k">"jiraKeys"</span>: [<span class="s">"PLAT-18"</span>],
+  <span class="k">"issues"</span>: [
+    {
+      <span class="k">"key"</span>: <span class="s">"PLAT-18"</span>,
+      <span class="k">"summary"</span>: <span class="s">"El registro de soporte conserva el release"</span>,
+      <span class="k">"acceptanceCriteria"</span>: [
+        <span class="s">"Guarda el enlace al issue"</span>,
+        <span class="s">"Guarda el release y el conteo"</span>
+      ]
+    }
+  ],
+  <span class="k">"sentry"</span>: {
+    <span class="k">"issueUrl"</span>: <span class="s">"https://sentry.example/issues/1001"</span>,
+    <span class="k">"release"</span>: <span class="s">"admin@1.4.2"</span>,
+    <span class="k">"count"</span>: <span class="num">17</span>
+  }
+}</code></pre>
+    </section>
+
+    <section class="slide slide-check" aria-hidden="true" inert>
+      <h1>La revisión estática</h1>
+      <p class="aside">El diff del pull request se compara con <code>baseBranch</code>, la rama de origen de la tarea.</p>
+      <ul class="states">
+        <li>
+          <strong>Pasa</strong>
+          <span>El criterio se cumple en el diff.</span>
+        </li>
+        <li>
+          <strong>Falla</strong>
+          <span>El diff no cumple el criterio.</span>
+        </li>
+        <li>
+          <strong>No se ve en el diff</strong>
+          <span>El criterio no aparece en el cambio.</span>
+        </li>
+      </ul>
+      <p class="ban">Sin merge automático.</p>
+    </section>
+
+    <section class="slide slide-close" aria-hidden="true" inert>
+      <h1>La persona aprueba</h1>
+      <p class="lede">Lee el comentario del pull request. El registro de soporte ya tiene el mismo resultado.</p>
+    </section>
+  </main>
+
+  <footer class="chrome">
+    <button type="button" id="prev">Anterior</button>
+    <p><span id="pos">1 / 6</span> <span class="hint">· clic o flechas</span></p>
+    <button type="button" id="next">Siguiente</button>
+  </footer>
+
+  <script>
+    const slides = [...document.querySelectorAll(".slide")];
+    const live = document.getElementById("live");
+    const pos = document.getElementById("pos");
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+    let index = 0;
+
+    function show(nextIndex) {
+      index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+      slides.forEach((slide, i) => {
+        const active = i === index;
+        slide.classList.toggle("is-active", active);
+        slide.toggleAttribute("inert", !active);
+        slide.setAttribute("aria-hidden", String(!active));
+      });
+      const title = slides[index].querySelector("h1").textContent;
+      pos.textContent = `${index + 1} / ${slides.length}`;
+      live.textContent = `Diapositiva ${index + 1} de ${slides.length}. ${title}`;
+      prev.disabled = index === 0;
+      next.disabled = index === slides.length - 1;
+    }
+
+    function advance(event) {
+      if (event.target.closest("button, a, pre, .chrome")) return;
+      show(index + 1);
+    }
+
+    document.getElementById("deck").addEventListener("click", advance);
+    prev.addEventListener("click", () => show(index - 1));
+    next.addEventListener("click", () => show(index + 1));
+
+    document.addEventListener("keydown", (event) => {
+      const key = event.key;
+      if (key === "ArrowRight" || key === "PageDown" || key === " ") {
+        event.preventDefault();
+        show(index + 1);
+      } else if (key === "ArrowLeft" || key === "PageUp") {
+        event.preventDefault();
+        show(index - 1);
+      } else if (key === "Home") {
+        event.preventDefault();
+        show(0);
+      } else if (key === "End") {
+        event.preventDefault();
+        show(slides.length - 1);
+      }
+    });
+
+    show(0);
+  </script>
+</body>
+</html>

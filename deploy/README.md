@@ -2,6 +2,24 @@
 
 Production hosting for the **API** is MonsterASP.net WebDeploy (`site56119`). Credentials and connection strings are **not** tracked in git. The UI (`web/`) deploys separately to Cloudflare Workers.
 
+## Regla de oro
+
+Un despliegue publica código. No publica configuración ni datos.
+
+Nunca pisar, vaciar ni reemplazar en MonsterASP:
+
+- `appsettings.json` y `appsettings.Production.json`
+- `web.config`
+- `App_Data` (claves de Data Protection)
+- variables y secretos del hosting
+- filas ya guardadas en la base: planes, secretos del owner, comercios, cobros y transferencias
+
+`appsettings.json` del repositorio es la plantilla vacía. Las claves reales están en `appsettings.Production.json` del servidor, que ASP.NET carga encima de esa plantilla cuando el entorno es Production. Copias locales viven en `deploy/local/` y no se commitean.
+
+`Database:EnsureSchema` queda en false. Un build que agrega columnas no altera la base como parte de un despliegue rutinario. Antes de una prueba, `Backup-ProductionConfig.ps1` guarda la configuración del servidor y las tablas de planes y secretos en `deploy/local/snapshots/`.
+
+El código que se publica tiene que ser el que se acaba de construir en esta copia. No se mezcla un ensamblado viejo con configuración nueva, ni se sube la plantilla vacía encima del archivo de producción. `Publish-ApiCode.ps1` solo acepta DLL y PDB de la API, y aborta si el paquete incluye json, `web.config` o `App_Data`.
+
 ## Where secrets live
 
 | Item | Local location (gitignored) |

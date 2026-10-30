@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { claimPaymentNotice, showDesktopFallback, enableDeviceAlerts } from "./push";
 import { Landing } from "./Landing";
+import { BusinessSolutions } from "./BusinessSolutions";
+import { LegalPage } from "./LegalPage";
 import { Logo } from "./Logo";
 import { PlanCards } from "./Plans";
 import { playCashBell, unlockSound, soundEnabled, subscribeSound } from "./audio";
@@ -255,6 +257,9 @@ export function App() {
       <Route path="/cuenta" element={<CreateAccount onSignedIn={setSession} />} />
       <Route path="/invitar/:token" element={<ClaimInvite onSignedIn={setSession} />} />
       <Route path="/owner" element={<OwnerSite />} />
+      <Route path="/soluciones-empresas" element={<BusinessSolutions />} />
+      <Route path="/terminos" element={<LegalPage />} />
+      <Route path="/privacidad" element={<LegalPage privacy />} />
       <Route path="/pagar" element={session ? <Pay session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/conectar" element={session ? <ChecklistPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />

@@ -18,7 +18,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
     {symbol}
     <g transform="translate(86, 46)" fontFamily="system-ui, -apple-system, Segoe UI, sans-serif">
       <text fontSize="32" fontWeight="800" letterSpacing="-0.6" fill="#0F172A">transfers<tspan fill="#3483FA">check</tspan><tspan fill="#00A650">.</tspan></text>
-      <text x="2" y="21" fontSize="13" fontWeight="600" fill="#475569">Tus notificaciones en todas partes.</text>
+      <text x="2" y="25" fontSize="13" fontWeight="600" fill="#475569">Tus notificaciones en todas partes.</text>
     </g>
   </svg>;
 }

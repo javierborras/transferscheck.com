@@ -240,3 +240,36 @@ Defaults recorded so implementers are not guessing (reversible by the human):
 - Auth0 Universal Login + Database connection + Social (Google default).
 - Bridge pattern: Auth0 IdP → API local session cookie.
 - Story 7.1 becomes Auth0-owned verification, not a local Código field on the commerce door.
+
+## Human decision — 25 October 2026, owner dashboard
+
+Source: the human, after the published owner page was only plans and service cards. Detail is the ADR-014 amendment and story 12.4.
+
+Closed:
+
+- The owner screen has a left menu: Inicio, Clientes, Facturaciones, Planes, Servicios.
+- Inicio shows pending tasks and technical health from rows and settings already stored. No new telemetry store.
+- Clientes lists commerces. Facturaciones lists SaaS billing orders and filters by commerce.
+- Planes and Servicios stay stories 12.2 and 12.3.
+
+Left out:
+
+- Helpdesk and the log/PR agent.
+- Commercial data (name, CUIT, address) and a money balance.
+- A read of the transfers each commerce collects.
+
+## Human decision — 27 October 2026, helpdesk and the incident agent
+
+Source: the human. Detail is ADR-025 through ADR-032 and the story 12.4 amendment. Where this entry conflicts with the 25 October dashboard entry, this entry wins. The earlier entry stays as history.
+
+Closed:
+
+- A published build is an annotated tag (`api-YYYYMMDD.N`) on that commit. `main` stays the only integration branch. A hotfix is a short-lived branch cut from the tag. The running process reports that SHA.
+- Sentry captures. A SQL row only latches a fingerprint. The dossier is one GitHub issue. The agent opens a draft pull request and does not merge. Review is manual. GitHub notifies. The agent does not restart production, run migrations, or touch secrets.
+- The owner menu gains Helpdesk: one screen, an incident list and a commerce-message list. A commerce writes a short form on the existing help page. The session fixes the tenant. The owner closes the message on that screen. A message does not open an issue or a pull request. There is no reply thread.
+
+Left out:
+
+- Commercial data (name, CUIT, address), a money balance, and a read of the transfers each commerce collects.
+- A second product email. The mail provider value stays unset (ADR-012).
+- Sentry Team or Business, Docker, and a self-hosted Sentry.

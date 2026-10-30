@@ -10,6 +10,7 @@ using TransfersCheck.Api.Accounts;
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Api.Billing;
 using TransfersCheck.Api.Configuration;
+using TransfersCheck.Api.Commercial;
 using TransfersCheck.Api.Connections;
 using TransfersCheck.Api.Jobs;
 using TransfersCheck.Api.Help;
@@ -118,6 +119,12 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 errorLogs.Provider = app.Services;
 
+app.MapGet("/api/status", (Microsoft.Extensions.Options.IOptions<MercadoPagoOptions> mercadoPago) => Results.Ok(new
+{
+    api = "online",
+    mercadoPago = new { configured = !string.IsNullOrWhiteSpace(mercadoPago.Value.ApiBaseUrl) && !string.IsNullOrWhiteSpace(mercadoPago.Value.AuthorizationUrl) }
+}));
+
 // ADR-018: a tenant with a missing client id, secret or redirect would lock every commerce admin out (the local door closes). Fail at startup instead.
 var auth0Options = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Auth0Options>>().Value;
 if (auth0Options.Enabled
@@ -177,6 +184,7 @@ BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);
 HistoryEndpoints.Map(app);
 PushEndpoints.Map(app);
+CommercialEndpoints.Map(app);
 
 app.Run();
 

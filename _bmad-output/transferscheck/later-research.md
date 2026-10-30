@@ -10,9 +10,9 @@ The owner microsite, the help copilot, Jev, and the production pipeline are not 
 
 ## Owner microsite
 
-Pending research. Not in the first build. Do not design hosts.
+The first build left this out. Sign-in, plan editing, and the services panel shipped later. On 25 Oct 2026 the dashboard host shipped with them: Inicio, Clientes, Facturaciones, Planes, and Servicios (ADR-014, story 12.4).
 
-The product decision stays: superadmin login, plan editing, and the services panel, including the configurable single mail sender. Also the helpdesk, and the agent that reads logs, files bugs, and opens a pull request for the owner to approve. ADR-012 and ADR-014. The concrete mail provider value stays unset.
+On 27 Oct 2026 the helpdesk and the incident agent left this file. Helpdesk is ADR-031 and story 12.4. The agent is ADR-025 through ADR-030 and ADR-032. Commercial data and a money balance stay out. The concrete mail provider value stays unset.
 
 ## Help copilot and Jev
 
