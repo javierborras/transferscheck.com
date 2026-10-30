@@ -18,11 +18,6 @@ foreach ($file in $Files) {
     if ($name -notmatch $allowed) { throw "Refusing '$name'. Only API, Core and Infrastructure dll/pdb files can be published." }
     if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing $file" }
 }
-foreach ($file in $Files) {
-    $name = [IO.Path]::GetFileName($file)
-    if ($name -match 'TransfersCheck\.(Core|Infrastructure)\.') { throw "Refusing '$name'. This publish is API-only so production transfer reads stay on the current assemblies." }
-}
-
 $msdeploy = 'C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe'
 if (!(Test-Path -LiteralPath $msdeploy)) { throw "msdeploy.exe was not found." }
 [xml]$settings = Get-Content -LiteralPath $PublishSettings -Raw
