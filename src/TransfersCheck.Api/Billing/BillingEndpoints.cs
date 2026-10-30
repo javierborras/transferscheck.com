@@ -28,11 +28,11 @@ public static class BillingEndpoints
         app.MapGet("/api/billing/return", (IOptions<UiOptions> ui) => Results.Redirect(ui.Value.Origin.TrimEnd('/') + "/pagar?returned=true"));
     }
 
-    private static bool IsFixed(Plan plan) => plan.Code is PlanCodes.PackMes or PlanCodes.PackEvento;
+    private static bool IsFixed(Plan plan) => plan.Code is PlanCodes.PackMes or PlanCodes.PackEvento or PlanCodes.PackCorporativo;
     private static object PublicPlan(Plan plan, int renewing = 0) => new {
         code = plan.Code, displayName = plan.Code == PlanCodes.PackEvento ? "Individual / Evento" : plan.DisplayName,
         amount = plan.Amount, currency = plan.Currency, durationDays = plan.DurationDays, durationHours = plan.DurationHours,
-        faceCopy = plan.Code == PlanCodes.PackEvento ? "24 horas desde que iniciás el evento. Admin + 1 Punto de Alerta." : "Para el comercio que cobra todos los días.",
+        faceCopy = plan.Code == PlanCodes.PackEvento ? "24 horas desde que iniciás el evento. Admin + 1 Punto de Alerta." : plan.Code == PlanCodes.PackCorporativo ? "Escala y multi-sucursal para equipos que necesitan crecer." : "Para el comercio que cobra todos los días.",
         enableCopilotHelp = plan.EnableCopilotHelp, includedAlertPoints = AlertPointAccess.Included(plan.Code),
         additionalPointPrice = AlertPointAccess.AdditionalPrice, renewingPoints = renewing,
         renewalAmount = checked(plan.Amount + renewing * AlertPointAccess.AdditionalPrice)
@@ -210,11 +210,11 @@ public static class BillingEndpoints
                 point.ExtraAccessUntil = point.ExtraAccessUntil > order.TargetAccessUntil ? point.ExtraAccessUntil : order.TargetAccessUntil;
             // A late confirmation is retained as paid without extending a past period (ADR-022).
             order.ActivatedAt = point?.ExtraAccessUntil > now ? now : null;
-        } else if (order.PlanCode == PlanCodes.PackMes) {
+        } else if (order.PlanCode is PlanCodes.PackMes or PlanCodes.PackCorporativo) {
             var start = merchant.AccessUntil > now ? merchant.AccessUntil.Value : now;
-            merchant.AccessUntil = start.AddDays(order.DurationDays ?? 30); merchant.PlanCode = PlanCodes.PackMes;
+            merchant.AccessUntil = start.AddDays(order.DurationDays ?? 30); merchant.PlanCode = order.PlanCode;
             order.ActivatedAt = now; await RenewPoints(db, order, merchant.AccessUntil.Value, ct);
-            await referrals.QueueGrantFromPackMesPaymentAsync(order.TenantId, now, ct);
+            if (order.PlanCode == PlanCodes.PackMes) await referrals.QueueGrantFromPackMesPaymentAsync(order.TenantId, now, ct);
         }
         await store.AddProcessedPaymentAsync(new ProcessedPayment { PaymentId = paymentId, TenantId = order.TenantId, AppliedAt = now }, ct);
         await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);

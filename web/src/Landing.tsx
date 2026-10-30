@@ -10,8 +10,8 @@ const segments = ["01. Profesionales, Consultorios y Reparto", "02. Comercios, G
 const testimonials = [
   { name: "Iván", role: "Kiosco · Córdoba", image: "/testimonials/kiosquero.jpg", text: "Me salvó varias veces: mis empleados podían cobrar y yo dejé de revisar a mano cada transferencia." },
   { name: "Amanda", role: "Tienda de ropa · Córdoba", image: "/testimonials/tienda-ropa.jpg", text: "Mis empleadas corroboran las transferencias sin ver mi cuenta. Me da mucha más tranquilidad." },
-  { name: "Liliana", role: "Docente", image: "/testimonials/docente.jpg", text: "En el acto de fin de año tuvimos dos dispositivos controlando las entradas. Pagás lo que usás." },
-  { name: "Ramiro", role: "Imprenta", image: "/testimonials/imprenta.jpg", text: "Ahorra tiempo cuando todo anda bien; dependés de tener conexión para actualizar los cobros." },
+  { name: "Liliana", role: "Docente", image: "/testimonials/docente.jpg", rating: 4, text: "En el acto de fin de año tuvimos dos dispositivos controlando las entradas. Pagás lo que usás." },
+  { name: "Ramiro", role: "Imprenta", image: "/testimonials/imprenta.jpg", rating: 4, text: "Ahorra tiempo cuando todo anda bien; dependés de tener conexión para actualizar los cobros." },
   { name: "Sofía", role: "Feria de artesanos · Mendoza", image: "/testimonials/feriante.jpg", text: "Abrimos solo algunos fines de semana y gastamos únicamente por los días que trabajamos." },
 ];
 export function Landing() {

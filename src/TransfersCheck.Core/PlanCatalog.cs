@@ -52,6 +52,12 @@ public static class PackMesTrial
     }
 }
 
+public static class PackCorporativoTrial
+{
+    public const int Days = 15;
+    public static bool Applies(string? planCode) => string.Equals(planCode, PlanCodes.PackCorporativo, StringComparison.OrdinalIgnoreCase);
+}
+
 public static class AccessBlock
 {
     public static bool IsBlocked(DateTimeOffset? accessUntil, DateTimeOffset now)

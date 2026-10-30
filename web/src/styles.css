@@ -1325,6 +1325,7 @@ a.button.secondary { background: #fff; color: var(--tc-brand-action); border: 2p
 #planes > h2, #planes > .error, #planes > [role="status"] { grid-column:1 / -1; }
 #planes > .plan-grid { display:contents; }
 #planes > .corporate-plan { margin:0; min-width:0; flex-direction:column; align-items:stretch; justify-content:space-between; }
+#planes > .corporate-plan { display:none; }
 .commercial-plan { padding:24px; min-height:100%; }
 .commercial-plan h2 { margin-top:16px; }.commercial-plan ul { display:grid; gap:12px; padding-left:0; list-style:none; }.commercial-plan li { line-height:1.45; }
 .commercial-plan { display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
@@ -1498,6 +1499,9 @@ ol.transfers li.latest-transfer { grid-template-columns: 1fr; grid-template-area
 .testimonial-dots { align-items:center; gap:8px; margin-top:18px; }
 .testimonial-dots button { width:9px; min-width:9px; height:9px; min-height:9px; padding:0; box-shadow:none; }
 .testimonial-dots button[aria-current="true"] { width:24px; min-width:24px; height:9px; }
+.testimonial-avatar { width:72px; height:72px; flex-basis:72px; }
+.testimonial-card:nth-child(2) .testimonial-stars, .testimonial-card:nth-child(3) .testimonial-stars { font-size:0; }
+.testimonial-card:nth-child(2) .testimonial-stars::after, .testimonial-card:nth-child(3) .testimonial-stars::after { content:"★★★★☆"; font-size:.85rem; }
 
 .owner-main .app-header {
   margin: 0;

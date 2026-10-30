@@ -139,6 +139,17 @@ public sealed class TransfersCheckDb : DbContext
                     FaceCopy = "",
                     EnableCopilotHelp = true,
                     Active = true
+                },
+                new Plan
+                {
+                    Code = PlanCodes.PackCorporativo,
+                    DisplayName = "Pack Corporativo",
+                    Amount = 15999,
+                    Currency = "ARS",
+                    DurationDays = 30,
+                    FaceCopy = "Escala y multi-sucursal para equipos que necesitan crecer.",
+                    EnableCopilotHelp = true,
+                    Active = true
                 });
         });
 

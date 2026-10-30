@@ -545,7 +545,7 @@ public static class OwnerEndpoints
     private static async Task<IResult> ListPlans(IPlanCatalog plans, CancellationToken cancellationToken)
     {
         var rows = await plans.ListAllAsync(cancellationToken);
-        return Results.Ok(rows.Where(plan => plan.Code is PlanCodes.PackMes or PlanCodes.PackEvento).Select(PlanDto));
+        return Results.Ok(rows.Where(plan => plan.Code is PlanCodes.PackMes or PlanCodes.PackEvento or PlanCodes.PackCorporativo).Select(PlanDto));
     }
 
     private static async Task<IResult> UpsertPlan(

@@ -293,7 +293,7 @@ function useAuth0Enabled() {
 function startAuth0(signUp: boolean) {
   const first = new URLSearchParams(window.location.search).get("first");
   if (first) sessionStorage.setItem("notificationFirst", first);
-  if (signUp) sessionStorage.setItem("initialPlan", new URLSearchParams(window.location.search).get("plan") === "pack_evento" ? "pack_evento" : "pack_mes");
+  if (signUp) { const plan = new URLSearchParams(window.location.search).get("plan"); sessionStorage.setItem("initialPlan", plan === "pack_evento" || plan === "pack_corporativo" ? plan : "pack_mes"); }
   window.location.assign(apiUrl(`/api/auth0/login${signUp ? "?signup=true" : ""}`));
 }
 
@@ -339,7 +339,7 @@ function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void 
       setError(withCorrelation(current, "No se pudo crear la cuenta."));
       return;
     }
-    await api("/api/billing/initial-plan", { method: "POST", body: JSON.stringify({ planCode: new URLSearchParams(window.location.search).get("plan") === "pack_evento" ? "pack_evento" : "pack_mes" }) });
+    const selectedPlan = new URLSearchParams(window.location.search).get("plan"); await api("/api/billing/initial-plan", { method: "POST", body: JSON.stringify({ planCode: selectedPlan === "pack_evento" || selectedPlan === "pack_corporativo" ? selectedPlan : "pack_mes" }) });
     onSignedIn(await current.json());
     navigate(new URLSearchParams(window.location.search).has("first") ? `/?first=${encodeURIComponent(new URLSearchParams(window.location.search).get("first")!)}` : "/conectar");
   }

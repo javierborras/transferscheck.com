@@ -114,6 +114,11 @@ public static class ConnectionEndpoints
         if (merchant is not null)
         {
             PackMesTrial.ApplyLink(merchant, now, entitlement);
+            if (merchant.AccessUntil is null && PackCorporativoTrial.Applies(merchant.PlanCode))
+            {
+                merchant.TrialEndsAt = entitlement.StartTrial(now, PackCorporativoTrial.Days);
+                merchant.AccessUntil = merchant.TrialEndsAt;
+            }
             var push = await store.HasPushDeviceAsync(cancellationToken);
             merchant.ChecklistStep = ChecklistRules.Step(true, true, push);
             await store.SaveChangesAsync(cancellationToken);

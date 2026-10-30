@@ -4,6 +4,7 @@ public static class PlanCodes
 {
     public const string PackEvento = "pack_evento";
     public const string PackMes = "pack_mes";
+    public const string PackCorporativo = "pack_corporativo";
 }
 
 /// <summary>
@@ -15,6 +16,8 @@ public sealed class LoginAccountCap
     {
         if (string.Equals(planCode, PlanCodes.PackMes, StringComparison.OrdinalIgnoreCase))
             return alertPointCount < 4;
+        if (string.Equals(planCode, PlanCodes.PackCorporativo, StringComparison.OrdinalIgnoreCase))
+            return alertPointCount < 5;
         return alertPointCount < 1;
     }
 }
