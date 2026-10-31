@@ -125,6 +125,7 @@ public sealed class TransfersCheckDb : DbContext
                     Amount = 1000,
                     Currency = "ARS",
                     DurationHours = 24,
+                    IncludedAlertPoints = 1,
                     FaceCopy = "Un día, un usuario. Ideal para la fiesta o el show.",
                     EnableCopilotHelp = false,
                     Active = true
@@ -136,6 +137,7 @@ public sealed class TransfersCheckDb : DbContext
                     Amount = 5999,
                     Currency = "ARS",
                     DurationDays = 30,
+                    IncludedAlertPoints = 4,
                     FaceCopy = "",
                     EnableCopilotHelp = true,
                     Active = true
@@ -147,6 +149,7 @@ public sealed class TransfersCheckDb : DbContext
                     Amount = 15999,
                     Currency = "ARS",
                     DurationDays = 30,
+                    IncludedAlertPoints = 100,
                     FaceCopy = "Escala y multi-sucursal para equipos que necesitan crecer.",
                     EnableCopilotHelp = true,
                     Active = true

@@ -25,6 +25,7 @@ public static class OwnerEndpoints
         string? Currency,
         int? DurationDays,
         int? DurationHours,
+        int? IncludedAlertPoints,
         string? FaceCopy,
         bool? EnableCopilotHelp,
         bool? Active);
@@ -613,6 +614,7 @@ public static class OwnerEndpoints
             Currency = string.IsNullOrWhiteSpace(body.Currency) ? baseline.Currency : body.Currency.Trim().ToUpperInvariant(),
             DurationDays = body.DurationDays ?? baseline.DurationDays,
             DurationHours = body.DurationHours ?? baseline.DurationHours,
+            IncludedAlertPoints = body.IncludedAlertPoints ?? baseline.IncludedAlertPoints,
             FaceCopy = body.FaceCopy ?? baseline.FaceCopy,
             EnableCopilotHelp = body.EnableCopilotHelp ?? baseline.EnableCopilotHelp,
             Active = body.Active ?? baseline.Active
@@ -627,6 +629,7 @@ public static class OwnerEndpoints
             currency = plan.Currency,
             durationDays = plan.DurationDays,
             durationHours = plan.DurationHours,
+            includedAlertPoints = plan.IncludedAlertPoints,
             faceCopy = plan.FaceCopy,
             enableCopilotHelp = plan.EnableCopilotHelp,
             active = plan.Active

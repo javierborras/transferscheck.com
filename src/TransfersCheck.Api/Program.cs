@@ -136,9 +136,7 @@ if (auth0Options.Enabled
 // The repo has no migrations and EnsureCreated skips any database that already has tables, so an older database drifts from the
 // model (missing LoginAccounts.PasswordSet, whole tables). SchemaBootstrap adds what is missing and never alters or drops.
 // Development and Test always run it; other environments opt in with Database:EnsureSchema=true.
-if (!string.IsNullOrWhiteSpace(connectionString)
-    && (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment()
-        || app.Configuration.GetValue<bool>("Database:EnsureSchema")))
+if (!string.IsNullOrWhiteSpace(connectionString))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();

@@ -15,6 +15,7 @@ type OwnerPlan = {
   currency: string;
   durationDays?: number | null;
   durationHours?: number | null;
+  includedAlertPoints: number;
   faceCopy: string;
   enableCopilotHelp: boolean;
   active: boolean;
@@ -134,6 +135,7 @@ function stamp(value: string | null) {
 function planFace(code: string | null | undefined) {
   if (code === "pack_mes") return "Pack Mes";
   if (code === "pack_evento") return "Pack Evento";
+  if (code === "pack_corporativo") return "Pack Corporativo";
   return code || "—";
 }
 
@@ -917,6 +919,12 @@ export function OwnerSite() {
             {filterLead(mpFilter, accessFilter, trialFilter, planFilter, q) ? (
               <p className="gate-lead">{filterLead(mpFilter, accessFilter, trialFilter, planFilter, q)}</p>
             ) : null}
+            <div className="owner-client-summary" aria-label="Resumen de clientes">
+              <div><span>Total</span><strong>{clients.length}</strong></div>
+              <div><span>Vinculados</span><strong>{clients.filter((client) => client.connected).length}</strong></div>
+              <div><span>Con prueba</span><strong>{clients.filter((client) => client.trialEndsAt).length}</strong></div>
+              <div><span>Con pagos</span><strong>{clients.filter((client) => (client.paidOrdersCount ?? 0) > 0).length}</strong></div>
+            </div>
             <form
               className="owner-filters"
               aria-label="Filtros de clientes"
@@ -935,6 +943,7 @@ export function OwnerSite() {
                   <option value="">Todos</option>
                   <option value="pack_mes">Pack Mes</option>
                   <option value="pack_evento">Pack Evento</option>
+                  <option value="pack_corporativo">Pack Corporativo</option>
                 </select>
               </label>
               <label>
@@ -975,7 +984,7 @@ export function OwnerSite() {
             </form>
             {clientsError ? <p className="error" role="alert">{clientsError}</p> : null}
             <div className="owner-table-wrap" tabIndex={0} role="region" aria-label="Comercios">
-            <table className="owner-table">
+            <table className="owner-table owner-client-table">
               <thead>
                 <tr>
                   <th>Alias</th>
@@ -1421,8 +1430,8 @@ export function OwnerSite() {
         {section === "planes" ? (
           <>
             <h1>Planes</h1>
-            <p className="gate-lead">Editá los dos planes. La pantalla de Pagos del comercio solo lee los activos.</p>
-            <ul className="owner-forms">
+            <p className="gate-lead">Editá precio, cupo de Puntos de Alerta y textos. La pantalla de Pagos solo lee los planes activos.</p>
+            <ul className="owner-forms owner-plan-grid">
               {plans.map((plan) => {
                 const draft = planDrafts[plan.code] ?? plan;
                 return (
@@ -1452,6 +1461,16 @@ export function OwnerSite() {
                           }
                         />
                       </span>
+                    </label>
+                    <label>
+                      Puntos de Alerta incluidos
+                      <input
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={draft.includedAlertPoints}
+                        onChange={(event) => setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, includedAlertPoints: Number(event.target.value) } }))}
+                      />
                     </label>
                     <label>
                       Texto de cara
@@ -1558,6 +1577,7 @@ export function OwnerSite() {
                 <select value={editPlan} onChange={(event) => setEditPlan(event.target.value)}>
                   <option value="pack_mes">Pack Mes</option>
                   <option value="pack_evento">Pack Evento</option>
+                  <option value="pack_corporativo">Pack Corporativo</option>
                 </select>
               </label>
               {editError ? <p className="error" role="alert">{editError}</p> : null}

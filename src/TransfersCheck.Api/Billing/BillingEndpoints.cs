@@ -33,7 +33,7 @@ public static class BillingEndpoints
         code = plan.Code, displayName = plan.Code == PlanCodes.PackEvento ? "Individual / Evento" : plan.DisplayName,
         amount = plan.Amount, currency = plan.Currency, durationDays = plan.DurationDays, durationHours = plan.DurationHours,
         faceCopy = plan.Code == PlanCodes.PackEvento ? "24 horas desde que iniciás el evento. Admin + 1 Punto de Alerta." : plan.Code == PlanCodes.PackCorporativo ? "Escala y multi-sucursal para equipos que necesitan crecer." : "Para el comercio que cobra todos los días.",
-        enableCopilotHelp = plan.EnableCopilotHelp, includedAlertPoints = AlertPointAccess.Included(plan.Code),
+        enableCopilotHelp = plan.EnableCopilotHelp, includedAlertPoints = plan.IncludedAlertPoints,
         additionalPointPrice = AlertPointAccess.AdditionalPrice, renewingPoints = renewing,
         renewalAmount = checked(plan.Amount + renewing * AlertPointAccess.AdditionalPrice)
     };

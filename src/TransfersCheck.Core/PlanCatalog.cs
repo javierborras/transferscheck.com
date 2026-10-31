@@ -8,6 +8,7 @@ public sealed class Plan
     public string Currency { get; set; } = "ARS";
     public int? DurationDays { get; set; }
     public int? DurationHours { get; set; }
+    public int IncludedAlertPoints { get; set; } = 1;
     public string FaceCopy { get; set; } = "";
     public bool EnableCopilotHelp { get; set; }
     public bool Active { get; set; } = true;

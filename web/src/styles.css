@@ -1912,6 +1912,7 @@ button.owner-card:focus-visible {
   .owner-main .app-header { position: static; padding-inline: 16px; }
   .owner-content { padding: 16px; max-width: none; }
   .owner-forms { grid-template-columns: 1fr; max-width: none; }
+  .owner-client-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 input[type="number"] { font-variant-numeric: tabular-nums; }
 .referral-code { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -1921,6 +1922,48 @@ input[type="number"] { font-variant-numeric: tabular-nums; }
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.owner-client-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.owner-client-summary > div {
+  display: grid;
+  gap: 4px;
+  min-height: 68px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff, #f8fafc);
+}
+
+.owner-client-summary span {
+  color: #64748b;
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.owner-client-summary strong {
+  color: #0f172a;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.owner-plan-grid .plan { min-width: 0; }
+
+.owner-client-table th:last-child,
+.owner-client-table td:last-child { min-width: 220px; }
+
+.owner-client-table .owner-email {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 button.small,
