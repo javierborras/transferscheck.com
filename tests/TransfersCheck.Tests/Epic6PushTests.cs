@@ -62,7 +62,7 @@ public sealed class Epic6PushTests(SqlFixture sql)
         }
 
         var app = File.ReadAllText(Path.Combine(RepoRoot(), "web", "src", "App.tsx"));
-        Assert.Contains("beep()", app, StringComparison.Ordinal);
+        Assert.Contains("playCashBell(", app, StringComparison.Ordinal);
         Assert.Contains("¡Entró un pago!", app, StringComparison.Ordinal);
         Assert.Contains("notificationclick", File.ReadAllText(Path.Combine(RepoRoot(), "web", "public", "sw.js")), StringComparison.Ordinal);
         Assert.Contains("/?first=", File.ReadAllText(Path.Combine(RepoRoot(), "web", "public", "sw.js")), StringComparison.Ordinal);

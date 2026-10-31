@@ -112,8 +112,19 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
                     Amount = item.Amount,
                     Currency = item.Currency,
                     OccurredAt = item.OccurredAt,
+                    ApprovedAt = item.ApprovedAt,
                     Status = item.Status,
-                    TypeCode = item.TypeCode
+                    StatusDetail = item.StatusDetail,
+                    TypeCode = item.TypeCode,
+                    OperationType = item.OperationType,
+                    PaymentMethodId = item.PaymentMethodId,
+                    CoelsaId = item.CoelsaId,
+                    BankTransferId = item.BankTransferId,
+                    PayerDocument = item.PayerDocument,
+                    PayerEmail = item.PayerEmail,
+                    OriginBank = item.OriginBank,
+                    OriginAccount = item.OriginAccount,
+                    Description = item.Description
                 };
                 db.Transfers.Add(row);
                 changes.Add(new TransferChange(row.Id, row.ExternalId, row.PayerName, row.Amount, row.OccurredAt, row.Status, StatusWords.MakesSound(item.Status)));
@@ -125,8 +136,19 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
                 row.Amount = item.Amount;
                 row.Currency = item.Currency;
                 row.OccurredAt = item.OccurredAt;
+                row.ApprovedAt = item.ApprovedAt;
                 row.Status = item.Status;
+                row.StatusDetail = item.StatusDetail;
                 row.TypeCode = item.TypeCode;
+                row.OperationType = item.OperationType;
+                row.PaymentMethodId = item.PaymentMethodId;
+                row.CoelsaId = item.CoelsaId;
+                row.BankTransferId = item.BankTransferId;
+                row.PayerDocument = item.PayerDocument;
+                row.PayerEmail = item.PayerEmail;
+                row.OriginBank = item.OriginBank;
+                row.OriginAccount = item.OriginAccount;
+                row.Description = item.Description;
                 if (becameArrived)
                     changes.Add(new TransferChange(row.Id, row.ExternalId, row.PayerName, row.Amount, row.OccurredAt, row.Status, true));
             }
@@ -138,6 +160,9 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
 
     public async Task AddPushDeviceAsync(PushDevice device, CancellationToken cancellationToken)
     {
+        // One browser token belongs to the account that most recently enabled it.
+        var previous = await db.PushDevices.IgnoreQueryFilters().Where(d => d.Token == device.Token && d.AccountId != device.AccountId).ToListAsync(cancellationToken);
+        db.PushDevices.RemoveRange(previous);
         var existing = await db.PushDevices.FirstOrDefaultAsync(d => d.AccountId == device.AccountId, cancellationToken);
         if (existing is null)
             db.PushDevices.Add(device);
@@ -173,7 +198,7 @@ public sealed class EfMerchantStore(TransfersCheckDb db, ITenantContext tenant) 
     }
 
     public async Task<IReadOnlyList<Guid>> ListConnectedTenantIdsAsync(CancellationToken cancellationToken)
-        => await db.Connections.IgnoreQueryFilters().Select(c => c.TenantId).Distinct().ToListAsync(cancellationToken);
+        => await db.Connections.IgnoreQueryFilters().Where(c => !c.ReconnectRequired).Select(c => c.TenantId).Distinct().ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<string>> ListStoredTypeCodesAsync(CancellationToken cancellationToken)
         => await db.TransferTypes.OrderBy(t => t.Code).Select(t => t.Code).ToListAsync(cancellationToken);

@@ -8,7 +8,7 @@ test("web blocks on the access date until pay", async ({ page }) => {
   await signUpWithAuth0(page, email);
   await setPlanCode(page, "pack_mes");
   await page.goto("/conectar");
-  await page.getByRole("button", { name: "Conectar Mercado Pago" }).click();
+  await page.getByRole("button", { name: "Conectar mi Mercado Pago" }).click();
   await expect(page.getByText("Conectado", { exact: true })).toBeVisible({ timeout: 20_000 });
 
   const accessUntil = new Date(Date.now() - 60_000).toISOString();
@@ -27,7 +27,7 @@ test("web blocks on the access date until pay", async ({ page }) => {
   expect(setAccess).toBe(204);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Se terminó el acceso" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Las alertas de tu mostrador están en pausa" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("link", { name: "Ir a Pagos" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Actualizar ahora" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "🔄 Revisar si entró un pago ahora" })).toHaveCount(0);
 });

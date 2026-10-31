@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>transferscheck.com — Vista CORTE</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F5F5F5; color: #333333; }
+    .tabular-amount { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .touch-target { min-height: 48px; }
+    .andes-card { background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.06); }
+  </style>
+</head>
+<body>
+<main id="view-corte" class="view-section flex-1 py-10 px-4">
+    <div class="max-w-4xl mx-auto space-y-8">
+      
+      <!-- Aviso de Bloqueo Operativo Empático -->
+      <div class="andes-card p-6 sm:p-8 text-center border-t-4 border-t-mpYellow space-y-3">
+        <div class="w-14 h-14 rounded-full bg-mpYellow/30 text-mpText flex items-center justify-center text-3xl mx-auto">
+          ⏸️
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-mpText">
+          Las alertas de tu mostrador están en pausa
+        </h1>
+        <p class="text-sm sm:text-base text-mpMuted max-w-xl mx-auto">
+          Terminó el período activo de tu cuenta. <strong>Tus Puntos de Alerta configurados y tu historial están guardados y seguros.</strong> Elegí un plan abajo para reactivar los avisos con sonido al instante.
+        </p>
+      </div>
+
+      <!-- Planes Dinámicos (Renderizados desde la API en producción) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Pack Mes -->
+        <div class="andes-card p-6 sm:p-7 border-2 border-mpAction flex flex-col justify-between shadow-md">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-extrabold uppercase bg-blue-100 text-mpAction px-2.5 py-1 rounded">RECOMENDADO PARA LOCALES</span>
+              <span class="text-xs font-bold text-mpMuted">30 días</span>
+            </div>
+            <h2 class="text-2xl font-extrabold text-mpText">Pack Mes</h2>
+            <p class="text-xs sm:text-sm text-mpMuted mt-1">1 Admin + hasta 4 Puntos de Alerta en mostrador.</p>
+
+            <div class="my-5 py-4 border-y border-neutral-200">
+              <div class="text-4xl font-black text-mpText tabular-amount">$ 5.999</div>
+              <div class="text-xs text-mpMuted mt-1">Pago por link oficial de Mercado Pago • Reactivación inmediata</div>
+            </div>
+
+            <ul class="space-y-2.5 text-sm text-mpText mb-6">
+              <li>✓ Tus 4 mostradores vuelven a sonar al instante</li>
+              <li>✓ Historial completo y descarga de planilla para Excel</li>
+              <li>✓ Ayuda con Copiloto inteligente incluida</li>
+            </ul>
+          </div>
+
+          <button onclick="showToast('Redirigiendo al link de pago oficial de Mercado Pago ($ 5.999)...')" class="w-full touch-target bg-mpAction hover:bg-mpActionHover text-white font-extrabold text-base rounded-xl py-3.5 px-4 shadow transition">
+            Pagar Pack Mes con Mercado Pago
+          </button>
+        </div>
+
+        <!-- Pack Evento -->
+        <div class="andes-card p-6 sm:p-7 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-extrabold uppercase bg-neutral-200 text-mpText px-2.5 py-1 rounded">USO EVENTUAL</span>
+              <span class="text-xs font-bold text-mpMuted">24 horas</span>
+            </div>
+            <h2 class="text-2xl font-extrabold text-mpText">Pack Evento</h2>
+            <p class="text-xs sm:text-sm text-mpMuted mt-1 italic">“Un día, un usuario. Ideal para la fiesta o el show.”</p>
+
+            <div class="my-5 py-4 border-y border-neutral-200">
+              <div class="text-4xl font-black text-mpText tabular-amount">$ 1.000</div>
+              <div class="text-xs text-mpMuted mt-1">Habilita alertas durante 24 hs corridas</div>
+            </div>
+
+            <ul class="space-y-2.5 text-sm text-mpText mb-6">
+              <li>✓ Ideal para controlar pagos en la barra o entrada desde el teléfono</li>
+              <li>✓ Sonido y aviso instantáneo de transferencias</li>
+              <li>✓ Sin renovación ni compromiso mensual</li>
+            </ul>
+          </div>
+
+          <button onclick="showToast('Redirigiendo al link de pago oficial de Mercado Pago ($ 1.000)...')" class="w-full touch-target bg-white hover:bg-neutral-100 text-mpAction border-2 border-mpAction font-extrabold text-base rounded-xl py-3.5 px-4 transition">
+            Pagar Pack Evento (24 hs)
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+</body>
+</html>

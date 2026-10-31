@@ -1,8 +1,5 @@
----
-id: transferencias
-title: Transferencias en vivo
-summary: La lista se actualiza sola cada cinco minutos; el botón de consulta tiene un enfriamiento de un minuto.
-path: /ayuda/transferencias
-keywords: transferencias lista refresco consulta cuota
----
-En mostrador ves Fecha, Pagador, Monto y Estado. Un pagador vacío se muestra como Desconocido. Las consultas on-demand cuentan para el tope semanal del plan.
+# Transferencias
+
+La pantalla muestra las últimas transferencias registradas. La consulta automática se espacia cuando no usás la página. Podés revisar manualmente; entre consultas hay una espera técnica de 10 segundos compartida por el comercio. No hay cupos comerciales de consultas.
+
+Activá la campanita para escuchar los pagos detectados con la pantalla abierta. Las notificaciones del navegador requieren permisos y compatibilidad; si no están disponibles, conservás el aviso visual.

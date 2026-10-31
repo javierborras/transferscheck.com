@@ -9,8 +9,8 @@ async function signUp(page: import("@playwright/test").Page, email: string) {
 
 async function openConfigurar(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Menú" }).click();
-  await page.getByRole("link", { name: "Configurar" }).click();
-  await expect(page.getByRole("heading", { name: "Configurar" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Menú", exact: true }).getByRole("link", { name: "Puntos de Alerta" }).click();
+  await expect(page.getByRole("heading", { name: "Accesos de Mostrador (Puntos de Alerta)" })).toBeVisible();
 }
 
 async function apiJson(
@@ -43,18 +43,20 @@ async function confirmAlias(page: import("@playwright/test").Page, alias: string
   expect(result.status, result.body).toBe(200);
 }
 
-test("Configurar refuses a second account when the plan is Pack Evento (unset)", async ({ page }) => {
+test("Individual includes one point and leaves the next pending payment", async ({ page }) => {
   await signUp(page, `e2e-evento-${Date.now()}@counter.test`);
+  await apiJson(page, "/api/dev/plan-code", "PUT", { planCode: "pack_evento" });
   await confirmAlias(page, `ev${Date.now()}`.slice(0, 12));
   await openConfigurar(page);
-  await page.getByLabel("Nombre *").fill("extra");
-  await page.getByRole("button", { name: "Crear invitación" }).click();
-  await expect(page.getByText("No se puede agregar otro Punto de Alerta en este plan.")).toBeVisible({
-    timeout: 10_000
-  });
+  await expect(page.getByRole("button", { name: "Crear invitación" })).toBeVisible();
+  const result = await apiJson(page, "/api/logins", "POST", { name: "extra" });
+  expect(result.status).toBe(201);
+  expect(JSON.parse(result.body).requiresPayment).toBe(false);
+  const extra = await apiJson(page, "/api/logins", "POST", { name: "adicional" });
+  expect(JSON.parse(extra.body).requiresPayment).toBe(true);
 });
 
-test("Configurar on Pack Mes allows four Puntos de Alerta and refuses the fifth; revoke keeps the owner", async ({
+test("Configurar on Pack Mes includes four points and allows a fifth pending payment; revoke keeps the owner", async ({
   page
 }) => {
   await signUp(page, `e2e-mes-${Date.now()}@counter.test`);
@@ -69,16 +71,17 @@ test("Configurar on Pack Mes allows four Puntos de Alerta and refuses the fifth;
   }
 
   const fifth = await apiJson(page, "/api/logins", "POST", { name: "alertaextra" });
-  expect(fifth.status).toBe(409);
+  expect(fifth.status).toBe(201);
+  expect(JSON.parse(fifth.body).requiresPayment).toBe(true);
 
   await openConfigurar(page);
-  await expect(page.getByText("Punto de Alerta")).toHaveCount(4);
-  await expect(page.getByText("Admin")).toBeVisible();
+  await expect(page.getByText("Punto de Alerta", { exact: true })).toHaveCount(5);
+  await expect(page.locator(".login-row .role").filter({ hasText: /^Admin$/ })).toBeVisible();
 
-  await expect(page.getByRole("button", { name: "Revocar" })).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "Revocar" })).toHaveCount(5);
   await page.getByRole("button", { name: "Revocar" }).first().click();
   await page.getByRole("button", { name: "Tocá de nuevo para revocar" }).click();
-  await expect(page.getByText("Admin")).toBeVisible();
+  await expect(page.locator(".login-row .role").filter({ hasText: /^Admin$/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Revocar", disabled: true })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Revocar", disabled: false })).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Revocar", disabled: false })).toHaveCount(4);
 });

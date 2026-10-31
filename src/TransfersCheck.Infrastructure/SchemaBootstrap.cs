@@ -22,7 +22,8 @@ public static class SchemaBootstrap
     private static readonly Dictionary<(string Table, string Column), object> ExistingRowDefaults = new()
     {
         // Rows that predate the column are accounts that already have a working local password.
-        [("LoginAccounts", "PasswordSet")] = true
+        [("LoginAccounts", "PasswordSet")] = true,
+        [("LoginAccounts", "RenewWithAdmin")] = true
     };
 
     public static async Task<IReadOnlyList<string>> EnsureAsync(TransfersCheckDb db, ILogger? logger = null, CancellationToken cancellationToken = default)
@@ -99,6 +100,17 @@ public static class SchemaBootstrap
                 {
                     logger?.LogError(exception, "Schema bootstrap could not create index {Index}; continuing without it.", name);
                 }
+            }
+            await using (var positions = connection.CreateCommand())
+            {
+                positions.CommandText = """
+                    ;WITH ranked AS (
+                      SELECT Id, ROW_NUMBER() OVER (PARTITION BY TenantId ORDER BY Id) AS Position
+                      FROM LoginAccounts WHERE IsOwner = 0 AND Revoked = 0
+                    )
+                    UPDATE a SET AlertPointPosition = r.Position FROM LoginAccounts a JOIN ranked r ON a.Id = r.Id WHERE a.AlertPointPosition = 0;
+                    """;
+                await positions.ExecuteNonQueryAsync(cancellationToken);
             }
         }
         finally

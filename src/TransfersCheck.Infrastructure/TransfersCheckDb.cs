@@ -25,10 +25,14 @@ public sealed class TransfersCheckDb : DbContext
     public DbSet<EmailSignInChallenge> EmailSignInChallenges => Set<EmailSignInChallenge>();
     public DbSet<AlertInvite> AlertInvites => Set<AlertInvite>();
     public DbSet<ReferralGrant> ReferralGrants => Set<ReferralGrant>();
-    public DbSet<ConsultaEvent> ConsultaEvents => Set<ConsultaEvent>();
+    public DbSet<BillingOrder> BillingOrders => Set<BillingOrder>();
     public DbSet<OwnerSecretRow> OwnerSecrets => Set<OwnerSecretRow>();
     public DbSet<HelpArticle> HelpArticles => Set<HelpArticle>();
     public DbSet<HelpCorpusState> HelpCorpusStates => Set<HelpCorpusState>();
+    public DbSet<IncidentLatch> IncidentLatches => Set<IncidentLatch>();
+    public DbSet<ErrorLog> ErrorLogs => Set<ErrorLog>();
+    public DbSet<CommerceHelpMessage> CommerceHelpMessages => Set<CommerceHelpMessage>();
+    public DbSet<MercadoPagoApiCall> MercadoPagoApiCalls => Set<MercadoPagoApiCall>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,8 +59,8 @@ public sealed class TransfersCheckDb : DbContext
                     "El Pack Mes dura 30 días y habilita hasta cinco cuentas. El Pack Evento dura 24 horas. Los precios los edita el dueño en el microsite; la pantalla de Pagos del comercio solo muestra los planes activos.",
                     "pagar pack mes evento precio", 1),
                 SeedArticle("transferencias", "Transferencias en vivo",
-                    "La lista se actualiza sola cada cinco minutos; el botón de consulta tiene un enfriamiento de un minuto.",
-                    "En mostrador ves Fecha, Pagador, Monto y Estado. Un pagador vacío se muestra como Desconocido. Las consultas on-demand cuentan para el tope semanal del plan.",
+                    "La actualización automática se espacia según actividad; el botón espera diez segundos entre consultas.",
+                    "En mostrador ves Fecha, Pagador, Monto y Estado. Un pagador vacío se muestra como Desconocido. No hay cupos comerciales de consultas. Los controles de espera son técnicos.",
                     "transferencias lista refresco consulta cuota", 1));
         });
 
@@ -80,10 +84,12 @@ public sealed class TransfersCheckDb : DbContext
             entity.Property(g => g.Outcome).HasMaxLength(32);
         });
 
-        modelBuilder.Entity<ConsultaEvent>(entity =>
+        modelBuilder.Entity<BillingOrder>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => new { e.TenantId, e.OccurredAt });
+            entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+            entity.Property(e => e.PlanCode).HasMaxLength(32);
+            entity.Property(e => e.Currency).HasMaxLength(8);
             entity.HasQueryFilter(e => _tenant.TenantId != Guid.Empty && e.TenantId == _tenant.TenantId);
         });
 
@@ -119,6 +125,7 @@ public sealed class TransfersCheckDb : DbContext
                     Amount = 1000,
                     Currency = "ARS",
                     DurationHours = 24,
+                    IncludedAlertPoints = 1,
                     FaceCopy = "Un día, un usuario. Ideal para la fiesta o el show.",
                     EnableCopilotHelp = false,
                     Active = true
@@ -130,7 +137,20 @@ public sealed class TransfersCheckDb : DbContext
                     Amount = 5999,
                     Currency = "ARS",
                     DurationDays = 30,
+                    IncludedAlertPoints = 4,
                     FaceCopy = "",
+                    EnableCopilotHelp = true,
+                    Active = true
+                },
+                new Plan
+                {
+                    Code = PlanCodes.PackCorporativo,
+                    DisplayName = "Pack Corporativo",
+                    Amount = 15999,
+                    Currency = "ARS",
+                    DurationDays = 30,
+                    IncludedAlertPoints = 100,
+                    FaceCopy = "Escala y multi-sucursal para equipos que necesitan crecer.",
                     EnableCopilotHelp = true,
                     Active = true
                 });
@@ -153,6 +173,8 @@ public sealed class TransfersCheckDb : DbContext
         modelBuilder.Entity<LoginAccount>(entity =>
         {
             entity.HasKey(a => a.Id);
+            entity.Property(a => a.AlertPointPosition).HasDefaultValue(0);
+            entity.Property(a => a.RenewWithAdmin).HasDefaultValue(true);
             entity.Property(a => a.Email).HasMaxLength(256);
             entity.Property(a => a.Auth0Subject).HasMaxLength(128);
             entity.Property(a => a.UserName).HasMaxLength(32);
@@ -202,7 +224,17 @@ public sealed class TransfersCheckDb : DbContext
             entity.Property(t => t.PayerName).HasMaxLength(256);
             entity.Property(t => t.Currency).HasMaxLength(8);
             entity.Property(t => t.Status).HasMaxLength(32);
+            entity.Property(t => t.StatusDetail).HasMaxLength(64);
             entity.Property(t => t.TypeCode).HasMaxLength(64);
+            entity.Property(t => t.OperationType).HasMaxLength(64);
+            entity.Property(t => t.PaymentMethodId).HasMaxLength(64);
+            entity.Property(t => t.CoelsaId).HasMaxLength(128);
+            entity.Property(t => t.BankTransferId).HasMaxLength(64);
+            entity.Property(t => t.PayerDocument).HasMaxLength(64);
+            entity.Property(t => t.PayerEmail).HasMaxLength(256);
+            entity.Property(t => t.OriginBank).HasMaxLength(128);
+            entity.Property(t => t.OriginAccount).HasMaxLength(64);
+            entity.Property(t => t.Description).HasMaxLength(256);
             entity.Property(t => t.Amount).HasPrecision(18, 2);
             entity.HasIndex(t => new { t.TenantId, t.Source, t.ExternalId }).IsUnique();
             entity.HasQueryFilter(t => _tenant.TenantId != Guid.Empty && t.TenantId == _tenant.TenantId);
@@ -221,6 +253,42 @@ public sealed class TransfersCheckDb : DbContext
             entity.HasKey(p => p.PaymentId);
             entity.Property(p => p.PaymentId).HasMaxLength(64);
             entity.HasQueryFilter(p => _tenant.TenantId != Guid.Empty && p.TenantId == _tenant.TenantId);
+        });
+
+        modelBuilder.Entity<MercadoPagoApiCall>(entity =>
+        {
+            entity.HasKey(call => call.Id);
+            entity.HasIndex(call => call.OccurredAt);
+            entity.HasIndex(call => call.TenantId);
+        });
+
+        modelBuilder.Entity<ErrorLog>(entity =>
+        {
+            entity.HasKey(row => row.Id);
+            entity.Property(row => row.CorrelationId).HasMaxLength(64);
+            entity.Property(row => row.Message).HasMaxLength(400);
+            entity.Property(row => row.Path).HasMaxLength(256);
+            entity.Property(row => row.Level).HasMaxLength(16);
+            entity.HasIndex(row => row.OccurredAt);
+        });
+
+        modelBuilder.Entity<IncidentLatch>(entity =>
+        {
+            entity.HasKey(l => l.Fingerprint);
+            entity.Property(l => l.Fingerprint).HasMaxLength(HelpdeskStore.FingerprintMaxLength);
+            entity.Property(l => l.ReleaseTag).HasMaxLength(64);
+            entity.Property(l => l.SentryId).HasMaxLength(256);
+            entity.Property(l => l.PullRequestUrl).HasMaxLength(512);
+        });
+
+        modelBuilder.Entity<CommerceHelpMessage>(entity =>
+        {
+            entity.HasKey(m => m.Id);
+            entity.Property(m => m.Alias).HasMaxLength(32);
+            entity.Property(m => m.AdminEmail).HasMaxLength(256);
+            entity.Property(m => m.Text).HasMaxLength(HelpdeskStore.TextMaxLength);
+            entity.HasIndex(m => m.CreatedAt);
+            entity.HasQueryFilter(m => _tenant.TenantId != Guid.Empty && m.TenantId == _tenant.TenantId);
         });
     }
 

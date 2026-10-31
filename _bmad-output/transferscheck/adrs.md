@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Locked 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended again 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018); the previous "Auth0 out / no Google on the commerce door" lock is withdrawn. One section each: context, decision, consequences. These records match `brief.md`. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. It is not decided here.
+Locked 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended again 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018); the previous "Auth0 out / no Google on the commerce door" lock is withdrawn. Amended 27 October 2026: release identity, the incident agent, and owner Helpdesk (ADR-025 through ADR-032). One section each: context, decision, consequences. These records match `brief.md`. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. It is not decided here.
 
 ## ADR-001 — .NET 10 LTS
 
@@ -306,7 +306,7 @@ The invite-link lifetime is 1 hour. The alias is immutable after confirmation. A
 
 ## ADR-014 — Owner microsite sign-in
 
-Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026, night. Amended 24 Oct 2026: clarified that Auth0 for commerce (ADR-018) does not open this microsite.
+Source: human decision 22 Oct 2026 during the parking-lot review. Amended 23 Oct 2026, night. Amended 24 Oct 2026: clarified that Auth0 for commerce (ADR-018) does not open this microsite. Amended 25 Oct 2026: the owner screen is a dashboard with Inicio, Clientes, Facturaciones, Planes, and Servicios. Amended 27 Oct 2026: Helpdesk is ADR-031.
 
 ### Context
 
@@ -316,11 +316,13 @@ The product owner is not a commerce. The commerce webapp must not be the place w
 
 Superadmin is the product owner. The owner uses a separate microsite. Sign-in is email and password issued by TransfersCheck. The first account comes from server configuration. There is no public superadmin signup. Auth0, Google, Cloudflare Access, and any other third party do not perform this login. Commerce Auth0 (ADR-018) does not open the microsite. Mercado Pago OAuth connects a commerce collection account. It does not open the microsite.
 
-The microsite holds plan and price editing, the services panel (ADR-012), and later the helpdesk. The commerce webapp does not get those screens. The microsite, including this sign-in, plan editing, the services panel, the helpdesk, and the log/PR agent, is pending research. It is not the first bmad-build (`later-research.md`). This record does not design a host.
+The microsite holds plan and price editing, the services panel (ADR-012), and Helpdesk (ADR-031). The commerce webapp does not get those screens. Sign-in, plan editing, and the services panel shipped after the first build. On 25 Oct 2026 the owner screen gained a host: a left menu and Inicio, Clientes, and Facturaciones. Planes and Servicios stay the screens already decided. On 27 Oct 2026 Helpdesk joins that menu. Commercial data (name, CUIT, address), a money balance, and a read of each commerce's collection transfers stay out.
+
+Inicio reads tasks and technical health from rows and settings the product already stores. It does not add a telemetry store or a credit ledger. Clientes lists each commerce: alias, admin email, plan, access date, trial, and whether Mercado Pago is linked. It does not show that collection-account id. Facturaciones lists SaaS billing orders, with detail, and can filter by commerce. Those orders are the platform charges, not the transfers each commerce collects.
 
 ### Consequences
 
-The helpdesk, and a Cursor agent that reads logs, files bugs, and opens a GitHub pull request for the owner to approve, are decided in intent and are not specified. They stay parked with the microsite helpdesk. They are not an epic. This record does not name the configuration keys for the first account, only that they come from server configuration.
+Helpdesk is ADR-031. The incident agent is ADR-025 through ADR-030 and ADR-032. This record does not name the configuration keys for the first account, only that they come from server configuration. The dashboard does not add a service card, a third plan, or a cross-tenant transfer query.
 
 ## ADR-015 — Referral code
 
@@ -423,3 +425,182 @@ The previous local requirement that every commerce-admin sign-in also required a
 ### Consequences
 
 Story 2.1 and the commerce door accept Auth0 Universal Login (SSO or Database password). Story 7.1 no longer requires a local email-code field on the commerce door. Wave and e2e checks that asserted "no Auth0 and no Google" are obsolete and must realign. Auth0 domain, client id, and client secret stay typed configuration outside the repo. PL-12 in `parking-lot-waves.md` is unparked for commerce only. Superadmin and Punto de Alerta rules above stay.
+
+
+## ADR-019 — Consultas sin cupos comerciales; protección técnica adaptativa
+
+Estado: Aceptado. Fuente: decisión explícita del propietario, 25 de octubre de 2026. Sustituye los cupos y cortes de ADR-007 y las frecuencias de ADR-006.
+
+No hay límites semanales, paquetes de requests, saldo de consultas ni recargas. Ningún plan se monetiza por uso de API. Se retiran contador, advertencias y cortes por 500. Los datos históricos de contadores existentes pueden conservarse sin uso; no se borran bases existentes.
+
+La captura de transferencias usa timer y revisión manual; no depende de eventos entrantes de Mercado Pago. La página no promete inmediatez. El botón manual espera 10 segundos, compartidos por comercio y validados en servidor. Las consultas automáticas se reducen por inactividad: intervalo base 30 segundos con actividad reciente, 60 segundos tras 2 minutos y 300 segundos tras 10 minutos. Con página cerrada se mantiene la consulta de fondo más espaciada para push. Son defaults técnicos configurables, nunca atributos del plan. El timer se comprueba cada 10 segundos; una exclusión mutua por comercio evita consultas simultáneas de varias pantallas/replicas. Se respeta la espera del proveedor ante errores o 429. La actividad sólo mantiene la frecuencia; no dispara una consulta a Mercado Pago.
+
+## ADR-020 — Dos planes fijos y Puntos de Alerta adicionales prepagos
+
+Estado: Aceptado. Fuente: propietario, 25 de octubre de 2026. Sustituye ADR-008/009/013 en cupos y extensibilidad de planes.
+
+Individual (código compatible pack_evento): 24 horas, un Admin y un Punto de Alerta incluido. Pack Mes: duración mensual configurada, un Admin y cuatro Puntos de Alerta incluidos. Se conservan los precios base configurados y la prueba inicial de 21 días de Pack Mes. No se agregan tipos de planes arbitrarios.
+
+Punto de Alerta significa un acceso/dispositivo receptor de avisos; no se denomina cajero. Cada cuenta mantiene una sesión operativa a la vez. Cada punto adicional cuesta ARS 1.000 por el período del Admin, sin prorrateo: cuesta lo mismo si se agrega al principio o al final. No hay débito automático.
+
+Cada punto tiene una posición estable; las primeras posiciones del plan están incluidas y las siguientes requieren un vencimiento pagado. El punto adicional se crea pendiente de pago y se habilita sólo tras confirmar su compra. Su vencimiento nunca supera el acceso del Admin y la compra queda vinculada al vencimiento cotizado. No se habilitan por el retorno del navegador.
+
+La renovación prepaga del Admin incluye el precio base más ARS 1.000 por cada adicional seleccionado para renovar. La selección por defecto conserva los adicionales no revocados, pero el Admin puede desmarcarlos: siguen habilitados hasta su vencimiento pagado y luego quedan suspendidos. La confirmación de la renovación amplía el acceso del Admin y los puntos incluidos en esa compra. No se borran puntos por vencimiento, cambio de plan o falta de pago. Se persiste cada orden con precio y puntos cotizados; no se recalcula un pago usando el catálogo posterior. El período de un adicional es siempre coterminal al acceso del Admin; no existe reloj independiente, prorrateo ni saldo monetario.
+
+## ADR-021 — Activación explícita de Individual / Evento
+
+Estado: Aceptado. Fuente: propietario y aclaración del 25 de octubre de 2026. Sustituye la concesión automática de 24 horas al vincular.
+
+Vincular Mercado Pago no inicia ni regala un pase Individual. Una compra aprobada queda disponible, sin consumir tiempo. Sólo el Admin puede tocar Iniciar Evento, con confirmación y vista previa del horario de corte. El servidor inicia 24 horas corridas con su reloj, responde el vencimiento real y no reinicia una activación repetida. No se inicia otro evento mientras haya acceso vigente. Cada compra aprobada tiene una única activación; varias compras quedan pendientes en orden, sin sumar horas silenciosamente a un evento ya iniciado. Sus adicionales seleccionados vencen al mismo instante. La UI informa que se deshabilita la consulta/recepción en TransfersCheck, no la cuenta ni los movimientos de Mercado Pago.
+
+## ADR-022 — Confirmación segura de cobros del abono y adicionales
+
+Estado: Decisión aceptada; validación productiva pendiente. No confundir cobros del SaaS con captura de transferencias del comercio.
+
+El retorno del navegador nunca concede acceso. Confirmación idempotente por pago y orden, consulta del estado/importe/moneda al proveedor y órdenes persistidas son obligatorios para habilitar períodos y puntos. Se conserva el mecanismo de pruebas con encabezado compartido, pero NO se lo declara compatible ni suficiente para producción. Actualización 25/10/2026: implementada la autenticación oficial y la conciliación autenticada por orden. (1) Cuando `Checkout:NotificationSigningKey` está configurada, el webhook exige `x-signature` (`ts` y `v1`, HMAC-SHA256 del manifiesto `id:{data.id};request-id:{x-request-id};ts:{ts};`) con tolerancia de reloj configurable (10 min) y comparación en tiempo constante. (2) Al crear cada preferencia en `/checkout/preferences`, `MercadoPagoCheckout` firma la `notification_url` servidor-a-servidor con `Session:SigningKey` (`?ref=order:…&sig=HMAC-SHA256`), y el webhook verifica en tiempo constante la firma de `ref`, consulta el pago directamente a Mercado Pago (`/v1/payments/{id}`) con el token del propietario, comprueba que `external_reference` coincida exactamente con `ref`, valida importe y moneda contra `BillingOrder`, y aplica idempotencia por pago. `ProductionConfiguration` rechaza `Checkout:WebhookSecret` en producción; el encabezado compartido queda exclusivamente para Development/Test. No se elimina la validación para lograr que una notificación pase. Una confirmación tardía de un adicional no amplía el vencimiento cotizado ni regala un nuevo período; si ya venció, queda registrada para revisión/devolución, sin habilitar acceso vencido. No hay débito automático.
+
+## ADR-023 — Avisos en capas, permisos y revocación de canales abiertos
+
+Estado: Aceptado, 25 de octubre de 2026. Completa ADR-003/010.
+
+Aviso visual siempre; campanita Web Audio C5/E5/G5 sólo con interacción explícita y contexto habilitado; notificación del sistema mediante push del navegador cuando sea compatible, configurado y autorizado. El sistema operativo controla su sonido; no se promete un tono ni entrega garantizados con pantalla bloqueada. Si push no puede activarse, se conserva la página con avisos visuales y sonido habilitable; no se simula un token en producción ni se pide permiso repetidamente si fue rechazado. Un permiso concedido no equivale a registro completado.
+
+El service worker coordina las pestañas abiertas para evitar avisos duplicados, usa un identificador estable por pago y enfoca la app en el click. El envío push se deduplica por pago/dispositivo y un token inválido no interrumpe la captura ni los demás destinatarios. Conectividad/configuración y permisos se muestran con mensajes concretos. La habilitación se comprueba por dispositivo actual, no por la existencia de otro punto del comercio.
+
+Los canales abiertos revalidan cuenta, sesión y derecho del punto periódicamente (máximo 5 segundos) y antes de entregar novedades. Revocación, reemplazo de sesión, vencimiento o punto impago cierran el canal y limpian la vista. Al cerrar sesión o reemplazar la sesión por otro ingreso se retiran sus registros push; el nuevo navegador debe habilitarlos nuevamente. Esto no depende de esperar el próximo pago.
+
+Referencias técnicas: https://firebase.google.com/docs/cloud-messaging/web/receive-messages y https://developer.chrome.com/blog/autoplay (consultadas el 25/10/2026).
+
+## ADR-024 — Salida a producción y verificación en el sitio publicado
+
+Estado: Aceptado, 25 de octubre de 2026. Fuente: propietario. Completa ADR-002, ADR-016 y ADR-022.
+
+La API se publica en MonsterASP (WebDeploy, sitio site56119) y la UI en Cloudflare Workers (wrangler deploy desde web/). Son dos despliegues de la misma revisión; se publican API primero y UI después. Antes de publicar la API se respalda SQL y se aplica Database__EnsureSchema=true sólo en el primer arranque de una build que agrega columnas o tablas. Los secretos (Auth0, Mercado Pago, Checkout:NotificationSigningKey, Firebase) viven fuera del repositorio. La verificación posterior se hace sobre el sitio publicado (https://www.transferscheck.com): Swagger de la API y recorrido en navegador de landing, alta, conexión, pago y lista. Un archivo suelto sin cambio de código puede subirse por FTP de MonsterASP sin redeploy, dejando constancia. Un fallo en la verificación se corrige y se vuelve a publicar; no se cierra el pase con pruebas rojas. No se hacen cobros reales de prueba sin que el propietario lo autorice.
+
+## ADR-025 — Identidad del release
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario. Completa ADR-024.
+
+### Contexto
+
+La API sale por WebDeploy desde la copia local y no hay un pipeline que publique al pushear una rama. Una rama se mueve. Un tag anota un commit y se queda. Una rama `release` o `production` permanente sería un segundo puntero que hay que mantener alineado con `main`, sin un deploy automático que lo justifique.
+
+### Decisión
+
+`main` sigue siendo la única rama de integración. Cada publicación anota un tag (`api-YYYYMMDD.N`, y el equivalente de UI si no salen del mismo commit) sobre el commit exacto que se publicó. El proceso en marcha informa ese SHA. Un hotfix es una rama corta cortada desde ese tag, con PR. Si producción no puede esperar a otros commits de `main`, se publica ese commit y se crea un tag nuevo. La rama se borra al mergear. El agente lee el repo en ese SHA. No hay un endpoint público que entregue el código del release.
+
+### Consecuencias
+
+El tag nombra el commit publicado y el proceso informa ese SHA. No se abre una rama de release permanente. No se agrega un endpoint que sirva el fuente.
+
+## ADR-026 — Sentry captura; la fila solo traba
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario.
+
+### Contexto
+
+El plan Developer de Sentry no abre issues de GitHub ni manda un webhook por cada error. Crear el issue desde Sentry pide Team o superior, y el automático pide Business. El webhook de cada error es Business. Superar la cuota descarta eventos y no se recuperan. Un Sentry self-hosted pide Kafka, ClickHouse, Redis y del orden de 16 GB de RAM. GlitchTip y Bugsink hablan el mismo SDK y piden otro servidor. El hosting de este producto es WebDeploy y Workers (ADR-024), no Docker.
+
+### Decisión
+
+El SDK de Sentry entra en la API como caño de captura, no como segunda bandeja del owner. El release del evento es el tag de ADR-025. `before_send` no manda PII, tokens ni cuerpos de pago. El DSN vive fuera del repositorio, igual que el resto de los secretos de servidor (ADR-024). Una fila por fingerprint guarda el conteo, el tag, el id de Sentry, el número de issue de GitHub y, cuando existe, la URL del PR. Esa fila no archiva el stack: traba el fingerprint para no abrir dos legajos. El owner no lee la tabla cruda. La ve el menú Helpdesk (ADR-031). No se compra Team ni Business para que Sentry cree el issue. No hay Docker ni un Sentry self-hosted.
+
+### Consecuencias
+
+El workflow propio sigue creando el Issue. La fila SQL no es un archivo de excepciones. El DSN no entra al repositorio. El hosting de ADR-024 no cambia.
+
+## ADR-027 — El único legajo es un GitHub Issue
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario.
+
+### Contexto
+
+Hace falta un lugar donde el owner lea un incidente repetido. Un markdown commiteado en el repo se mezcla con el código y no es una bandeja. Sentry guarda el stack. La fila de ADR-026 solo evita duplicar el legajo.
+
+### Decisión
+
+El único legajo es un GitHub Issue, uno abierto por fingerprint, creado por un workflow de GitHub a partir de un `repository_dispatch`. El cuerpo lleva el tag, el SHA, el conteo y la URL del issue de Sentry. La lista del Helpdesk, con la etiqueta del incidente, es el vistazo. Se omiten los fallos transitorios de Mercado Pago que ya cubre el reintento. El stack largo se lee en Sentry cuando el issue no alcanza. No es un archivo markdown commiteado.
+
+### Consecuencias
+
+Abrir el issue no compra un plan de Sentry. El legajo vive en GitHub. Esta decisión no archiva el stack en SQL.
+
+## ADR-028 — Vuelta del PR al Issue
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario.
+
+### Contexto
+
+El issue de ADR-027 nombra el incidente. El arreglo propuesto tiene que volver a ese issue para que el owner vea el diff sin buscarlo. Un endpoint que aplique un parche en el servidor publicado mezcla la revisión con la ejecución.
+
+### Decisión
+
+El agente abre un pull request en borrador que cita el issue (`Fixes #n`) y no lo mergea. El workflow comenta en el issue la URL del PR. Esa es la vuelta del id. No hay un endpoint de “aplicar este parche”. El agente no lee la base de los comercios ni escribe la configuración de producción.
+
+### Consecuencias
+
+El owner aprueba el diff en GitHub. El PR queda en borrador hasta esa revisión. El servidor publicado no recibe un parche por HTTP.
+
+## ADR-029 — Revisión desde el agente local
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario.
+
+### Contexto
+
+El borrador de ADR-028 espera una persona. El owner ya recibe avisos de GitHub. El proveedor de mail del producto sigue sin elegir (ADR-012).
+
+### Decisión
+
+El agente local lee el issue, el diff y los checks del PR. La aprobación es manual. El aviso es la notificación propia de GitHub. En este paso no se suma un segundo mail del producto.
+
+### Consecuencias
+
+No hay un correo nuevo que mantener. Cerrar o mergear sigue siendo un acto de la persona, no del agente.
+
+## ADR-030 — Qué no es trabajo del agente
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario.
+
+### Contexto
+
+Reintentos, webhooks idempotentes, backups y el rollback de un deploy ya viven en el producto y en `deploy/`. El agente propone un diff. No opera el sitio publicado.
+
+### Decisión
+
+El agente no reinicia producción, no corre migraciones y no toca secretos. Los reintentos, los webhooks idempotentes, los backups y el rollback del deploy siguen en el producto y en `deploy/`.
+
+### Consecuencias
+
+Un incidente no autoriza al agente a cambiar el proceso en marcha ni los secretos. Esas operaciones siguen siendo del deploy y del producto.
+
+## ADR-031 — Helpdesk del owner, dos listas
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario. Enmienda ADR-014 y el criterio de la story 12.4 que decían que Helpdesk no está.
+
+### Contexto
+
+El microsite ya tiene menú. ADR-014 y la story 12.4 dejaban Helpdesk afuera. La ayuda del comercio ya existe (ADR-016). El proveedor de mail sigue sin elegir (ADR-012), así que no hay con qué armar un hilo de respuestas.
+
+### Decisión
+
+Helpdesk es un ítem del menú del microsite. Una pantalla, dos listas. Incidentes: conteo, tag, enlace al Issue, enlace al PR y enlace a Sentry, sin copia del stack. Mensajes: alias, email del admin, texto, fecha, abierto o cerrado, sin CUIT, sin dirección y sin saldo. El comercio escribe un formulario corto desde la ayuda que ya existe, no un chat. La sesión fija el comercio. El owner cierra el mensaje en esa pantalla. No hay hilo de respuestas.
+
+### Consecuencias
+
+Datos comerciales, CUIT, saldo y la lectura de las transferencias de cobro de cada comercio siguen afuera. No es una épica nueva. No se elige proveedor de mail.
+
+## ADR-032 — El mensaje no despierta al agente
+
+Estado: Aceptado, 27 de octubre de 2026. Fuente: propietario.
+
+### Contexto
+
+Un comercio puede escribir porque algo no se entiende. Eso no es la misma señal que una excepción repetida. El agente de ADR-027 corre cuando un fingerprint se traba.
+
+### Decisión
+
+Un mensaje del comercio no crea un Issue, no corta una rama y no abre un PR. El agente solo corre por excepciones repetidas. Cerrar un mensaje no publica código.
+
+### Consecuencias
+
+La lista de mensajes y la lista de incidentes no se disparan una a la otra. Cerrar el mensaje deja constancia en el Helpdesk y no cambia el release.

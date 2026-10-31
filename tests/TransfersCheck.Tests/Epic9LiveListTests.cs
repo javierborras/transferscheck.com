@@ -67,6 +67,27 @@ public sealed class Epic9LiveListTests(SqlFixture sql)
         Assert.True(doc.RootElement.TryGetProperty("statusLabel", out _));
     }
 
+    [Fact]
+    public async Task An_open_channel_revalidates_signout_before_delivering_a_payment()
+    {
+        MockState.Reset(); MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        await using var factory = new TransfersApiFactory(sql);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var cookie = await SignUpAndConnect(client);
+        using var current = await Send(client, "/api/session", cookie, HttpMethod.Get);
+        var tenant = (await current.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tenantId").GetGuid();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/transfers/live"); request.Headers.TryAddWithoutValidation("Cookie", cookie);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        using var logout = await Send(client, "/api/sessions", cookie, HttpMethod.Delete); logout.EnsureSuccessStatusCode();
+        using var scope = factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ILiveListPublisher>().PublishAsync(tenant, new LiveTransferArrived(Guid.NewGuid(), "No entregar", 100m, DateTimeOffset.UtcNow, "approved", "Llegó"), CancellationToken.None);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        var content = await response.Content.ReadAsStringAsync(timeout.Token);
+        Assert.Contains("event: AccessChanged", content);
+        Assert.Contains("session-ended", content);
+        Assert.DoesNotContain("No entregar", content);
+    }
+
     private static async Task<string> SignUpAndConnect(HttpClient client)
     {
         using var signup = await client.PostAsJsonAsync("/api/accounts", new { email = $"live-{Guid.NewGuid():N}@counter.test", password = "password1" });

@@ -8,6 +8,7 @@ public sealed class Plan
     public string Currency { get; set; } = "ARS";
     public int? DurationDays { get; set; }
     public int? DurationHours { get; set; }
+    public int IncludedAlertPoints { get; set; } = 1;
     public string FaceCopy { get; set; } = "";
     public bool EnableCopilotHelp { get; set; }
     public bool Active { get; set; } = true;
@@ -23,7 +24,7 @@ public interface IPlanCatalog
 }
 
 /// <summary>
-/// Starts access from the Mercado Pago link: Pack Mes 21-day trial, Pack Evento 24 hours.
+/// Starts only the Pack Mes 21-day trial at linking; Individual requires a paid explicit start.
 /// </summary>
 public static class PackMesTrial
 {
@@ -48,9 +49,14 @@ public static class PackMesTrial
             return;
         }
 
-        // Pack Evento (and unset) — 24 hours from the link (story 5.7).
-        merchant.AccessUntil = linkInstant.AddHours(24);
+        // ADR-021: Individual starts only after a paid order is explicitly activated.
     }
+}
+
+public static class PackCorporativoTrial
+{
+    public const int Days = 15;
+    public static bool Applies(string? planCode) => string.Equals(planCode, PlanCodes.PackCorporativo, StringComparison.OrdinalIgnoreCase);
 }
 
 public static class AccessBlock

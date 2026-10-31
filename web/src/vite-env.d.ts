@@ -1,5 +1,7 @@
 interface ImportMetaEnv {
+  readonly DEV: boolean;
   readonly VITE_API_ORIGIN?: string;
+  readonly VITE_ENABLE_MOCK_SERVICES?: string;
 }
 
 interface ImportMeta {

@@ -7,13 +7,34 @@ public sealed record IncomingTransfer(
     string Currency,
     DateTimeOffset OccurredAt,
     string Status,
-    string TypeCode);
+    string TypeCode,
+    DateTimeOffset? ApprovedAt = null,
+    string StatusDetail = "",
+    string OperationType = "",
+    string PaymentMethodId = "",
+    string CoelsaId = "",
+    string BankTransferId = "",
+    string PayerDocument = "",
+    string PayerEmail = "",
+    string OriginBank = "",
+    string OriginAccount = "",
+    string Description = "");
 
 public sealed record TransferChange(Guid TransferId, string ExternalId, string PayerName, decimal Amount, DateTimeOffset OccurredAt, string Status, bool NewlyArrived);
 
 public sealed class RateLimitedException : Exception
 {
     public RateLimitedException() : base("Mercado Pago rate limit.") { }
+}
+
+/// <summary>
+/// Mercado Pago refused the stored grant (invalid or revoked refresh token, or a 401/403 on the token endpoint).
+/// Retrying the same credentials will not succeed; the commerce has to connect again.
+/// </summary>
+public sealed class MerchantAuthorizationRejectedException : InvalidOperationException
+{
+    public MerchantAuthorizationRejectedException()
+        : base("Mercado Pago rejected the merchant authorization.") { }
 }
 
 public sealed record TokenSet(
@@ -26,6 +47,12 @@ public interface ITransferSource
 {
     string SourceCode { get; }
     Task<IReadOnlyList<IncomingTransfer>> ReadIncomingAsync(TokenSet tokens, int pageSize, CancellationToken cancellationToken);
+}
+
+public sealed record TransferPage(IReadOnlyList<IncomingTransfer> Items, int? NextOffset);
+public interface ITransferQuerySource
+{
+    Task<TransferPage> QueryAsync(TokenSet tokens, DateTimeOffset? from, DateTimeOffset? to, int offset, int limit, CancellationToken cancellationToken);
 }
 
 public interface IMerchantAuthorizer
@@ -115,9 +142,12 @@ public interface IPushSender
 public interface ICheckout
 {
     /// <summary>Creates a prepaid Mercado Pago payment link (not preapproval). Owner AccessToken may be empty until story 12.3.</summary>
-    Task<string> CreatePaymentLinkAsync(Guid tenantId, int amount, string currency, string title, CancellationToken cancellationToken);
-    Task<string?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
+    Task<string> CreatePaymentLinkAsync(string reference, int amount, string currency, string title, CancellationToken cancellationToken);
+    Task<ApprovedCheckoutPayment?> ReadApprovedPaymentAsync(string paymentId, CancellationToken cancellationToken);
 }
+
+public sealed record ApprovedCheckoutPayment(string Reference, decimal Amount, string Currency);
+public sealed record CheckoutOrder(Guid TenantId, string PlanCode, int Amount, string Currency, int? DurationDays, int? DurationHours);
 
 /// <summary>Named service cards on the owner microsite (ADR-012). WhatsApp has no secret.</summary>
 public static class OwnerServiceCards
@@ -161,3 +191,5 @@ public interface IIdentityProvider
     string BuildLogoutUrl(string returnTo);
     Task<IdentityClaims> ExchangeAsync(string code, string codeVerifier, string nonce, CancellationToken cancellationToken);
 }
+
+public sealed class InvalidPushTokenException : Exception { }

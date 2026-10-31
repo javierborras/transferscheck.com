@@ -5,15 +5,16 @@ public sealed class CommercialOptions
     public const string Section = "Commercial";
     public string Currency { get; set; } = "ARS";
     public int PaidPeriodDays { get; set; } = 30;
-    public int WeeklyQueryCap { get; set; } = 500;
-    public int WeeklyQueryWarningGap { get; set; } = 50;
 }
 
 public sealed class SyncOptions
 {
     public const string Section = "Sync";
-    public TimeSpan PollInterval { get; set; } = TimeSpan.FromMinutes(5);
-    public TimeSpan ButtonCooldown { get; set; } = TimeSpan.FromSeconds(60);
+    public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(30);
+    public TimeSpan QuietPollInterval { get; set; } = TimeSpan.FromMinutes(1);
+    public TimeSpan IdlePollInterval { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan TimerInterval { get; set; } = TimeSpan.FromSeconds(10);
+    public TimeSpan ButtonCooldown { get; set; } = TimeSpan.FromSeconds(10);
     public int PageSize { get; set; } = 10;
     public int AlertPointRecordCount { get; set; } = 10;
 }
@@ -41,7 +42,7 @@ public sealed class CheckoutOptions
     public const string Section = "Checkout";
     /// <summary>SaaS owner Mercado Pago token for payment links. Stays empty in the repo; story 12.3 fills it outside this build.</summary>
     public string AccessToken { get; set; } = "";
-    public string WebhookSecret { get; set; } = "";
+    public string WebhookSecret { get; set; } = ""; public string NotificationSigningKey { get; set; } = ""; public TimeSpan NotificationTolerance { get; set; } = TimeSpan.FromMinutes(10);
     public string NotificationUrl { get; set; } = "";
     public string ReturnUrl { get; set; } = "";
 }

@@ -16,6 +16,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task Connect_uses_pkce_and_an_expired_state_is_rejected()
     {
         MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         var clock = new MutableClock();
         await using var factory = new TransfersApiFactory(sql) { Clock = clock };
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -44,6 +45,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task Callback_stores_an_encrypted_connection_starts_the_trial_and_opens_the_list()
     {
         MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var cookie = await SignUp(client);
@@ -56,7 +58,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         Assert.Equal("Re-conectar cuenta", checklist.GetProperty("reconnectButton").GetString());
         Assert.Equal("No conectado", checklist.GetProperty("connectionBadge").GetString());
         Assert.Equal(
-            "¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?",
+            "¿Querés volver a conectar tu cuenta de Mercado Pago?",
             checklist.GetProperty("reconnectConfirm").GetString());
         Assert.Equal(ConnectionEndpoints.Help, checklist.GetProperty("help").GetString());
         Assert.Contains("1.", checklist.GetProperty("help").GetString(), StringComparison.Ordinal);
@@ -98,6 +100,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     public async Task A_mercado_pago_account_already_linked_is_refused()
     {
         MockState.Reset();
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         var linkedUser = Random.Shared.Next(2000, 2_000_000_000);
         // Mock oauth increments UserId per code exchange; pin the same id for both merchants.
         MockState.UserId = linkedUser - 1;
@@ -139,6 +142,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
     {
         MockState.Reset();
         MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
+        MockState.UserId = Random.Shared.Next(2000, 2_000_000_000);
         await using var factory = new TransfersApiFactory(sql);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var cookie = await SignUp(client);
@@ -153,7 +157,7 @@ public sealed class Epic3ConnectTests(SqlFixture sql)
         Assert.Equal(ConnectionEndpoints.Help, open.GetProperty("help").GetString());
         Assert.Equal("Conectar Mercado Pago", open.GetProperty("button").GetString());
         Assert.Equal("Re-conectar cuenta", open.GetProperty("reconnectButton").GetString());
-        Assert.Equal("¿Estás seguro que deseas re-conectar tu cuenta de Mercado Pago?", open.GetProperty("reconnectConfirm").GetString());
+        Assert.Equal("¿Querés volver a conectar tu cuenta de Mercado Pago?", open.GetProperty("reconnectConfirm").GetString());
         Assert.Equal("No conectado", open.GetProperty("connectionBadge").GetString());
         Assert.Equal("", open.GetProperty("videoUrl").GetString());
         Assert.DoesNotContain("Pagar", open.ToString(), StringComparison.OrdinalIgnoreCase);

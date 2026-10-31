@@ -1,6 +1,6 @@
 # Epics and stories
 
-Locked MVP, 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018); stories 2.1 and 7.1 realign. Epics are in build order. Each story is accepted or rejected on its checks. Source is the human decision or the architecture lock of that date, plus the amendment where a story says so. The first bmad-build is the note in `later-research.md`. Epics 11 and 12 stay product decisions and are not that build.
+Locked MVP, 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018); stories 2.1 and 7.1 realign. Amended 27 October 2026: story 12.4 includes Helpdesk (ADR-031). Epics are in build order. Each story is accepted or rejected on its checks. Source is the human decision or the architecture lock of that date, plus the amendment where a story says so. The first bmad-build is the note in `later-research.md`. Epics 11 and 12 stay product decisions and are not that build.
 
 A story is closed only after unit tests in `tests/TransfersCheck.Tests`, Swagger, and the browser. Commit and push happen only when the human asks. This documentation pass does not run that ritual.
 
@@ -767,7 +767,7 @@ Source: human decision 23 Oct 2026. The copilot shape is ADR-017. This story doe
 
 ## Epic 12 — Owner microsite
 
-Not in the first bmad-build. The product decisions stay. See `later-research.md`. Do not design a host. Build story 12.2 after the plan table (story 5.1) when that research resumes. The helpdesk is not a story. The mail provider value stays unset.
+Not in the first bmad-build. Stories 12.1–12.3 shipped after that boundary. Story 12.4, amended 27 Oct 2026, is the owner dashboard host and Helpdesk (ADR-031). A commerce message does not open an issue or a pull request (ADR-032). The mail provider value stays unset. Commercial data, a money balance, and each commerce's collection transfers stay out.
 
 ### Story 12.1
 
@@ -817,3 +817,27 @@ As the product owner, I want one card per service the product already uses, so t
 **And** this story adds no card that was not named
 
 Source: human decision 22 Oct 2026 during the parking-lot review.
+
+### Story 12.4
+
+As the product owner, I want a dashboard with a left menu, so that I can see pending work, commerces, and subscription charges without opening a commerce account.
+
+**Acceptance Criteria:**
+
+**Given** the owner microsite
+**When** the owner signs in
+**Then** the menu includes Inicio, Clientes, Facturaciones, Planes, Servicios, and Helpdesk
+**And** Datos comerciales is absent
+**And** Helpdesk lists incidents with count, tag, and links to the Issue, the PR, and Sentry
+**And** that incident list does not copy a stack
+**And** Helpdesk lists commerce messages with alias, admin email, text, date, and open or closed
+**And** that message list does not show a CUIT, an address, or a balance
+**And** a commerce message does not open a GitHub issue or a pull request
+**And** Inicio shows pending tasks and technical health from data the product already stores
+**And** Clientes lists each commerce with alias, admin email, plan, access, trial, and whether Mercado Pago is linked
+**And** that list does not show the collection-account id or a commerce transfer
+**And** Facturaciones lists every SaaS billing order and can filter by commerce
+**And** a commerce session cannot call these reads
+**And** Planes and Servicios keep stories 12.2 and 12.3
+
+Source: human decision 25 Oct 2026, amended 27 Oct 2026. ADR-014 and ADR-031.

@@ -1,0 +1,14 @@
+.git
+**/bin
+**/obj
+**/node_modules
+web
+tests
+tools
+deploy/local
+**/appsettings.*.local.json
+**/*.pubxml
+**/*.publishsettings
+**/*service-account*.json
+**/*firebase-adminsdk*.json
+ui-reference

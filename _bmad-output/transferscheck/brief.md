@@ -1,5 +1,7 @@
 # Product Brief: transferscheck.com
 
+> Cambio vigente 25/10/2026: prevalecen ADR-019 a ADR-023 de `adrs.md`: sin cuotas de consultas; Individual 1+1 por 24 horas con inicio explícito; Pack Mes 1+4; adicionales ARS 1.000 prepagos hasta el vencimiento del Admin; controles técnicos y notificaciones por capas. Las reglas anteriores incompatibles son históricas.
+
 Locked 21 October 2026. Amended 22 October 2026: the UI and the API are two deployables. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 from human decisions that day, including the night close of the weekly-cap cutoff and the adopted UI labels. Amended 24 October 2026: commerce identity uses Auth0 (ADR-018). A reviewer accepts or rejects this pack. The decisions below are closed. What is still unknown is `later-research.md`, indexed from `open-decisions.md`.
 
 Companion files in this folder: `epics-and-stories.md`, `adrs.md`, `parking-lot.md`, `mp-authorization-setup.md`.

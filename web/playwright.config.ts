@@ -22,7 +22,7 @@ export default defineConfig({
       reuseExistingServer: false
     },
     {
-      command: "npm run dev",
+      command: "npm run dev -- --mode e2e",
       url: "http://localhost:5183",
       timeout: 60_000,
       reuseExistingServer: false

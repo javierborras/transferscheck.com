@@ -1,6 +1,6 @@
 # Parking lot
 
-Locked 21 October 2026. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 where a sentence below was no longer true, including the night close of the week start. Items now in scope point at an ADR. Discarded items stay discarded. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. That file is not a backlog.
+Locked 21 October 2026. Amended 22 October 2026 during the parking-lot review. Amended 23 October 2026 where a sentence below was no longer true, including the night close of the week start. Amended 27 October 2026: the helpdesk and the incident agent leave the later list (ADR-025 through ADR-032). Items now in scope point at an ADR. Discarded items stay discarded. What is still unknown is `later-research.md`, indexed from `open-decisions.md`. That file is not a backlog.
 
 ## Now in scope
 
@@ -13,7 +13,8 @@ Locked 21 October 2026. Amended 22 October 2026 during the parking-lot review. A
 - **Owner services panel.** ADR-012. Not a key-value bag. Not the first bmad-build (`later-research.md`). The mail provider value stays unset.
 - **Commerce admin, Punto de Alerta, and the alias.** ADR-008 and ADR-013.
 - **Commerce Auth0 Universal Login (SSO or Database email/password).** ADR-018. Punto de Alerta stays usuario/clave. Mercado Pago OAuth stays collection-account linking, not the IdP. Owner microsite stays out of Auth0 (ADR-014).
-- **Owner microsite sign-in.** ADR-014. Not the first bmad-build (`later-research.md`). Do not design a host.
+- **Owner microsite sign-in and dashboard.** ADR-014, amended 27 Oct 2026. Menu includes Helpdesk (ADR-031). Commercial data, a money balance, and each commerce's collection transfers stay out.
+- **Incident latch, GitHub issue, and draft pull request.** ADR-025 through ADR-030 and ADR-032. A commerce message does not start that agent.
 - **Help pages in `web/help/`, plus the plan flag and the two help modes.** ADR-016 and ADR-017. Not a help CMS. Not a chatbot on the connect screen. Pack Mes `EnableCopilotHelp` and the Pack Evento static menu stay decided. Implementation of the copilot, Jev, and the production pipeline is not the first bmad-build (`later-research.md`).
 - **Brand manual as a design reference.** `Docs/ManualdeMarcayUI.html`. Not a product module and not an approval gate.
 
@@ -44,8 +45,6 @@ Locked 21 October 2026. Amended 22 October 2026 during the parking-lot review. A
 ### Later, not an epic
 
 - **An accumulable recharge of 500 queries.** The human may evaluate it later from real application telemetry. They believe 500 will be enough. Not a story.
-- **The microsite helpdesk.** Pending research. Not the first bmad-build (`later-research.md`).
-- **A Cursor agent that reads logs, files bugs, and opens a GitHub pull request for the owner to approve.** Intent only. Not specified. Parked with the helpdesk. Not the first bmad-build (`later-research.md`).
 
 The owner microsite, the help copilot, Jev, and the production pipeline stay product decisions and are not the first bmad-build. `later-research.md`. There is no GitHub Actions pipeline today. Do not invent one.
 

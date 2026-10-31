@@ -9,16 +9,34 @@ using Microsoft.IdentityModel.Tokens;
 using TransfersCheck.Api.Accounts;
 using TransfersCheck.Api.Auth;
 using TransfersCheck.Api.Billing;
+using TransfersCheck.Api.Configuration;
+using TransfersCheck.Api.Commercial;
 using TransfersCheck.Api.Connections;
 using TransfersCheck.Api.Jobs;
 using TransfersCheck.Api.Help;
+using TransfersCheck.Api.Logging;
 using TransfersCheck.Api.Owner;
 using TransfersCheck.Api.Push;
 using TransfersCheck.Api.Transfers;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
 
+if (args.Length == 2 && args[0] == "--validate-production-config")
+{
+    var configuration = new ConfigurationBuilder().AddJsonFile(Path.GetFullPath(args[1]), optional: false).Build();
+    var errors = TransfersCheck.Api.Configuration.ProductionConfiguration.Errors(configuration, "Production");
+    foreach (var error in errors) Console.Error.WriteLine(error);
+    if (errors.Count == 0) Console.WriteLine("Production configuration validated. No database, host, or background services started.");
+    Environment.ExitCode = errors.Count == 0 ? 0 : 1;
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
+TransfersCheck.Api.Configuration.ProductionConfiguration.RequireValid(builder.Configuration, builder.Environment.EnvironmentName);
+TransfersCheck.Api.Configuration.SentryCapture.Register(builder);
+var errorLogs = new ErrorLogServices();
+builder.Logging.AddProvider(new ErrorLogLoggerProvider(errorLogs));
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<CommercialOptions>(builder.Configuration.GetSection(CommercialOptions.Section));
@@ -42,7 +60,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("ui", policy =>
     {
         if (!string.IsNullOrWhiteSpace(uiOrigin))
-            policy.WithOrigins(uiOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+            policy.WithOrigins(uiOrigin).AllowAnyHeader().AllowAnyMethod().AllowCredentials().WithExposedHeaders(Correlation.HeaderName);
     });
 });
 
@@ -99,6 +117,13 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+errorLogs.Provider = app.Services;
+
+app.MapGet("/api/status", (Microsoft.Extensions.Options.IOptions<MercadoPagoOptions> mercadoPago) => Results.Ok(new
+{
+    api = "online",
+    mercadoPago = new { configured = !string.IsNullOrWhiteSpace(mercadoPago.Value.ApiBaseUrl) && !string.IsNullOrWhiteSpace(mercadoPago.Value.AuthorizationUrl) }
+}));
 
 // ADR-018: a tenant with a missing client id, secret or redirect would lock every commerce admin out (the local door closes). Fail at startup instead.
 var auth0Options = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Auth0Options>>().Value;
@@ -111,13 +136,36 @@ if (auth0Options.Enabled
 // The repo has no migrations and EnsureCreated skips any database that already has tables, so an older database drifts from the
 // model (missing LoginAccounts.PasswordSet, whole tables). SchemaBootstrap adds what is missing and never alters or drops.
 // Development and Test always run it; other environments opt in with Database:EnsureSchema=true.
-if (!string.IsNullOrWhiteSpace(connectionString)
-    && (app.Environment.IsEnvironment("Test") || app.Environment.IsDevelopment()
-        || app.Configuration.GetValue<bool>("Database:EnsureSchema")))
+if (!string.IsNullOrWhiteSpace(connectionString))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
     await SchemaBootstrap.EnsureAsync(db, app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaBootstrap"));
+}
+
+// Keep the new commercial plan available on existing production databases as well as fresh schemas.
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<TransfersCheckDb>();
+    if (!await db.Plans.AnyAsync(plan => plan.Code == PlanCodes.PackCorporativo))
+    {
+        db.Plans.Add(new Plan { Code = PlanCodes.PackCorporativo, DisplayName = "Pack Corporativo", Amount = 15999, Currency = "ARS", DurationDays = 30, FaceCopy = "Escala y multi-sucursal para equipos que necesitan crecer.", EnableCopilotHelp = true, Active = true });
+        await db.SaveChangesAsync();
+    }
+    var planDefaults = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+    {
+        [PlanCodes.PackEvento] = 1,
+        [PlanCodes.PackMes] = 4,
+        [PlanCodes.PackCorporativo] = 100
+    };
+    var planRows = await db.Plans.Where(plan => planDefaults.Keys.Contains(plan.Code) && plan.IncludedAlertPoints <= 0).ToListAsync();
+    if (planRows.Count > 0)
+    {
+        foreach (var plan in planRows)
+            plan.IncludedAlertPoints = planDefaults[plan.Code];
+        await db.SaveChangesAsync();
+    }
 }
 
 // Product schedules from HangfireJobs (defaults: daily noon UTC / every six hours). ADR-011 names the jobs; cron is typed config.
@@ -127,6 +175,7 @@ recurringJobs.AddOrUpdate<FiveDayNoticeJob>("five-day-notice", job => job.Execut
 recurringJobs.AddOrUpdate<ReferralBonusJob>("referral-bonus", job => job.Execute(), hangfireJobs.ReferralBonusCron);
 
 app.UseCors("ui");
+Correlation.Use(app);
 if (Encoding.UTF8.GetByteCount(signingKey) >= 32)
 {
     app.UseAuthentication();
@@ -148,7 +197,9 @@ if (app.Environment.IsDevelopment())
 
 AccountEndpoints.Map(app);
 Auth0Endpoints.Map(app);
+#if DEBUG
 DevPlanEndpoints.Map(app);
+#endif
 OwnerEndpoints.Map(app);
 HelpEndpoints.Map(app);
 ConnectionEndpoints.Map(app);
@@ -156,6 +207,7 @@ BillingEndpoints.Map(app);
 TransferEndpoints.Map(app);
 HistoryEndpoints.Map(app);
 PushEndpoints.Map(app);
+CommercialEndpoints.Map(app);
 
 app.Run();
 

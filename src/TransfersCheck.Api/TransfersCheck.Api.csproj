@@ -9,7 +9,11 @@
     <PackageReference Include="Hangfire.AspNetCore" Version="1.8.25" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.25" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageReference Include="Sentry.AspNetCore" Version="6.12.1" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+    <!-- Hangfire's older minimum must not pin the vulnerable JSON.NET implementation. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -18,5 +22,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>transferscheck-api</UserSecretsId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Update="appsettings.Development.json;appsettings.*.local.json" CopyToPublishDirectory="Never" />
+    <Content Update="Properties\launchSettings.json" CopyToPublishDirectory="Never" />
+    <Compile Remove="Accounts\DevPlanEndpoints.cs" Condition="'$(Configuration)' == 'Release'" />
+  </ItemGroup>
 
 </Project>

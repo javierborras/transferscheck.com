@@ -1,8 +1,5 @@
----
-id: punto-alerta
-title: Punto de Alerta
-summary: El Punto de Alerta ve las últimas filas y puede abrir el detalle. No administra cuentas ni el historial completo.
-path: /ayuda/punto-alerta
-keywords: punto alerta invite usuario clave
----
-El admin crea un nombre y comparte un link de una hora. Esa persona entra con usuario y clave, ve las últimas transferencias y puede abrir el detalle de una fila cuando Mercado Pago no muestra el pagador.
+# Puntos de Alerta
+
+Un Punto de Alerta es un acceso para un dispositivo receptor de avisos. Individual incluye uno y Pack Mes cuatro, además del Admin. Cada punto adicional cuesta $ 1.000 sin prorrateo y vence con el acceso del Admin. Elegí cuáles incluir en la próxima renovación prepaga. No hay débito automático.
+
+El punto sólo ve los últimos registros y no puede consultar ni exportar los movimientos del Admin. Una cuenta tiene una sesión operativa a la vez.

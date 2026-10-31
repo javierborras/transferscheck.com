@@ -65,7 +65,7 @@ public sealed class Auth0IdentityProvider(HttpClient http, IOptions<Auth0Options
         using var response = await http.PostAsync(Root + "/oauth/token", new FormUrlEncodedContent(form), cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Auth0 token exchange failed ({(int)response.StatusCode}): {Truncate(body)}");
+            throw new InvalidOperationException($"Auth0 token exchange failed ({(int)response.StatusCode}).");
 
         string idToken;
         try
@@ -123,8 +123,6 @@ public sealed class Auth0IdentityProvider(HttpClient http, IOptions<Auth0Options
         };
         return await new JsonWebTokenHandler().ValidateTokenAsync(idToken, parameters);
     }
-
-    private static string Truncate(string value) => value.Length <= 200 ? value : value[..200];
 
     private async Task<JsonWebKeySet> KeysAsync(bool forceRefresh, CancellationToken cancellationToken)
     {

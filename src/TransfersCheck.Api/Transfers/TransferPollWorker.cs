@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Options;
+using Sentry;
+using TransfersCheck.Api.Configuration;
 using TransfersCheck.Core;
 using TransfersCheck.Infrastructure;
 
@@ -13,9 +15,17 @@ public sealed class TransferPollWorker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(sync.Value.PollInterval, clock);
+        using var timer = new PeriodicTimer(sync.Value.TimerInterval, clock);
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            var correlationId = Guid.NewGuid().ToString("N");
+            using var logScope = logger.BeginScope("CorrelationId={CorrelationId}", correlationId);
+            IDisposable? sentryScope = null;
+            if (SentrySdk.IsEnabled)
+            {
+                sentryScope = SentrySdk.PushScope();
+                SentrySdk.ConfigureScope(scope => scope.SetTag("correlation_id", correlationId));
+            }
             try
             {
                 await PollOnce(stoppingToken);
@@ -28,6 +38,10 @@ public sealed class TransferPollWorker(
             {
                 // A failed poll must never stop the host; the next tick retries.
                 logger.LogError(ex, "Transfer poll tick failed; will retry on the next interval.");
+            }
+            finally
+            {
+                sentryScope?.Dispose();
             }
         }
     }
@@ -52,7 +66,7 @@ public sealed class TransferPollWorker(
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // One tenant's bad connection (e.g. revoked Mercado Pago token) must not block the others.
-                    logger.LogWarning(ex, "Transfer sync failed for tenant {TenantId}; skipping this tick.", tenantId);
+                    logger.LogError(ex, "Transfer sync failed for tenant {TenantId}; skipping this tick.", tenantId);
                 }
             }
         }

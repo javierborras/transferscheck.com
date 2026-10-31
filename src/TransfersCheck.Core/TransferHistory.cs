@@ -14,6 +14,15 @@ public static class TransferHistory
     public static string DisplayPayer(string payerName)
         => string.IsNullOrWhiteSpace(payerName) ? "Desconocido" : payerName;
 
+    public static string DisplayPayer(string? payerName, string? payerEmail, string? payerDocument)
+        => !string.IsNullOrWhiteSpace(payerName) && !string.Equals(payerName, "Desconocido", StringComparison.OrdinalIgnoreCase)
+            ? payerName.Trim()
+            : !string.IsNullOrWhiteSpace(payerEmail)
+                ? payerEmail.Trim()
+                : !string.IsNullOrWhiteSpace(payerDocument)
+                    ? payerDocument.Trim()
+                    : "Desconocido";
+
     public static HistoryTotals Totals(IReadOnlyList<HistoryRow> rows, DateTimeOffset now)
     {
         var dayStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, now.Offset);

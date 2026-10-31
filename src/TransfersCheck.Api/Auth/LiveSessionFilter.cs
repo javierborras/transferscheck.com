@@ -26,6 +26,13 @@ public sealed class LiveSessionFilter(IMerchantStore store, ITenantContext tenan
             || session.ExpiresAt <= now)
             return Results.Unauthorized();
 
+        if (!account.IsOwner)
+        {
+            var merchant = await store.FindMerchantAsync(account.TenantId, context.HttpContext.RequestAborted);
+            var path = context.HttpContext.Request.Path.Value ?? "";
+            var metadata = path is "/api/session" or "/api/billing" or "/api/sessions";
+            if (!metadata && !AlertPointAccess.Allows(account, merchant, now)) return Results.Json(new { error = "point_disabled" }, statusCode: 403);
+        }
         context.HttpContext.Items["account"] = account;
         return await next(context);
     }

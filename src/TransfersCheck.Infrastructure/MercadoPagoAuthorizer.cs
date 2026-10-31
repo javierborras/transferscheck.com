@@ -1,10 +1,11 @@
+using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TransfersCheck.Core;
 
 namespace TransfersCheck.Infrastructure;
 
-public sealed class MercadoPagoAuthorizer(HttpClient http, IOptions<MercadoPagoOptions> options) : IMerchantAuthorizer
+public sealed class MercadoPagoAuthorizer(HttpClient http, IOptions<MercadoPagoOptions> options, IMercadoPagoCallLog? calls = null) : IMerchantAuthorizer
 {
     private readonly MercadoPagoOptions _options = options.Value;
 
@@ -44,10 +45,20 @@ public sealed class MercadoPagoAuthorizer(HttpClient http, IOptions<MercadoPagoO
 
     private async Task<TokenSet> TokenAsync(Dictionary<string, string> form, CancellationToken cancellationToken)
     {
+        if (calls is not null)
+            await calls.RecordAsync(cancellationToken);
         using var response = await http.PostAsync(_options.TokenUrl, new FormUrlEncodedContent(form), cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException("Mercado Pago token exchange failed.");
+        {
+            // 400/401/403 means this grant will not start working on the next tick (invalid_grant, revoked, wrong client).
+            // The body can echo credential material, so it stays out of the exception.
+            if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                throw new MerchantAuthorizationRejectedException();
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                throw new RateLimitedException();
+            throw new HttpRequestException($"Mercado Pago token exchange failed ({(int)response.StatusCode}).", null, response.StatusCode);
+        }
 
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;

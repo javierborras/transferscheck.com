@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, apiUrl } from "./api";
+import { claimPaymentNotice, showDesktopFallback, enableDeviceAlerts } from "./push";
+import { Landing } from "./Landing";
+import { BusinessSolutions } from "./BusinessSolutions";
+import { LegalPage } from "./LegalPage";
+import { Logo } from "./Logo";
+import { PlanCards } from "./Plans";
+import { playCashBell, unlockSound, soundEnabled, subscribeSound } from "./audio";
+import { api, apiUrl, apiOrigin, withCorrelation } from "./api";
+import { OwnerSite } from "./owner/OwnerSite";
+import { NotificationBanner } from "./NotificationBanner";
 import { liveTransferMessageType, type LiveTransferArrived } from "./liveTransferContract";
 
 type Session = { accountId: string; tenantId: string; email: string; isOwner: boolean };
@@ -20,15 +29,32 @@ type Checklist = {
   alertsDone: boolean;
   trialRunning: boolean;
   listReachable: boolean;
+  trialEligible: boolean;
   videoUrl: string;
 };
 type Transfer = {
   id: string;
+  externalId?: string;
   payerName: string;
   amount: number;
+  currency?: string;
   occurredAt: string;
+  approvedAt?: string | null;
   status: string;
   statusLabel: string;
+  statusDetail?: string;
+  statusDetailLabel?: string;
+  typeCode?: string;
+  operationType?: string;
+  paymentMethodId?: string;
+  operationLabel?: string;
+  coelsaId?: string;
+  bankTransferId?: string;
+  payerDocument?: string;
+  payerEmail?: string;
+  originBank?: string;
+  originAccount?: string;
+  description?: string;
 };
 type LoginRow = {
   id: string;
@@ -38,10 +64,15 @@ type LoginRow = {
   pushApproved: boolean;
   revoked: boolean;
   passwordSet?: boolean;
+  included: boolean;
+  enabled: boolean;
+  requiresPayment: boolean;
+  extraAccessUntil?: string | null;
+  renewWithAdmin: boolean;
 };
 
-let firstOpen: Promise<void> | null = null;
-const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+
+const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 });
 const when = new Intl.DateTimeFormat("es-AR", {
   day: "2-digit",
   month: "2-digit",
@@ -51,43 +82,7 @@ const when = new Intl.DateTimeFormat("es-AR", {
   hour12: false
 });
 
-function beep() {
-  const context = new AudioContext();
-  const tone = context.createOscillator();
-  const gain = context.createGain();
-  tone.type = "sine";
-  tone.frequency.value = 1000;
-  gain.gain.value = 0.08;
-  tone.connect(gain);
-  gain.connect(context.destination);
-  tone.start();
-  tone.stop(context.currentTime + 0.2);
-  tone.onended = () => void context.close();
-}
-
-function Mark() {
-  return (
-    <svg className="mark" viewBox="0 0 120 120" fill="none" aria-hidden="true">
-      <rect width="120" height="120" rx="28" fill="#009EE3" />
-      <circle cx="60" cy="60" r="44" stroke="#FFFFFF" strokeOpacity="0.25" strokeWidth="4" strokeDasharray="4 4" />
-      <path d="M38 60C38 47.8497 47.8497 38 60 38C69.317 38 77.2952 43.7841 80.5 52" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
-      <path d="M82 46V53H75" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M82 60C82 72.1503 72.1503 82 60 82C50.683 82 42.7048 76.2159 39.5 68" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" />
-      <path d="M38 74V67H45" stroke="#FFFFFF" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="60" cy="60" r="20" fill="#FFFFFF" />
-      <path d="M52 60.5L57.5 66L68.5 54" stroke="#00A650" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function Wordmark() {
-  return (
-    <span className="wordmark">
-      <Mark />
-      <span className="name">TransfersCheck</span>
-    </span>
-  );
-}
+function Wordmark() { return <Logo />; }
 
 function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; back: boolean; isOwner: boolean }) {
   const [open, setOpen] = useState(false);
@@ -124,9 +119,9 @@ function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; b
   return (
     <header className="app-header">
       <Link className="wordmark" to="/">
-        <Mark />
-        <span className="name">TransfersCheck</span>
+        <Logo compact />
       </Link>
+      <span className="role-indicator">{isOwner ? "Admin" : "Mostrador / Punto de Alerta"}</span>
       <span id="alias" className="alias-slot" aria-label="Alias">
         {alias}
       </span>
@@ -151,7 +146,7 @@ function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; b
           <button className="menu-backdrop" type="button" aria-label="Cerrar menú" onClick={() => setOpen(false)} />
           <nav id="app-menu" className="app-menu" aria-label="Menú">
             <Link to="/" aria-current={here("/")}>
-              Transacciones
+              Mostrador en vivo
             </Link>
             <Link to="/ayuda" aria-current={here("/ayuda")}>
               Ayuda
@@ -159,13 +154,13 @@ function AppHeader({ onSalir, back, isOwner }: { onSalir: () => Promise<void>; b
             {isOwner ? (
               <>
                 <Link to="/historial" aria-current={here("/historial")}>
-                  Historial
+                  Movimientos y exportación
                 </Link>
                 <Link to="/usuarios" aria-current={here("/usuarios")}>
-                  Configurar
+                  Puntos de Alerta
                 </Link>
                 <Link to="/pagar" aria-current={here("/pagar")}>
-                  Pagos
+                  Mi Plan
                 </Link>
               </>
             ) : null}
@@ -202,6 +197,7 @@ function Shell({
   return (
     <div className={counter ? "shell counter" : "shell page"}>
       <AppHeader onSalir={onSalir} back={back ?? false} isOwner={isOwner} />
+      {isOwner && !counter ? <nav className="admin-nav" aria-label="Administración del comercio"><Link to="/">Mostrador en vivo</Link><Link to="/usuarios">Puntos de Alerta</Link><Link to="/historial">Movimientos y exportación</Link><Link to="/pagar">Mi Plan</Link><Link to="/conectar">Conectar Mercado Pago</Link></nav> : null}
       {children}
     </div>
   );
@@ -209,13 +205,24 @@ function Shell({
 
 export function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
     let gone = false;
     api("/api/session").then(async (response) => {
       if (gone) return;
-      setSession(response.ok ? await response.json() : null);
+      if (response.ok) {
+        const selected = sessionStorage.getItem("initialPlan");
+        if (selected) {
+          const chosen = await api("/api/billing/initial-plan", { method: "POST", body: JSON.stringify({ planCode: selected }) });
+          sessionStorage.removeItem("initialPlan");
+          if (chosen.ok) navigate("/conectar");
+        }
+        setSession(await response.json());
+        const first = sessionStorage.getItem("notificationFirst");
+        if (first) { sessionStorage.removeItem("notificationFirst"); navigate(`/?first=${encodeURIComponent(first)}`); }
+      } else setSession(null);
     });
     return () => {
       gone = true;
@@ -246,15 +253,19 @@ export function App() {
 
   return (
     <Routes>
+      <Route path="/ingresar" element={session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/cuenta" element={<CreateAccount onSignedIn={setSession} />} />
       <Route path="/invitar/:token" element={<ClaimInvite onSignedIn={setSession} />} />
       <Route path="/owner" element={<OwnerSite />} />
+      <Route path="/soluciones-empresas" element={<BusinessSolutions />} />
+      <Route path="/terminos" element={<LegalPage />} />
+      <Route path="/privacidad" element={<LegalPage privacy />} />
       <Route path="/pagar" element={session ? <Pay session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/conectar" element={session ? <ChecklistPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/usuarios" element={session ? <Users session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/ayuda/:id?" element={session ? <HelpPage session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
       <Route path="/historial" element={session?.isOwner ? <HistoryPage session={session} onSalir={salir} /> : session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
-      <Route path="*" element={session ? <Transfers session={session} onSalir={salir} /> : <Enter onSignedIn={setSession} />} />
+      <Route path="*" element={session ? <Transfers session={session} onSalir={salir} /> : new URLSearchParams(location.search).has("auth0_error") || new URLSearchParams(location.search).has("first") ? <Enter onSignedIn={setSession} /> : <Landing />} />
     </Routes>
   );
 }
@@ -280,24 +291,31 @@ function useAuth0Enabled() {
 }
 
 function startAuth0(signUp: boolean) {
+  const first = new URLSearchParams(window.location.search).get("first");
+  if (first) sessionStorage.setItem("notificationFirst", first);
+  if (signUp) { const plan = new URLSearchParams(window.location.search).get("plan"); sessionStorage.setItem("initialPlan", plan === "pack_evento" || plan === "pack_corporativo" ? plan : "pack_mes"); }
   window.location.assign(apiUrl(`/api/auth0/login${signUp ? "?signup=true" : ""}`));
 }
 
-function auth0Message(code: string | null) {
-  switch (code) {
-    case null:
-      return "";
-    case "email_unverified":
-      return "Verificá tu email y volvé a intentar.";
-    case "not_allowed":
-      return "Esa cuenta no puede entrar como admin.";
-    case "invalid_state":
-      return "El inicio de sesión venció. Probá de nuevo.";
-    case "server_error":
-      return "No pudimos abrir tu sesión. Probá de nuevo en un momento.";
-    default:
-      return "No se pudo iniciar sesión con Auth0.";
-  }
+function auth0Message(code: string | null, correlationId: string | null) {
+  const text = (() => {
+    switch (code) {
+      case null:
+        return "";
+      case "email_unverified":
+        return "Verificá tu email y volvé a intentar.";
+      case "not_allowed":
+        return "Esa cuenta no puede entrar como admin.";
+      case "invalid_state":
+        return "El inicio de sesión venció. Probá de nuevo.";
+      case "server_error":
+        return "No pudimos abrir tu sesión. Probá de nuevo en un momento.";
+      default:
+        return "No pudimos abrir tu sesión. Volvé a intentar.";
+    }
+  })();
+  if (!text || (code !== "server_error" && code !== "exchange_failed")) return text;
+  return correlationId && /^[A-Za-z0-9_-]{8,64}$/.test(correlationId) ? `${text} Referencia: ${correlationId}.` : text;
 }
 function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   const navigate = useNavigate();
@@ -313,16 +331,17 @@ function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void 
       body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
     });
     if (!response.ok) {
-      setError("No se pudo crear la cuenta.");
+      setError(response.status >= 500 ? withCorrelation(response, "No se pudo crear la cuenta.") : "No se pudo crear la cuenta.");
       return;
     }
     const current = await api("/api/session");
     if (!current.ok) {
-      setError("No se pudo crear la cuenta.");
+      setError(withCorrelation(current, "No se pudo crear la cuenta."));
       return;
     }
+    const selectedPlan = new URLSearchParams(window.location.search).get("plan"); await api("/api/billing/initial-plan", { method: "POST", body: JSON.stringify({ planCode: selectedPlan === "pack_evento" || selectedPlan === "pack_corporativo" ? selectedPlan : "pack_mes" }) });
     onSignedIn(await current.json());
-    navigate("/");
+    navigate(new URLSearchParams(window.location.search).has("first") ? `/?first=${encodeURIComponent(new URLSearchParams(window.location.search).get("first")!)}` : "/conectar");
   }
 
   if (auth0 === undefined) {
@@ -340,10 +359,10 @@ function CreateAccount({ onSignedIn }: { onSignedIn: (session: Session) => void 
         <h1>Creá tu cuenta</h1>
         <p className="gate-lead">Registrate con tu email o con tu cuenta de Google.</p>
         <button type="button" onClick={() => startAuth0(true)}>
-          Crear cuenta con Auth0
+          Crear mi cuenta
         </button>
         <p className="switch">
-          <Link to="/">Ya tengo cuenta</Link>
+          <Link to="/ingresar">Ya tengo cuenta</Link>
         </p>
       </main>
     );
@@ -403,6 +422,10 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
       body: JSON.stringify(payload)
     });
     if (!response.ok) {
+      if (response.status >= 500) {
+        setError(withCorrelation(response, "No se pudo abrir la sesión."));
+        return;
+      }
       const body = await response.json().catch(() => ({} as { error?: string }));
       if (body.error === "code_required") {
         setNeedsCode(true);
@@ -420,11 +443,11 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
     }
     const current = await api("/api/session");
     if (!current.ok) {
-      setError("No se pudo abrir la sesión.");
+      setError(withCorrelation(current, "No se pudo abrir la sesión."));
       return;
     }
     onSignedIn(await current.json());
-    navigate("/");
+    navigate(new URLSearchParams(window.location.search).has("first") ? `/?first=${encodeURIComponent(new URLSearchParams(window.location.search).get("first")!)}` : "/");
   }
 
   if (auth0 === undefined) {
@@ -436,18 +459,18 @@ function Enter({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
   }
 
   const adminAuth0 = auth0 && !alertPoint;
-  const auth0Error = auth0Message(params.get("auth0_error"));
+  const auth0Error = auth0Message(params.get("auth0_error"), params.get("correlation_id"));
 
   return (
     <main className="gate">
       <Wordmark />
       <h1>Hola de nuevo</h1>
-      <p className="gate-lead">Inicia sesión en tu cuenta de TransfersCheck</p>
+      <p className="gate-lead">Ingresá a tu cuenta de transferscheck.com</p>
       {adminAuth0 ? (
         <>
           {auth0Error ? <p className="error">{auth0Error}</p> : null}
           <button type="button" onClick={() => startAuth0(false)}>
-            Iniciar sesión con Auth0
+            Ingresar a mi cuenta
           </button>
         </>
       ) : (
@@ -528,12 +551,12 @@ function ClaimInvite({ onSignedIn }: { onSignedIn: (session: Session) => void })
       body: JSON.stringify({ password: data.get("password") })
     });
     if (!response.ok) {
-      setError("El enlace no sirve o ya se usó.");
+      setError(response.status >= 500 ? withCorrelation(response, "No pudimos usar el enlace. Volvé a intentar.") : "El enlace no sirve o ya se usó.");
       return;
     }
     const current = await api("/api/session");
     if (!current.ok) {
-      setError("El enlace no sirve o ya se usó.");
+      setError(withCorrelation(current, "No pudimos usar el enlace. Volvé a intentar."));
       return;
     }
     onSignedIn(await current.json());
@@ -557,6 +580,11 @@ function ClaimInvite({ onSignedIn }: { onSignedIn: (session: Session) => void })
   );
 }
 
+function relativeTime(date: string) {
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(date)) / 60000));
+  return minutes < 1 ? "Hace instantes" : `Hace ${minutes} min`;
+}
+
 function helpLines(help: string) {
   const lines = help.split(/(?<=\.)\s+(?=\d+\.)/).map((line) => line.trim()).filter(Boolean);
   return lines.length > 1 ? lines : [help];
@@ -567,7 +595,11 @@ function ChecklistPage({ session, onSalir }: { session: Session; onSalir: () => 
 
   async function reload() {
     const response = await api("/api/checklist");
-    if (response.ok) setChecklist(await response.json());
+    if (response.ok) {
+      const state = await response.json();
+      state.alertsDone = state.alertsDone && localStorage.getItem("push-account") === session.accountId;
+      setChecklist(state);
+    }
   }
 
   useEffect(() => {
@@ -591,7 +623,7 @@ function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload
     if (checklist.connectDone && !window.confirm(checklist.reconnectConfirm)) return;
     const response = await api("/api/connections/mercadopago", { method: "POST" });
     if (!response.ok) {
-      setError("No se pudo empezar la conexión.");
+      setError(withCorrelation(response, "No se pudo empezar la conexión."));
       return;
     }
     const body = await response.json();
@@ -599,25 +631,14 @@ function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload
   }
 
   async function enableAlerts() {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Promise.race([
-        Notification.requestPermission(),
-        new Promise((resolve) => setTimeout(resolve, 1500))
-      ]);
-    }
-    const config = await api("/api/push/config");
-    const keys = config.ok ? await config.json() : {};
-    const token = keys.apiKey ? "" : `mock-${crypto.randomUUID()}`;
-    if (!token) return;
-    const saved = await api("/api/push/tokens", { method: "POST", body: JSON.stringify({ token }) });
-    if (saved.ok) {
-      await onReload();
-      navigate("/");
-    }
+    try { await enableDeviceAlerts(); await onReload(); navigate("/"); }
+    catch (error) { setError(withCorrelation(error, "No pudimos activar los avisos. Revisá los permisos de este navegador y volvé a intentar.")); }
   }
 
   const connectBody = (
     <>
+      <p>Autorizá a transferscheck.com a leer únicamente las transferencias que entran a tu cuenta (bancarias y de Mercado Pago).</p>
+      <div className="trust-block"><p><strong>🔒 Conexión oficial:</strong> No nos das tu clave. Autorizás directo en Mercado Pago.</p><p><strong>🙈 Modo ciego:</strong> Nadie en el mostrador podrá ver tu saldo total, tus gastos ni mover dinero.</p></div>
       <ol className="help">
         {helpLines(checklist.help).map((line) => (
           <li key={line}>{line}</li>
@@ -631,45 +652,46 @@ function ChecklistView({ checklist, onReload }: { checklist: Checklist; onReload
   return (
     <>
       <main>
+        <h1>Dejá listo tu mostrador en 3 pasos</h1>
+        <p>Configuralo una sola vez. Tus empleados van a poder verificar cobros sin tocar tu cuenta de Mercado Pago.</p>
+        {checklist.trialEligible ? <p className="trial-info">🎁 Tenés 21 días de prueba gratis en el Pack Mes desde el momento en que vinculás tu Mercado Pago.</p> : checklist.trialRunning ? <p className="trial-info">La prueba está en curso.</p> : null}
         <p className="connection-badge" data-connected={checklist.connectDone ? "yes" : "no"} role="status">
           {checklist.connectionBadge}
         </p>
         <ol className="steps">
           <li className={checklist.accountDone ? "done" : "current"} data-step="1">
             <div className="step-body">
-              {checklist.accountDone ? checklist.accountTitle : <h1>{checklist.accountTitle}</h1>}
+              {checklist.accountDone ? "Creá tu cuenta de comercio" : <h1>Creá tu cuenta de comercio</h1>}
             </div>
           </li>
           <li className={connectNow ? "current" : checklist.connectDone ? "done" : "later"} data-step="2">
             <div className="step-body">
-              {connectNow ? <h1>{checklist.connectTitle}</h1> : checklist.connectTitle}
+              {connectNow ? <h1>Conectá tu Mercado Pago de forma segura</h1> : "Conectá tu Mercado Pago de forma segura"}
               {connectNow || checklist.connectDone ? connectBody : null}
             </div>
           </li>
           <li className={alertsNow ? "current" : checklist.alertsDone ? "done" : "later"} data-step="3">
             <div className="step-body">
-              {alertsNow ? <h1>{checklist.alertsTitle}</h1> : checklist.alertsTitle}
+              {alertsNow ? <h1>Activá los avisos en este dispositivo</h1> : "Activá los avisos en este dispositivo"}
+              <p>Habilitá las notificaciones para recibir un aviso cuando detectemos un pago acreditado.</p>
               <p className="ios-hint">{checklist.iosHint}</p>
+              {alertsNow && error ? <p role="alert" className="error">{error}</p> : null}
             </div>
           </li>
-          <li className={checklist.trialRunning ? "done" : "later"} data-step="4" data-status="trial">
-            <div className="step-body" role="status">
-              {checklist.trialLine}
-            </div>
-          </li>
+
         </ol>
       </main>
       {connectNow ? (
         <Dock>
           <button type="button" onClick={() => void connect()}>
-            {checklist.button}
+            Conectar mi Mercado Pago
           </button>
         </Dock>
       ) : null}
       {checklist.connectDone && !alertsNow ? (
         <Dock>
           <button type="button" onClick={() => void connect()}>
-            {checklist.reconnectButton}
+            Reconectar Mercado Pago
           </button>
         </Dock>
       ) : null}
@@ -693,14 +715,18 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   const [wait, setWait] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [alertsDone, setAlertsDone] = useState<boolean | null>(null);
   const [trial, setTrial] = useState(false);
   const [expired, setExpired] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [fiveDayWarning, setFiveDayWarning] = useState(false);
-  const [consultaWarn, setConsultaWarn] = useState(false);
-  const [pollSeconds, setPollSeconds] = useState(300);
-  const [cooldownSeconds, setCooldownSeconds] = useState(60);
+  const [connected, setConnected] = useState(true);
+  const [audioActive, setAudioActive] = useState(soundEnabled);
+  const [audioError, setAudioError] = useState("");
+  useEffect(() => subscribeSound(() => setAudioActive(soundEnabled())), []);
+  const announced = useRef(new Set<string>());
+  const [pollSeconds, setPollSeconds] = useState(30);
+  const displayLimit = useRef(10);
+  const [cooldownSeconds, setCooldownSeconds] = useState(10);
   const seen = useRef<Map<string, string> | null>(null);
   const first = params.get("first");
 
@@ -717,74 +743,112 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
 
   async function load(announce: boolean) {
     const path = first ? `/api/transfers?first=${encodeURIComponent(first)}` : "/api/transfers";
+    const billing = await api("/api/billing");
+    if (billing.status === 401) { window.location.assign("/ingresar"); return; }
+    if (billing.ok) {
+      const state = await billing.json();
+      setConnected(Boolean(state.connected));
+      setExpired(Boolean(state.accessUntil) && new Date(state.accessUntil).getTime() <= Date.now());
+      setBlocked(Boolean(state.blocked) || state.accountEnabled === false);
+      setFiveDayWarning(Boolean(state.fiveDayWarning));
+      if (state.blocked || state.accountEnabled === false) { setItems([]); return; }
+    }
     const response = await api(path);
+    if (response.status === 401) { window.location.assign("/ingresar"); return; }
+    if (response.status === 403) { setItems([]); setBlocked(true); return; }
     if (!response.ok) return;
     const body = await response.json();
     const next = body.items as Transfer[];
+    displayLimit.current = body.take ?? 10;
     setPollSeconds(body.pollIntervalSeconds);
     setCooldownSeconds(body.buttonCooldownSeconds);
+    if (body.refreshRetrySeconds > 0) setCooldown(body.refreshRetrySeconds);
     if (announce) announceArrivals(next);
-    else seen.current = new Map(next.map((item) => [item.id, item.status]));
+    else if (!seen.current) {
+      seen.current = new Map(next.map(item => [item.id, item.status]));
+      next.filter(item => item.status === "approved").forEach(item => announced.current.add(item.id));
+    }
     setItems(next);
     const check = await api("/api/checklist");
     if (check.ok) {
-      const state = await check.json();
-      setAlertsDone(state.alertsDone);
-      setTrial(state.trialRunning);
+      const state = await check.json(); setTrial(state.trialRunning);
     }
-    const billing = await api("/api/billing");
-    if (billing.ok) {
-      const { accessUntil, fiveDayWarning, blocked: isBlocked, consultaWarn: warnConsultas } = await billing.json();
-      setExpired(Boolean(accessUntil) && new Date(accessUntil).getTime() <= Date.now());
-      setBlocked(Boolean(isBlocked));
-      setFiveDayWarning(Boolean(fiveDayWarning));
-      setConsultaWarn(Boolean(warnConsultas));
-    }
+    return true;
   }
 
   function announceArrivals(next: Transfer[]) {
     const previous = seen.current;
-    seen.current = new Map(next.map((item) => [item.id, item.status]));
     if (!previous) return;
-    const arrived = next.find((item) => item.status === "approved" && previous.get(item.id) !== "approved");
-    if (!arrived) return;
-    beep();
-    setNotice(arrived);
+    const arrived: Transfer[] = [];
+    for (const item of next) {
+      if (item.status === "approved" && previous.get(item.id) !== "approved" && !announced.current.has(item.id)) {
+        announced.current.add(item.id);
+        arrived.push(item);
+      }
+      previous.set(item.id, item.status);
+    }
+    arrived.forEach((item, index) => {
+      void claimPaymentNotice(session.tenantId, item.id).then(claimed => {
+        if (claimed) { playCashBell(index * 0.4); void showDesktopFallback(item.id, item.payerName, item.amount); }
+      });
+    });
+    if (arrived.length) setNotice(arrived[0]);
   }
 
   useEffect(() => {
     let gone = false;
-    const opening = session.isOwner
-      ? (firstOpen ??= api("/api/transfers/refresh", { method: "POST" }).then(() => undefined, () => undefined))
-      : Promise.resolve();
-    void opening.then(() => {
-      if (!gone) void load(false);
-    });
+    void load(false).then(async ready => {
+      if (!ready || gone) return;
+      const response = await api("/api/transfers/refresh", { method: "POST" });
+      if (response.ok && !gone) await load(false);
+    }).catch(() => setWait("No pudimos cargar los movimientos. Revisá tu conexión."));
+    let lastInteraction = 0;
+    let lastLoad = Date.now();
+    const activity = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastInteraction >= 10000) {
+        lastInteraction = Date.now();
+        void api("/api/activity", { method: "POST" }).catch(() => undefined);
+      }
+    };
+    activity();
+    const events = ["pointerdown", "keydown", "scroll"] as const;
+    events.forEach(event => window.addEventListener(event, activity, { passive: true }));
+    const onVisible = () => { if (document.visibilityState === "visible") activity(); };
+    document.addEventListener("visibilitychange", onVisible);
+    const onPush = (event: MessageEvent) => { if (event.data?.type === "transfer-arrived") void load(true); };
+    navigator.serviceWorker?.addEventListener("message", onPush);
     const timer = window.setInterval(() => {
-      if (!gone) void load(true);
-    }, pollSeconds * 1000);
-    const origin = import.meta.env.VITE_API_ORIGIN ?? "http://localhost:5080";
-    const source = new EventSource(`${origin}/api/transfers/live`, { withCredentials: true });
+      const idle = Date.now() - lastInteraction;
+      const interval = idle >= 600000 ? 300000 : idle >= 120000 ? 60000 : pollSeconds * 1000;
+      if (!gone && Date.now() - lastLoad >= interval) { lastLoad = Date.now(); void load(true).catch(() => undefined); }
+    }, 1000);
+    const source = new EventSource(`${apiOrigin}/api/transfers/live`, { withCredentials: true });
+    source.addEventListener("AccessChanged", event => {
+      source.close(); setItems([]); setNotice(null); seen.current = null;
+      const reason = JSON.parse((event as MessageEvent).data).reason;
+      if (reason === "session-ended") window.location.assign("/ingresar");
+      else { setBlocked(true); void load(false); }
+    });
     source.addEventListener(liveTransferMessageType, (event) => {
       if (gone) return;
       const message = JSON.parse((event as MessageEvent).data) as LiveTransferArrived;
       if (message.messageType !== liveTransferMessageType) return;
-      setItems((current) => {
-        if (current.some((item) => item.id === message.id)) return current;
-        const row: Transfer = {
-          id: message.id,
-          payerName: message.payerName,
-          amount: message.amount,
-          occurredAt: message.occurredAt,
-          status: message.status,
-          statusLabel: message.statusLabel
-        };
-        return [row, ...current].slice(0, current.length || 10);
+      const row: Transfer = { id: message.id, payerName: message.payerName, amount: message.amount,
+        occurredAt: message.occurredAt, status: message.status, statusLabel: message.statusLabel };
+      announceArrivals([row]);
+      setItems(current => {
+        const updated = current.some(item => item.id === row.id)
+          ? current.map(item => item.id === row.id ? row : item) : [row, ...current];
+        return updated.sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt)).slice(0, displayLimit.current);
       });
     });
     return () => {
       gone = true;
       window.clearInterval(timer);
+      events.forEach(event => window.removeEventListener(event, activity));
+      document.removeEventListener("visibilitychange", onVisible);
+      navigator.serviceWorker?.removeEventListener("message", onPush);
       source.close();
     };
   }, [first, pollSeconds, session.isOwner]);
@@ -796,21 +860,20 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   }, [cooldown]);
 
   async function refresh() {
-    if (!session.isOwner || cooldown > 0 || loading) return;
+    if (cooldown > 0 || loading) return;
     setLoading(true);
     setWait("");
-    const response = await api("/api/transfers/refresh", { method: "POST" });
-    if (response.status === 429) {
-      const body = await response.json().catch(() => ({} as { error?: string }));
-      setWait(
-        body.error === "quota_wait"
-          ? "Llegaste al tope de consultas de esta semana. Esperá al próximo período."
-          : "Mercado Pago está demorado. Aguardá unos instantes para volver a consultar."
-      );
-    } else if (response.status === 409) setExpired(true);
-    else await load(true);
-    setLoading(false);
-    setCooldown(cooldownSeconds);
+    try {
+      const response = await api("/api/transfers/refresh", { method: "POST" });
+      if (response.status === 429) {
+        const body = await response.json().catch(() => ({}));
+        setWait("Esperá unos segundos antes de volver a revisar los cobros.");
+        setCooldown(body.retryAfterSeconds ?? cooldownSeconds);
+      } else if (response.status === 409) { setExpired(true); setBlocked(true); }
+      else if (!response.ok) setWait("No pudimos revisar los cobros. Volvé a intentar en un momento.");
+      else { await load(true); setCooldown(cooldownSeconds); }
+    } catch { setWait("No pudimos revisar los cobros. Revisá tu conexión y volvé a intentar."); }
+    finally { setLoading(false); }
   }
 
   async function openDetail(id: string) {
@@ -818,35 +881,24 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
     if (response.ok) setDetail(await response.json());
   }
 
-  async function enableAlerts() {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Promise.race([
-        Notification.requestPermission(),
-        new Promise((resolve) => setTimeout(resolve, 1500))
-      ]);
-    }
-    const config = await api("/api/push/config");
-    const keys = config.ok ? await config.json() : {};
-    const token = keys.apiKey ? "" : `mock-${crypto.randomUUID()}`;
-    if (!token) return;
-    const saved = await api("/api/push/tokens", { method: "POST", body: JSON.stringify({ token }) });
-    if (saved.ok) setAlertsDone(true);
-  }
-
   const cooling = cooldown > 0;
 
   return (
     <Shell onSalir={onSalir} counter isOwner={session.isOwner}>
       <main className="board">
+        <NotificationBanner accountId={session.accountId} />
         {blocked || expired ? (
           <section className="access-block" role="alert">
-            <h1>Se terminó el acceso</h1>
-            <p>Para seguir viendo transferencias y avisos, extendé el acceso.</p>
-            {session.isOwner ? <Link to="/pagar">Ir a Pagos</Link> : null}
+            <h1>{session.isOwner && !connected && !expired ? "Dejá listo tu mostrador en 3 pasos" : "Las alertas de tu mostrador están en pausa"}</h1>
+            <p>{session.isOwner && !connected && !expired ? "Conectá tu Mercado Pago de forma segura para empezar a recibir avisos de tus cobros." : "Terminó el período activo de tu cuenta. Tus Puntos de Alerta configurados y tu historial están guardados y seguros."}</p>
+            {!session.isOwner ? <p>Pedile al Admin del comercio que renueve el acceso.</p> : null}
+            {session.isOwner ? <><Link to={connected ? "/pagar" : "/conectar"}>{connected ? "Ir a Pagos" : "Conectar Mercado Pago"}</Link></> : null}
           </section>
         ) : (
           <>
             <div className="board-scroll">
+              <p className="update-hint">Actualización automática. Si el cliente ya pagó, podés revisar ahora.</p>
+              {!audioActive ? <section className="sound-banner" role="status"><p>🔇 El sonido de caja está desactivado en este navegador.</p><button className="secondary" onClick={() => void unlockSound().catch(() => setAudioError("No pudimos activar el sonido. Tocá de nuevo para intentar."))}>🔊 Tocá acá para activar la campanita de cobros</button>{audioError ? <p role="alert">{audioError}</p> : null}</section> : <p className="sound-active">🔊 Alerta sonora activa</p>}
               {session.isOwner && fiveDayWarning ? (
                 <p className="banner warning" role="status">
                   <span>Quedan cinco días de acceso. Pagá para seguir recibiendo avisos.</span>
@@ -855,23 +907,11 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
               ) : session.isOwner && trial ? (
                 <p className="banner trial">La prueba está en curso.</p>
               ) : null}
-              {session.isOwner && consultaWarn ? (
-                <p className="banner warning" role="status">
-                  Te quedan pocas consultas de esta semana.
-                </p>
-              ) : null}
               {notice ? (
                 <p className="notice" role="status">
                   <strong>¡Entró un pago!</strong>
-                  <span>{notice.payerName} te transfirió {money.format(notice.amount)}</span>
+                  <span className="money">{notice.payerName} te transfirió {money.format(notice.amount)}</span>
                 </p>
-              ) : null}
-              {alertsDone === false ? (
-                <section className="alerts">
-                  <h2>Activá los avisos</h2>
-                  <p>En el iPhone, agregá la app a la pantalla de inicio.</p>
-                  <button type="button" onClick={enableAlerts}>Activar avisos</button>
-                </section>
               ) : null}
               <div className="transfer-columns" role="row">
                 <span>Fecha</span>
@@ -879,16 +919,18 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
                 <span>Monto</span>
                 <span>Estado</span>
               </div>
+              {!items.length ? <p className="empty">Todavía no detectamos transferencias. Las revisamos periódicamente; también podés revisar ahora. Activá la campanita para escuchar los nuevos cobros.</p> : null}
               <ol className="transfers">
-                {items.map((item) => {
+                {items.map((item, index) => {
                   const tone = item.status === "approved" || item.status === "pending" || item.status === "rejected" ? item.status : "other";
                   return (
-                    <li key={item.id} className={first === item.id ? `row ${tone} focus` : `row ${tone}`}>
+                    <li key={item.id} className={`row ${tone} ${first === item.id ? "focus" : ""} ${index === 0 && tone === "approved" ? "latest-transfer" : ""}`}>
+                      {index === 0 && tone === "approved" ? <span className="latest-label">✨ ÚLTIMO COBRO RECIBIDO · {relativeTime(item.occurredAt)}</span> : null}
                       <button type="button" className="row-open" onClick={() => void openDetail(item.id)}>
                         <div className="when">{when.format(new Date(item.occurredAt))}</div>
-                        <div className="payer">{item.payerName || "Desconocido"}</div>
+                        <div className="payer">{index === 0 ? "Pagó: " : ""}{item.payerName || "Desconocido"}</div>
                         <div className="amount">{money.format(item.amount)}</div>
-                        <div className="status">{item.statusLabel}</div>
+                        <div className="status">{item.status === "approved" ? "✓ Acreditado" : item.statusLabel}</div>
                       </button>
                     </li>
                   );
@@ -915,33 +957,20 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
                 if (!inside) dialog.close();
               }}
             >
-              {detail ? (
-                <>
-                  <h2 id="transfer-detail-title">Detalle</h2>
-                  <p>{when.format(new Date(detail.occurredAt))}</p>
-                  <p>{detail.payerName || "Desconocido"}</p>
-                  <p>{money.format(detail.amount)}</p>
-                  <p>{detail.statusLabel}</p>
-                  <form method="dialog">
-                    <button type="submit">Cerrar</button>
-                  </form>
-                </>
-              ) : null}
+              {detail ? <TransferDetailContent detail={detail} /> : null}
             </dialog>
             {wait ? <p className="wait" role="status">{wait}</p> : null}
-            {session.isOwner ? (
-              <Dock>
+            <Dock>
                 <button
                   className={cooling ? "cooldown" : undefined}
                   type="button"
                   onClick={refresh}
                   aria-disabled={cooling || loading}
-                  disabled={loading}
+                  disabled={cooling || loading}
                 >
-                  {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "Actualizar ahora"}
+                  {cooling ? `Esperá ${cooldown}s...` : loading ? "Actualizando..." : "🔄 Revisar si entró un pago ahora"}
                 </button>
               </Dock>
-            ) : null}
           </>
         )}
       </main>
@@ -949,102 +978,155 @@ function Transfers({ session, onSalir }: { session: Session; onSalir: () => Prom
   );
 }
 
+function TransferDetailContent({ detail }: { detail: Transfer }) {
+  return (
+    <div className="receipt-card">
+      <div className="receipt-header">
+        <h2 id="transfer-detail-title">Detalle del comprobante</h2>
+        <span className={`status-pill ${detail.status}`}>
+          {detail.status === "approved" ? "✓ Acreditado" : detail.statusLabel}
+        </span>
+      </div>
+      <p className="receipt-amount money">{money.format(detail.amount)}</p>
+      <p className="receipt-payer">{detail.payerName || "Desconocido"}</p>
+      <p className="receipt-when">{when.format(new Date(detail.occurredAt))}</p>
+      <p className="visually-hidden">{detail.statusLabel}</p>
+
+      <dl className="receipt-grid">
+        {detail.externalId ? (
+          <div className="receipt-row">
+            <dt>N.° de operación MP</dt>
+            <dd className="mono">{detail.externalId}</dd>
+          </div>
+        ) : null}
+        {detail.coelsaId ? (
+          <div className="receipt-row">
+            <dt>Código COELSA / ID</dt>
+            <dd className="mono">{detail.coelsaId}</dd>
+          </div>
+        ) : null}
+        {detail.bankTransferId ? (
+          <div className="receipt-row">
+            <dt>ID Transferencia bancaria</dt>
+            <dd className="mono">{detail.bankTransferId}</dd>
+          </div>
+        ) : null}
+        {detail.operationLabel ? (
+          <div className="receipt-row">
+            <dt>Tipo de operación</dt>
+            <dd>{detail.operationLabel}</dd>
+          </div>
+        ) : null}
+        {detail.payerDocument ? (
+          <div className="receipt-row">
+            <dt>CUIT / CUIL / Doc</dt>
+            <dd className="mono">{detail.payerDocument}</dd>
+          </div>
+        ) : null}
+        {detail.payerEmail ? (
+          <div className="receipt-row">
+            <dt>Correo del pagador</dt>
+            <dd>{detail.payerEmail}</dd>
+          </div>
+        ) : null}
+        {detail.originBank ? (
+          <div className="receipt-row">
+            <dt>Entidad de origen</dt>
+            <dd>{detail.originBank}</dd>
+          </div>
+        ) : null}
+        {detail.originAccount ? (
+          <div className="receipt-row">
+            <dt>CBU / CVU origen</dt>
+            <dd className="mono">{detail.originAccount}</dd>
+          </div>
+        ) : null}
+        {detail.description ? (
+          <div className="receipt-row">
+            <dt>Concepto / Motivo</dt>
+            <dd>{detail.description}</dd>
+          </div>
+        ) : null}
+        {detail.statusDetailLabel ? (
+          <div className="receipt-row">
+            <dt>Detalle de estado</dt>
+            <dd>{detail.statusDetailLabel}</dd>
+          </div>
+        ) : null}
+        {detail.approvedAt ? (
+          <div className="receipt-row">
+            <dt>Acreditado el</dt>
+            <dd>{when.format(new Date(detail.approvedAt))}</dd>
+          </div>
+        ) : null}
+      </dl>
+
+      <form method="dialog">
+        <button type="submit">Cerrar</button>
+      </form>
+    </div>
+  );
+}
+
 function HistoryPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [items, setItems] = useState<Transfer[]>([]);
-  const [totals, setTotals] = useState<{ byDay: number; byMonth: number; byRange: number } | null>(null);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-
-  async function load() {
-    const query = new URLSearchParams();
-    if (from) query.set("from", new Date(from).toISOString());
-    if (to) query.set("to", new Date(to).toISOString());
-    const suffix = query.toString() ? `?${query}` : "";
-    const response = await api(`/api/history${suffix}`);
-    if (!response.ok) return;
-    const body = await response.json();
-    setItems(body.items);
-    setTotals(body.totals);
-  }
-
+  const [detail, setDetail] = useState<Transfer | null>(null);
+  const detailDialog = useRef<HTMLDialogElement>(null);
+  const [from, setFrom] = useState(""); const [to, setTo] = useState("");
+  const [next, setNext] = useState<number | null>(null); const [offset, setOffset] = useState(0);
+  const [wait, setWait] = useState(0); const [loading, setLoading] = useState(false); const [error, setError] = useState("");
+  useEffect(() => { if (wait > 0) { const tick = setTimeout(() => setWait(value => value - 1), 1000); return () => clearTimeout(tick); } }, [wait]);
   useEffect(() => {
-    void load();
-  }, []);
-
-  return (
-    <Shell onSalir={onSalir} back isOwner={session.isOwner}>
-      <main className="history">
-        <h1>Historial de Transacciones</h1>
-        <form
-          className="history-range"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void load();
-          }}
-        >
-          <label>
-            Desde
-            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-          </label>
-          <label>
-            Hasta
-            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-          </label>
-          <button type="submit">Consultar</button>
-          <button
-            type="button"
-            onClick={() => {
-              void (async () => {
-                const query = new URLSearchParams();
-                if (from) query.set("from", new Date(from).toISOString());
-                if (to) query.set("to", new Date(to).toISOString());
-                const suffix = query.toString() ? `?${query}` : "";
-                const response = await api(`/api/history/csv${suffix}`);
-                if (!response.ok) return;
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "historial.csv";
-                link.click();
-                URL.revokeObjectURL(url);
-              })();
-            }}
-          >
-            CSV
-          </button>
-        </form>
-        {totals ? (
-          <p className="history-totals">
-            Día {money.format(totals.byDay)} · Mes {money.format(totals.byMonth)} · Rango {money.format(totals.byRange)}
-          </p>
-        ) : null}
-        <div className="transfer-columns" role="row">
-          <span>Fecha</span>
-          <span>Pagador</span>
-          <span>Monto</span>
-          <span>Estado</span>
-        </div>
-        <ol className="transfers">
-          {items.map((item) => (
-            <li key={item.id} className="row">
-              <div className="when">{when.format(new Date(item.occurredAt))}</div>
-              <div className="payer">{item.payerName || "Desconocido"}</div>
-              <div className="amount">{money.format(item.amount)}</div>
-              <div className="status">{item.statusLabel}</div>
-            </li>
-          ))}
-        </ol>
-      </main>
-    </Shell>
-  );
+    const dialog = detailDialog.current;
+    if (!dialog) return;
+    if (detail) { if (!dialog.open) dialog.showModal(); return; }
+    if (dialog.open) dialog.close();
+  }, [detail]);
+  async function load(start = 0) {
+    if (loading || wait > 0) return; setLoading(true); setError("");
+    try {
+      const query = new URLSearchParams({ offset: String(start) });
+      if (from) query.set("from", new Date(`${from}T00:00:00`).toISOString());
+      if (to) query.set("to", new Date(`${to}T23:59:59.999`).toISOString());
+      const response = await api(`/api/history?${query}`);
+      const body = await response.json();
+      if (!response.ok) {
+        if (response.status >= 500) { setError(withCorrelation(response, "No pudimos consultar los movimientos. Volvé a intentar.")); return; }
+        setWait(body.retryAfterSeconds ?? 0);
+        setError(response.status === 409 ? "Necesitás vincular Mercado Pago y tener acceso activo para consultar." : "Esperá unos segundos o revisá tu conexión antes de volver a consultar.");
+        return;
+      }
+      setItems(body.items); setNext(body.nextOffset); setOffset(start); setWait(body.buttonCooldownSeconds ?? 10);
+    } catch (error) { setError(withCorrelation(error, "No pudimos consultar los movimientos. Volvé a intentar.")); } finally { setLoading(false); }
+  }
+  function downloadVisible() {
+    const cell = (text: string) => `"${(/^\s*[=+@-]/.test(text) ? "'" : "") + text.replaceAll('"', '""')}"`;
+    const csv = ["Fecha,Pagador,Monto,Estado,OperacionMP,CoelsaID,Documento", ...items.map(item => [cell(when.format(new Date(item.occurredAt))), cell(item.payerName), item.amount.toFixed(2), cell(item.statusLabel), cell(item.externalId ?? ""), cell(item.coelsaId ?? ""), cell(item.payerDocument ?? "")].join(","))].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = "movimientos-visibles.csv"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  return <Shell onSalir={onSalir} back isOwner={session.isOwner}><main className="history">
+    <h1>Movimientos de tu cuenta</h1><p>Vista exclusiva del Admin. Consultá los movimientos disponibles en Mercado Pago. Tocá cualquier fila para ver el comprobante completo. La descarga contiene únicamente las filas que ves en esta página.</p>
+    <form className="history-range" onSubmit={event => { event.preventDefault(); void load(); }}>
+      <label>Desde<input type="date" value={from} onChange={event => { setFrom(event.target.value); setItems([]); setNext(null); setOffset(0); }} /></label>
+      <label>Hasta<input type="date" value={to} onChange={event => { setTo(event.target.value); setItems([]); setNext(null); setOffset(0); }} /></label>
+      <button type="submit" disabled={loading || wait > 0}>{loading ? "Consultando..." : wait > 0 ? `Esperá ${wait}s...` : "Consultar movimientos"}</button>
+      <button type="button" className="secondary" disabled={!items.length} onClick={downloadVisible}>Descargar vista (Excel / CSV)</button>
+    </form>
+    {error ? <p className="error" role="alert">{error}</p> : null}
+    <p className="money">{items.length} movimientos visibles · Acreditado en esta página: {money.format(items.filter(item => item.status === "approved").reduce((total, item) => total + item.amount, 0))}</p>
+    <ol className="transfers">{items.map(item => <li key={item.id} className={`row ${item.status}`}><button type="button" className="row-open" onClick={() => setDetail(item)}><div className="when">{when.format(new Date(item.occurredAt))}</div><div className="payer">{item.payerName}</div><div className="amount">{money.format(item.amount)}</div><div className="status">{item.statusLabel}</div></button></li>)}</ol>
+    <dialog ref={detailDialog} className="transfer-detail" closedby="any" aria-labelledby="transfer-detail-title" onClose={() => setDetail(null)}>{detail ? <TransferDetailContent detail={detail} /> : null}</dialog>
+    <div className="hero-actions"><button className="secondary" disabled={loading || wait > 0 || offset === 0} onClick={() => void load(Math.max(0, offset - 20))}>Página anterior</button><button className="secondary" disabled={loading || wait > 0 || next === null} onClick={() => next !== null && void load(next)}>Página siguiente</button></div>
+  </main></Shell>;
 }
 
 function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   return (
     <Shell onSalir={onSalir} back isOwner={session.isOwner}>
       <main>
-        <h1>Configurar</h1>
+        <h1>Accesos de Mostrador (Puntos de Alerta)</h1>
+        <p>Habilitá dispositivos para recibir avisos. Tu plan incluye Puntos de Alerta; cada adicional cuesta $ 1.000 y vence junto con el acceso del Admin.</p>
         {session.isOwner ? <OwnerLogins /> : null}
       </main>
     </Shell>
@@ -1053,6 +1135,8 @@ function Users({ session, onSalir }: { session: Session; onSalir: () => Promise<
 
 function OwnerLogins() {
   const [rows, setRows] = useState<LoginRow[]>([]);
+  const [pointCap, setPointCap] = useState(0);
+  const [savingRenewal, setSavingRenewal] = useState<string | null>(null);
   const [alias, setAlias] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -1060,7 +1144,8 @@ function OwnerLogins() {
   const [previewName, setPreviewName] = useState("");
 
   async function reload() {
-    const [logins, aliasResponse] = await Promise.all([api("/api/logins"), api("/api/alias")]);
+    const [logins, aliasResponse, billingResponse] = await Promise.all([api("/api/logins"), api("/api/alias"), api("/api/billing")]);
+    if (billingResponse.ok) setPointCap((await billingResponse.json()).alertPointCap);
     if (logins.ok) setRows(await logins.json());
     if (aliasResponse.ok) {
       const body = (await aliasResponse.json()) as { alias?: string | null };
@@ -1096,7 +1181,8 @@ function OwnerLogins() {
 
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     const response = await api("/api/logins", {
       method: "POST",
       body: JSON.stringify({ name: data.get("name") })
@@ -1104,17 +1190,19 @@ function OwnerLogins() {
     if (!response.ok) {
       const body = await response.json().catch(() => ({} as { error?: string }));
       setError(
-        body.error === "account_cap"
-          ? "No se puede agregar otro Punto de Alerta en este plan."
-          : body.error === "alias_required"
-            ? "Confirmá el alias primero."
-            : "No se pudo crear la cuenta."
+        response.status >= 500
+          ? withCorrelation(response, "No se pudo crear la cuenta.")
+          : body.error === "account_cap"
+            ? "No se puede agregar otro Punto de Alerta en este plan."
+            : body.error === "alias_required"
+              ? "Confirmá el alias primero."
+              : "No se pudo crear la cuenta."
       );
       return;
     }
     const body = (await response.json()) as { displayName: string; inviteUrl: string; waMeUrl: string };
     setInvite(body);
-    event.currentTarget.reset();
+    form.reset();
     setPreviewName("");
     setError("");
     await reload();
@@ -1136,10 +1224,30 @@ function OwnerLogins() {
     await reload();
   }
 
+  async function setRenewal(row: LoginRow, selected: boolean) {
+    if (savingRenewal) return;
+    setSavingRenewal(row.id); setError("");
+    setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: selected } : point));
+    try {
+      const response = await api(`/api/logins/${row.id}/renewal`, { method: "PUT", body: JSON.stringify({ renewWithAdmin: selected }) });
+      if (!response.ok) {
+        setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: row.renewWithAdmin } : point));
+        setError(withCorrelation(response, "No pudimos guardar la selección de renovación. Volvé a intentar."));
+        return;
+      }
+      await reload();
+    } catch (error) {
+      setRows(current => current.map(point => point.id === row.id ? { ...point, renewWithAdmin: row.renewWithAdmin } : point));
+      setError(withCorrelation(error, "No pudimos guardar la selección de renovación. Volvé a intentar."));
+    } finally { setSavingRenewal(null); }
+  }
+
   const aliasBare = alias?.replace(/^#/, "") ?? "";
 
   return (
     <section className="logins">
+      <p className="point-cap">{rows.filter(row => !row.isOwner && !row.revoked).length} Puntos de Alerta creados · {pointCap} incluidos</p>
+      <p>Incluidos: {pointCap}. Los adicionales requieren pago y pueden renovarse con el Admin.</p>
       {alias ? (
         <p className="alias-confirmed">
           Alias confirmado: <strong>{alias}</strong>
@@ -1158,6 +1266,15 @@ function OwnerLogins() {
         <div className="login-row" key={row.id}>
           <span className="email">{row.displayName ?? row.email}</span>
           <span className="role">{row.isOwner ? "Admin" : "Punto de Alerta"}</span>
+          {!row.isOwner && !row.revoked ? <>
+            <p>{row.included ? "Incluido en tu plan" : row.enabled ? `Adicional habilitado hasta ${row.extraAccessUntil ? when.format(new Date(row.extraAccessUntil)) : "el vencimiento del Admin"}` : "Adicional pendiente de pago o renovación"}</p>
+            {!row.included ? <label><input type="checkbox" checked={row.renewWithAdmin} disabled={savingRenewal !== null} onChange={event => void setRenewal(row, event.target.checked)} />Incluir en la próxima renovación prepaga del Admin (+ $ 1.000)</label> : null}
+            {row.requiresPayment ? <button className="secondary" onClick={async () => {
+              const response = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ additionalPointId: row.id }) });
+              if (!response.ok) { setError(response.status >= 500 ? withCorrelation(response, "No pudimos abrir el pago. Volvé a intentar en un momento.") : "Primero necesitás un período activo del Admin para pagar este punto."); return; }
+              window.location.assign((await response.json()).initPoint);
+            }}>Habilitar adicional por $ 1.000 hasta el vencimiento del Admin</button> : null}
+          </> : null}
           {row.revoked ? null : (
             <label>
               <input type="checkbox" checked={row.pushApproved} onChange={(event) => void push(row, event.target.checked)} />
@@ -1226,12 +1343,22 @@ type PayScreen = {
   planName?: string | null;
   accessUntil?: string | null;
   plans: PayPlan[];
+  blocked: boolean;
+  trialEligible: boolean;
+  fiveDayWarning: boolean;
+  eventReadyCount: number;
+  eventDurationHours: number;
+  canStartEvent: boolean;
+  paymentsNeedingReview: number;
+  connected: boolean;
 };
 
 function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const [screen, setScreen] = useState<PayScreen | null>(null);
   const [myCode, setMyCode] = useState("");
   const [inviteCode, setInviteCode] = useState("");
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState("");
 
   useEffect(() => {
     api("/api/billing").then(async (response) => {
@@ -1244,14 +1371,39 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
     });
   }, []);
 
-  async function pay() {
-    const response = await api("/api/billing/checkout", {
-      method: "POST",
-      body: JSON.stringify({ referralCode: inviteCode || undefined })
-    });
-    if (!response.ok) return;
-    const body = await response.json();
-    window.location.assign(body.initPoint);
+  async function startEvent() {
+    if (!screen || paying) return;
+    const estimate = new Date(Date.now() + screen.eventDurationHours * 3600000);
+    if (!window.confirm(`El evento empieza ahora. Las consultas y alertas de TransfersCheck se deshabilitarán el ${when.format(estimate)}. Tu cuenta de Mercado Pago seguirá funcionando. ¿Querés iniciar?`)) return;
+    setPaying(true); setPayError("");
+    try {
+      const response = await api("/api/billing/start-event", { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) {
+        setPayError(response.status >= 500
+          ? withCorrelation(response, "No pudimos iniciar el evento. Volvé a intentar en un momento.")
+          : "No pudimos iniciar el evento. Verificá que esté pago, vinculado y que no tengas otro período activo.");
+        setPaying(false);
+        return;
+      }
+      window.alert(`Evento iniciado. TransfersCheck estará habilitado hasta ${when.format(new Date(body.accessUntil))}.`);
+      window.location.assign("/");
+    } catch (error) { setPayError(withCorrelation(error, "No pudimos iniciar el evento. Volvé a intentar en un momento.")); setPaying(false); }
+  }
+
+  async function pay(planCode: string) {
+    if (paying || !session.isOwner) return;
+    setPaying(true); setPayError("");
+    try {
+      const response = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ planCode, referralCode: inviteCode || undefined }) });
+      if (!response.ok) {
+        setPayError(withCorrelation(response, "No pudimos abrir el pago. Volvé a intentar en un momento."));
+        setPaying(false);
+        return;
+      }
+      const body = await response.json();
+      window.location.assign(body.initPoint);
+    } catch (error) { setPayError(withCorrelation(error, "No pudimos abrir el pago. Volvé a intentar en un momento.")); setPaying(false); }
   }
 
   return (
@@ -1259,7 +1411,9 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
       {!screen ? <main /> : (
         <>
           <main className="pay">
-            <h1>Extendé el acceso</h1>
+            {screen.blocked ? <section className="andes-card pause-message" role="alert"><div className="pause-icon">⏸️</div><h1>{screen.accessUntil ? "Las alertas de tu mostrador están en pausa" : "Elegí cómo usar TransfersCheck"}</h1><p>{screen.accessUntil ? "Terminó el período activo de tu cuenta. " : "Activá tu acceso para empezar. "}<strong>Tus Puntos de Alerta configurados se conservan.</strong> Elegí un plan para habilitar la consulta y los avisos de TransfersCheck.</p></section> : <h1>Extendé el acceso</h1>}
+            {screen.paymentsNeedingReview > 0 ? <p className="banner warning" role="alert">Recibimos un pago de un Punto de Alerta que no pudo habilitarse porque el período venció o el acceso fue revocado. Ese pago requiere revisión para resolver la habilitación o devolución.</p> : null}
+            {screen.fiveDayWarning ? <p className="banner warning">Quedan cinco días de acceso. Pagá para seguir recibiendo avisos.</p> : null}
             <p className="account-row">
               <span className="label">Email</span>
               <span>{screen.email}</span>
@@ -1283,44 +1437,15 @@ function Pay({ session, onSalir }: { session: Session; onSalir: () => Promise<vo
                 autoComplete="off"
               />
             </label>
-            <ul className="plans">
-              {screen.plans.map((plan) => (
-                <li key={plan.code} className="plan">
-                  <strong>{plan.displayName}</strong>
-                  <span className="amount">{money.format(plan.amount)}</span>
-                  <span className="period">
-                    {plan.durationHours
-                      ? `${plan.durationHours} horas`
-                      : plan.durationDays
-                        ? `${plan.durationDays} días`
-                        : ""}
-                  </span>
-                  {plan.faceCopy ? <span className="face">{plan.faceCopy}</span> : null}
-                </li>
-              ))}
-            </ul>
+            {screen.eventReadyCount > 0 ? <section className="andes-card"><h2>Tenés {screen.eventReadyCount} pase(s) Individual / Evento disponible(s)</h2><p>El tiempo comienza cuando iniciás el evento. Las alertas y consultas de TransfersCheck vencen {screen.eventDurationHours} horas después.</p>{screen.canStartEvent ? <button disabled={paying} onClick={() => void startEvent()}>Iniciar Evento</button> : <p>{!screen.connected ? "Primero vinculá tu Mercado Pago." : "Podés iniciarlo cuando termine tu período activo."}</p>}</section> : null}
+            {payError ? <p className="error" role="alert">{payError}</p> : null}
+            {session.isOwner ? <PlanCards primary={!screen.canStartEvent} plans={screen.plans} initial={screen.trialEligible && !screen.blocked} onPay={code => void pay(code)} busy={paying} /> : <p>Pedile al Admin del comercio que renueve el acceso para reactivar las alertas.</p>}
           </main>
-          <Dock>
-            <button type="button" onClick={pay}>Pagar con Mercado Pago</button>
-          </Dock>
         </>
       )}
     </Shell>
   );
 }
-
-type OwnerCard = { card: string; isSet: boolean; lastFour: string | null; expiresAt: string | null };
-type OwnerPlan = {
-  code: string;
-  displayName: string;
-  amount: number;
-  currency: string;
-  durationDays?: number | null;
-  durationHours?: number | null;
-  faceCopy: string;
-  enableCopilotHelp: boolean;
-  active: boolean;
-};
 
 type HelpCatalog = {
   enableCopilotHelp: boolean;
@@ -1337,13 +1462,6 @@ type HelpAsk = {
   clarification?: string | null;
 };
 
-const ownerCardLabels: Record<string, string> = {
-  mercadopago_platform: "Mercado Pago (plataforma)",
-  mail: "Mail",
-  browser_push: "Notificaciones web",
-  whatsapp: "WhatsApp"
-};
-
 function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promise<void> }) {
   const { id } = useParams();
   const [catalog, setCatalog] = useState<HelpCatalog | null>(null);
@@ -1351,6 +1469,10 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<HelpAsk | null>(null);
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [sendingNote, setSendingNote] = useState(false);
+  const [noteStatus, setNoteStatus] = useState("");
+  const [noteError, setNoteError] = useState("");
 
   useEffect(() => {
     let gone = false;
@@ -1392,6 +1514,26 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
     setBusy(false);
     if (!response.ok) return;
     setAnswer(await response.json());
+  }
+
+  async function sendNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = note.trim();
+    if (!text) return;
+    setSendingNote(true);
+    setNoteStatus("");
+    setNoteError("");
+    const response = await api("/api/help/messages", {
+      method: "POST",
+      body: JSON.stringify({ text })
+    });
+    setSendingNote(false);
+    if (!response.ok) {
+      setNoteError(response.status >= 500 ? withCorrelation(response, "No se pudo enviar el mensaje.") : "No se pudo enviar el mensaje.");
+      return;
+    }
+    setNote("");
+    setNoteStatus("Recibido. Lo lee el dueño del producto en Helpdesk.");
   }
 
   return (
@@ -1452,6 +1594,27 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
             </section>
           </>
         ) : null}
+        <form className="help-message" onSubmit={(event) => void sendNote(event)}>
+          <h2>Escribile al producto</h2>
+          <label htmlFor="help-message">Mensaje</label>
+          <textarea
+            id="help-message"
+            name="text"
+            value={note}
+            onChange={(event) => {
+              setNote(event.target.value);
+              if (noteError) setNoteError("");
+            }}
+            maxLength={1000}
+            required
+            rows={4}
+            aria-describedby="help-message-hint"
+          />
+          <p id="help-message-hint" className="gate-lead">Un mensaje corto. No es un chat.</p>
+          {noteError ? <p className="error" role="alert">{noteError}</p> : null}
+          {noteStatus ? <p role="status">{noteStatus}</p> : null}
+          <button type="submit" disabled={sendingNote}>Enviar mensaje</button>
+        </form>
         {answer ? (
           <section className="help-answer" aria-live="polite">
             {answer.explanation ? <p>{answer.explanation}</p> : null}
@@ -1469,303 +1632,5 @@ function HelpPage({ session, onSalir }: { session: Session; onSalir: () => Promi
         ) : null}
       </main>
     </Shell>
-  );
-}
-
-function OwnerSite() {
-  const [email, setEmail] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [cards, setCards] = useState<OwnerCard[]>([]);
-  const [plans, setPlans] = useState<OwnerPlan[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [planDrafts, setPlanDrafts] = useState<Record<string, OwnerPlan>>({});
-  const [newPlan, setNewPlan] = useState({ code: "", displayName: "", amount: "", faceCopy: "", enableCopilotHelp: false });
-
-  async function loadPanel() {
-    const [services, planRows] = await Promise.all([api("/api/owner/services"), api("/api/owner/plans")]);
-    if (!services.ok || !planRows.ok) {
-      setEmail(null);
-      return;
-    }
-    const nextPlans = (await planRows.json()) as OwnerPlan[];
-    setCards(await services.json());
-    setPlans(nextPlans);
-    setPlanDrafts(Object.fromEntries(nextPlans.map((plan) => [plan.code, { ...plan }])));
-  }
-
-  useEffect(() => {
-    let gone = false;
-    api("/api/owner/session").then(async (response) => {
-      if (gone) return;
-      if (!response.ok) {
-        setEmail(null);
-        return;
-      }
-      const body = (await response.json()) as { email: string };
-      setEmail(body.email);
-      await loadPanel();
-    });
-    return () => {
-      gone = true;
-    };
-  }, []);
-
-  async function signIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const response = await api("/api/owner/sessions", {
-      method: "POST",
-      body: JSON.stringify({ email: data.get("email"), password: data.get("password") })
-    });
-    if (!response.ok) {
-      setError("El correo o la contraseña no sirven.");
-      return;
-    }
-    const body = (await response.json()) as { email: string };
-    setEmail(body.email);
-    setError("");
-    await loadPanel();
-  }
-
-  async function signOut() {
-    await api("/api/owner/sessions", { method: "DELETE" });
-    setEmail(null);
-    setCards([]);
-    setPlans([]);
-  }
-
-  async function replaceSecret(card: string) {
-    const secret = drafts[card]?.trim() ?? "";
-    if (!secret) {
-      setError("Pegá el secreto de nuevo para reemplazarlo.");
-      return;
-    }
-    const response = await api(`/api/owner/services/${card}`, {
-      method: "PUT",
-      body: JSON.stringify({ secret })
-    });
-    if (!response.ok) {
-      setError("No se pudo guardar el secreto.");
-      return;
-    }
-    setDrafts((value) => ({ ...value, [card]: "" }));
-    setError("");
-    await loadPanel();
-  }
-
-  async function savePlan(code: string) {
-    const draft = planDrafts[code];
-    if (!draft) return;
-    const response = await api(`/api/owner/plans/${encodeURIComponent(code)}`, {
-      method: "PUT",
-      body: JSON.stringify(draft)
-    });
-    if (!response.ok) {
-      setError("No se pudo guardar el plan.");
-      return;
-    }
-    setError("");
-    await loadPanel();
-  }
-
-  async function createPlan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const amount = Number(newPlan.amount);
-    if (!newPlan.code.trim() || !newPlan.displayName.trim() || !Number.isFinite(amount)) {
-      setError("Código, nombre e importe son obligatorios.");
-      return;
-    }
-    const response = await api("/api/owner/plans", {
-      method: "POST",
-      body: JSON.stringify({
-        code: newPlan.code.trim(),
-        displayName: newPlan.displayName.trim(),
-        amount,
-        faceCopy: newPlan.faceCopy,
-        enableCopilotHelp: newPlan.enableCopilotHelp,
-        active: true,
-        currency: "ARS"
-      })
-    });
-    if (!response.ok) {
-      setError("No se pudo crear el plan.");
-      return;
-    }
-    setNewPlan({ code: "", displayName: "", amount: "", faceCopy: "", enableCopilotHelp: false });
-    setError("");
-    await loadPanel();
-  }
-
-  if (!email) {
-    return (
-      <main className="gate">
-        <Wordmark />
-        <h1>Owner</h1>
-        <p className="gate-lead">Acceso del producto. No es la puerta del comercio.</p>
-        <form onSubmit={signIn}>
-          <label>
-            Dirección de email *
-            <input name="email" type="email" autoComplete="username" required />
-          </label>
-          <label>
-            Contraseña *
-            <input name="password" type="password" autoComplete="current-password" required />
-          </label>
-          {error ? <p className="error">{error}</p> : null}
-          <button type="submit">Entrar</button>
-        </form>
-      </main>
-    );
-  }
-
-  return (
-    <main className="shell page">
-      <header className="app-header">
-        <Wordmark />
-        <span className="alias-slot">{email}</span>
-        <button className="salir" type="button" onClick={() => void signOut()}>
-          Salir
-        </button>
-      </header>
-      {error ? <p className="error">{error}</p> : null}
-
-      <h1>Planes</h1>
-      <p className="gate-lead">Editá precios y alta de planes. La pantalla de Pagos del comercio solo lee los activos.</p>
-      <ul className="plans">
-        {plans.map((plan) => {
-          const draft = planDrafts[plan.code] ?? plan;
-          return (
-            <li key={plan.code} className="plan">
-              <strong>{plan.code}</strong>
-              <label>
-                Nombre
-                <input
-                  value={draft.displayName}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, displayName: event.target.value } }))
-                  }
-                />
-              </label>
-              <label>
-                Importe
-                <input
-                  type="number"
-                  value={draft.amount}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({
-                      ...value,
-                      [plan.code]: { ...draft, amount: Number(event.target.value) }
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Texto de cara
-                <input
-                  value={draft.faceCopy}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, faceCopy: event.target.value } }))
-                  }
-                />
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={draft.enableCopilotHelp}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({
-                      ...value,
-                      [plan.code]: { ...draft, enableCopilotHelp: event.target.checked }
-                    }))
-                  }
-                />
-                EnableCopilotHelp
-              </label>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={draft.active}
-                  onChange={(event) =>
-                    setPlanDrafts((value) => ({ ...value, [plan.code]: { ...draft, active: event.target.checked } }))
-                  }
-                />
-                Activo
-              </label>
-              <button type="button" onClick={() => void savePlan(plan.code)}>
-                Guardar plan
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <form className="owner-new-plan" onSubmit={createPlan}>
-        <h2>Nuevo plan</h2>
-        <label>
-          Código
-          <input value={newPlan.code} onChange={(event) => setNewPlan({ ...newPlan, code: event.target.value })} required />
-        </label>
-        <label>
-          Nombre
-          <input
-            value={newPlan.displayName}
-            onChange={(event) => setNewPlan({ ...newPlan, displayName: event.target.value })}
-            required
-          />
-        </label>
-        <label>
-          Importe
-          <input
-            type="number"
-            value={newPlan.amount}
-            onChange={(event) => setNewPlan({ ...newPlan, amount: event.target.value })}
-            required
-          />
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={newPlan.enableCopilotHelp}
-            onChange={(event) => setNewPlan({ ...newPlan, enableCopilotHelp: event.target.checked })}
-          />
-          EnableCopilotHelp
-        </label>
-        <button type="submit">Agregar plan</button>
-      </form>
-
-      <h1>Panel de servicios</h1>
-      <p className="gate-lead">Cada tarjeta es un servicio que el producto ya usa. El valor completo no se muestra.</p>
-      <ul className="plans">
-        {cards.map((card) => (
-          <li key={card.card} className="plan">
-            <strong>{ownerCardLabels[card.card] ?? card.card}</strong>
-            <span>
-              {card.isSet
-                ? card.lastFour
-                  ? `Configurado · ···${card.lastFour}`
-                  : "Configurado"
-                : "Sin configurar"}
-            </span>
-            {card.card !== "whatsapp" ? (
-              <>
-                <label>
-                  Reemplazar secreto
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    value={drafts[card.card] ?? ""}
-                    onChange={(event) => setDrafts((value) => ({ ...value, [card.card]: event.target.value }))}
-                  />
-                </label>
-                <button type="button" onClick={() => void replaceSecret(card.card)}>
-                  Guardar
-                </button>
-              </>
-            ) : (
-              <span className="face">Solo wa.me · sin clave</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </main>
   );
 }
