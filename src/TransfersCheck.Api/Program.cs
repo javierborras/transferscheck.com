@@ -153,6 +153,19 @@ if (!string.IsNullOrWhiteSpace(connectionString))
         db.Plans.Add(new Plan { Code = PlanCodes.PackCorporativo, DisplayName = "Pack Corporativo", Amount = 15999, Currency = "ARS", DurationDays = 30, FaceCopy = "Escala y multi-sucursal para equipos que necesitan crecer.", EnableCopilotHelp = true, Active = true });
         await db.SaveChangesAsync();
     }
+    var planDefaults = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+    {
+        [PlanCodes.PackEvento] = 1,
+        [PlanCodes.PackMes] = 4,
+        [PlanCodes.PackCorporativo] = 100
+    };
+    var planRows = await db.Plans.Where(plan => planDefaults.Keys.Contains(plan.Code) && plan.IncludedAlertPoints <= 0).ToListAsync();
+    if (planRows.Count > 0)
+    {
+        foreach (var plan in planRows)
+            plan.IncludedAlertPoints = planDefaults[plan.Code];
+        await db.SaveChangesAsync();
+    }
 }
 
 // Product schedules from HangfireJobs (defaults: daily noon UTC / every six hours). ADR-011 names the jobs; cron is typed config.
