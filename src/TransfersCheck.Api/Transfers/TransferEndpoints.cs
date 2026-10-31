@@ -162,7 +162,7 @@ public static class TransferEndpoints
     {
         id = row.Id,
         externalId = row.ExternalId,
-        payerName = string.IsNullOrWhiteSpace(row.PayerName) ? "Desconocido" : row.PayerName,
+        payerName = TransferHistory.DisplayPayer(row.PayerName, row.PayerEmail, row.PayerDocument),
         amount = row.Amount,
         currency = row.Currency,
         occurredAt = row.OccurredAt,

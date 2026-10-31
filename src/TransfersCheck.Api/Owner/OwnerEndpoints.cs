@@ -365,7 +365,7 @@ public static class OwnerEndpoints
                 externalId = row.ExternalId,
                 occurredAt = row.OccurredAt,
                 approvedAt = row.ApprovedAt,
-                payerName = TransferHistory.DisplayPayer(row.PayerName),
+                payerName = TransferHistory.DisplayPayer(row.PayerName, row.PayerEmail, row.PayerDocument),
                 amount = row.Amount,
                 currency = row.Currency,
                 status = row.Status,

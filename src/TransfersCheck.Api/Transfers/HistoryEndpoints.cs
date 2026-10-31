@@ -68,7 +68,7 @@ public static class HistoryEndpoints
             var allowed = await store.ListStoredTypeCodesAsync(ct);
             var items = page.Items.Where(row => allowed.Contains(row.TypeCode)).Select(row => new {
                 id = row.ExternalId, externalId = row.ExternalId, occurredAt = row.OccurredAt, approvedAt = row.ApprovedAt,
-                payerName = TransferHistory.DisplayPayer(row.PayerName), amount = row.Amount, currency = row.Currency,
+                payerName = TransferHistory.DisplayPayer(row.PayerName, row.PayerEmail, row.PayerDocument), amount = row.Amount, currency = row.Currency,
                 status = row.Status, statusLabel = StatusWords.Label(row.Status),
                 statusDetail = row.StatusDetail, statusDetailLabel = StatusWords.DetailLabel(row.StatusDetail),
                 typeCode = row.TypeCode, operationType = row.OperationType, paymentMethodId = row.PaymentMethodId,
